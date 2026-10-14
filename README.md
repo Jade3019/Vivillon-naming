@@ -45,10 +45,11 @@ approval for privileged intents on larger bots.
    python bot.py
    ```
 
-When Pokétwo posts a wild-spawn image, the bot sends the recognized name as a
-reply. The vision model is asked to identify Pokémon across the National
-Pokédex; image recognition can still make mistakes, so check guesses before
-relying on them.
+When Pokétwo posts a wild-spawn image, the bot replies with one predicted name
+and its estimated confidence percentage (for example, `Pikachu: 85%`). The
+confidence is a model estimate, not a calibrated probability. The vision model
+is asked to identify Pokémon across the National Pokédex; image recognition can
+still make mistakes, so check guesses before relying on them.
 
 After a catch, the bot summarizes level, gender, and IV data that appear in
 Pokétwo's message. If a catch message omits IV or gender, run Pokétwo's usual

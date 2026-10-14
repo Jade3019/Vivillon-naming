@@ -1,6 +1,6 @@
 import unittest
 
-from bot import extract_stats
+from bot import extract_stats, format_guess
 
 
 class ExtractStatsTests(unittest.TestCase):
@@ -28,6 +28,10 @@ class ExtractStatsTests(unittest.TestCase):
     def test_does_not_treat_an_iv_stat_spread_as_a_percentage(self) -> None:
         self.assertEqual(extract_stats("IVs: 31/31/31/31/31/31"), {})
 
+
+class GuessFormatTests(unittest.TestCase):
+    def test_formats_one_guess_without_a_label(self) -> None:
+        self.assertEqual(format_guess("Pikachu", 85), "Pikachu: 85%")
 
 if __name__ == "__main__":
     unittest.main()

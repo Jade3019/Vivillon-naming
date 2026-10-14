@@ -105,7 +105,7 @@ async def recognize_pokemon(
     client: AsyncOpenAI,
     http: aiohttp.ClientSession,
     model: str,
-) -> str:
+) -> tuple[str, int]:
     async with http.get(url) as response:
         response.raise_for_status()
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
@@ -126,11 +126,15 @@ async def recognize_pokemon(
                 "content": (
                     "Identify the Pokémon species shown in this Pokétwo wild-spawn "
                     "image. The species may be any Pokémon in the National Pokédex "
-                    "through #1026. Return JSON only, in the form "
-                    '{"name":"Pokétwo-accepted English name"}. Include a form or '
-                    "regional name when needed to identify the shown Pokémon. Do not "
-                    "include an explanation or guess list. If the "
-                    "image is not recognizable as a Pokémon, set name to an empty string."
+                    "through #1026. Choose the single most likely Pokémon name. Never "
+                    "return multiple candidates, alternate names, aliases, or a list. "
+                    "Estimate your confidence in that one guess as a whole-number "
+                    "percentage from 0 to 100. Return JSON only, in the form "
+                    '{"name":"one Pokétwo-accepted English name","confidence":85}. '
+                    "Include a form or "
+                    "regional name when needed to identify the shown Pokémon. If the "
+                    "image is not recognizable as a Pokémon, set name to an empty "
+                    "string and confidence to 0."
                 ),
             },
             {
@@ -151,13 +155,26 @@ async def recognize_pokemon(
     if not content:
         raise ValueError("Vision model returned an empty response")
     prediction = json.loads(content)
+    if not isinstance(prediction, dict):
+        raise ValueError("Vision model response must be a JSON object")
     name = prediction.get("name")
     if not isinstance(name, str):
         raise ValueError("Vision model response did not include a Pokémon name")
+    confidence = prediction.get("confidence")
+    if (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, int)
+        or not 0 <= confidence <= 100
+    ):
+        raise ValueError("Vision model response included an invalid confidence percentage")
     name = name.strip()
     if len(name) > 60 or (name and not re.fullmatch(r"[A-Za-z0-9 .'-]+", name)):
         raise ValueError("Vision model returned an invalid Pokémon name")
-    return name
+    return name, confidence
+
+
+def format_guess(name: str, confidence: int) -> str:
+    return f"{name}: {confidence}%"
 
 
 def extract_stats(text: str) -> dict[str, str]:
@@ -245,7 +262,7 @@ class NamingBot(discord.Client):
             return
 
         try:
-            name = await recognize_pokemon(
+            name, confidence = await recognize_pokemon(
                 url,
                 client=self.openai,
                 http=self.image_http,
@@ -272,7 +289,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        await message.reply(name, mention_author=False)
+        await message.reply(format_guess(name, confidence), mention_author=False)
 
 
 def main() -> None:

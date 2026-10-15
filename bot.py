@@ -134,6 +134,17 @@ async def recognize_pokemon(
                     "over its head, a blue face with large eyes, and slender lime-green "
                     "legs; do not mistake the water bubble around its head for a body part "
                     "or identify it only from a watery setting. "
+                    "Pansage is a small green monkey-like Pokémon with very large round "
+                    "ears, a pale cream face and hands, a leafy green tuft on top of its "
+                    "head, and a long curled tail; distinguish it from the similar "
+                    "Pansear and Panpour by its green coloring. "
+                    "Cascoon is a floating cocoon-shaped Pokémon with a pale lavender "
+                    "segmented shell, several long pointed spikes, and one visible red "
+                    "eye; distinguish it from Silcoon, which is green and has no spikes. "
+                    "Sewaddle is a small green caterpillar-like Pokémon wearing a "
+                    "large leaf hood, with a yellow face, black eyes, orange mouth, and "
+                    "a segmented green body with small orange bumps; distinguish it from "
+                    "other small Bug-type Pokémon by the leaf covering its head. "
                     "Choose the single most likely Pokémon name. Never "
                     "return multiple candidates, alternate names, aliases, or a list. "
                     "Estimate your confidence in that one guess as a whole-number "
@@ -201,7 +212,7 @@ def format_catch_command(poketwo_bot_id: int, name: str) -> str:
 def format_spawn_reply(name: str, confidence: int, poketwo_bot_id: int) -> str:
     return (
         f"{format_guess(name, confidence)}\n"
-        f"{format_catch_command(poketwo_bot_id, name)}"
+        f"`{format_catch_command(poketwo_bot_id, name)}`"
     )
 
 

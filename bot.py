@@ -2227,8 +2227,8 @@ def remember_reserve_list(message_id: int, embeds: list[discord.Embed]) -> None:
 
 POKEBALL_BURST_SPAWNS: Final[int] = 10
 POKEBALL_BURST_WINDOW_SECONDS: Final[float] = 60.0
-POKEBALL_EVENT_GRACE_SECONDS: Final[float] = 180.0
-POKEBALL_INTERVAL_SECONDS: Final[float] = 120.0
+POKEBALL_EVENT_GRACE_SECONDS: Final[float] = 120.0
+POKEBALL_INTERVAL_SECONDS: Final[float] = 60.0
 ARTWORK_URL: Final[str] = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/"
     "other/official-artwork/{}.png"

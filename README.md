@@ -175,3 +175,5 @@ replies "Exchange cancelled." If `@owner` doesn't have some listed Pokémon, sma
 text under the list names them and suggests "Do you mean @member?" for members
 who do have them. Only the command user (with the reserve manager role) can
 press the buttons (they appear even when `@owner` has none of the listed Pokémon), and unanswered prompts expire after 3 minutes.
+
+In an exchange, `all <pokemon>` moves every form the owner has reserved, including regional forms such as Galarian or Alolan ones, not only the all-forms reservation.

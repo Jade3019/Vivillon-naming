@@ -1721,6 +1721,22 @@ def parse_exchange_list(text: str) -> list[tuple[int, list[str]]]:
     return transfers
 
 
+REGIONAL_MARKER_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:alola|alolan|galar|galarian|hisui|hisuian|paldea|paldean)\b",
+    re.IGNORECASE,
+)
+
+
+def pokemon_matches_exchange_all_forms(pokemon_name: str, base_name: str) -> bool:
+    # Exchanges treat "all <pokemon>" as every form, regional forms included.
+    if pokemon_matches_all_forms_reservation(pokemon_name, base_name):
+        return True
+    stripped_name = " ".join(REGIONAL_MARKER_PATTERN.sub(" ", pokemon_name).split())
+    return bool(stripped_name) and pokemon_matches_all_forms_reservation(
+        stripped_name, base_name
+    )
+
+
 def exchange_reservations(
     reservations: dict[str, list[int]],
     guild_id: int,
@@ -1742,7 +1758,7 @@ def exchange_reservations(
                     if key.startswith(prefix)
                     and not key.startswith(f"{prefix}*:")
                     and key not in keys
-                    and pokemon_matches_all_forms_reservation(
+                    and pokemon_matches_exchange_all_forms(
                         key.removeprefix(prefix), base_name
                     )
                 )

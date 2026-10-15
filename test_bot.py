@@ -555,6 +555,30 @@ class AllFormsExchangeTests(unittest.TestCase):
         self.assertEqual(skipped, [])
 
 
+class RegionalExchangeTests(unittest.TestCase):
+    def test_all_articuno_exchange_includes_regional_forms(self) -> None:
+        reservations = {
+            "10:*:articuno": [100],
+            "10:articuno": [100],
+            "10:galarian articuno": [100],
+            "10:articuno (galar)": [100],
+            "10:zapdos": [100],
+        }
+        updated, moved, _ = exchange_reservations(
+            reservations, 10, 100, [(1, ["all articuno"])]
+        )
+
+        for key in (
+            "10:*:articuno",
+            "10:articuno",
+            "10:galarian articuno",
+            "10:articuno (galar)",
+        ):
+            self.assertEqual(updated[key], [1])
+        self.assertEqual(updated["10:zapdos"], [100])
+        self.assertEqual(moved, [(1, "all articuno")])
+
+
 class ReservationPersistenceTests(unittest.TestCase):
     def test_parses_and_deduplicates_multiple_collection_pokemon(self) -> None:
         self.assertEqual(

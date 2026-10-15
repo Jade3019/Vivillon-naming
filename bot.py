@@ -3549,15 +3549,10 @@ class GrabListView(discord.ui.View):
             all_forms=self.all_forms,
             emojis=self.emojis,
         )
-        blocks = [
-            f"```\n{chunk}\n```" for chunk in paginate_grab_lines(lines, 1800)
-        ]
-        await interaction.response.send_message(
-            blocks[0] + "\nOn phone: press and hold the list, then tap Copy.",
-            ephemeral=True,
-        )
-        for block in blocks[1:]:
-            await interaction.followup.send(block, ephemeral=True)
+        chunks = paginate_grab_lines(lines, 1900)
+        await interaction.response.send_message(chunks[0], ephemeral=True)
+        for chunk in chunks[1:]:
+            await interaction.followup.send(chunk, ephemeral=True)
 
     @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
     async def previous_button(

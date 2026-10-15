@@ -155,3 +155,18 @@ reservation takes precedence over shinyhunt and collection mentions. Otherwise,
 the bot shows a `Shinyhunt:` line and/or a `Collection:` line only for groups
 with matching members. If no one matches, it shows the normal naming reply
 without empty mention lines.
+
+## Exchanging reservations
+
+Reserve managers can move one member's reservations to others. Post a list
+with one member per line (commas separate Pokémon, and `all <pokemon>` works):
+
+```
+@jade - pikachu, eevee
+@bluebird - sylveon, hatterene
+@snowii - all arceus
+```
+
+Then reply to that message with `v!r e @owner` (or `v!r exchange @owner`). Each
+listed Pokémon that `@owner` has reserved moves to the member on its line;
+Pokémon `@owner` doesn't have reserved are reported and left unchanged.

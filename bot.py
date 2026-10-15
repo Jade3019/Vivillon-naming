@@ -1675,6 +1675,59 @@ def remove_reservations(
     return updated_reservations, removed_names, missing_names
 
 
+EXCHANGE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!r\s+(?:e|exchange)\s+<@!?(\d+)>\s*$",
+    re.IGNORECASE,
+)
+EXCHANGE_LINE_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"<@!?(\d+)>\s*[-–—:]\s*(.+)"
+)
+
+
+def parse_exchange_list(text: str) -> list[tuple[int, list[str]]]:
+    transfers: list[tuple[int, list[str]]] = []
+    for line in text.splitlines():
+        match = EXCHANGE_LINE_PATTERN.search(line)
+        if match is None:
+            continue
+        names: list[str] = []
+        for raw_name in match.group(2).split(","):
+            name = unicodedata.normalize("NFC", raw_name.strip())
+            if (
+                name
+                and len(name) <= 60
+                and is_valid_pokemon_name(name)
+                and name.casefold() not in {n.casefold() for n in names}
+            ):
+                names.append(name)
+        if names:
+            transfers.append((int(match.group(1)), names))
+    return transfers
+
+
+def exchange_reservations(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    source_id: int,
+    transfers: list[tuple[int, list[str]]],
+) -> tuple[dict[str, list[int]], list[tuple[int, str]], list[tuple[int, str]]]:
+    updated = {key: list(user_ids) for key, user_ids in reservations.items()}
+    moved: list[tuple[int, str]] = []
+    skipped: list[tuple[int, str]] = []
+    for recipient_id, names in transfers:
+        for name in names:
+            key = reservation_key_for_command(guild_id, name)
+            user_ids = updated.get(key)
+            if recipient_id == source_id or user_ids is None or source_id not in user_ids:
+                skipped.append((recipient_id, name))
+                continue
+            user_ids.remove(source_id)
+            if recipient_id not in user_ids:
+                user_ids.append(recipient_id)
+            moved.append((recipient_id, name))
+    return updated, moved, skipped
+
+
 def format_remove_confirmation(pokemon_name: str, member_mention: str | None) -> str:
     display_names = ", ".join(
         (
@@ -2148,7 +2201,7 @@ class NamingBot(discord.Client):
                 await self.handle_collection_command(message)
                 return
             if re.match(
-                r"^v!r\s+(?:add|list|search|remove|clear)(?:\s|$)",
+                r"^v!r\s+(?:add|list|search|remove|clear|e|exchange)(?:\s|$)",
                 message.content,
                 re.IGNORECASE,
             ):
@@ -2448,6 +2501,9 @@ class NamingBot(discord.Client):
             )
             return
 
+        if re.match(r"^v!r\s+(?:e|exchange)(?:\s|$)", message.content, re.IGNORECASE):
+            await self.handle_reserve_exchange(message)
+            return
         if re.match(r"^v!r\s+remove(?:\s|$)", message.content, re.IGNORECASE):
             await self.handle_reserve_remove(message)
             return
@@ -2516,6 +2572,69 @@ class NamingBot(discord.Client):
         )
         await message.reply(
             f"Reserve {display_names} added to {target.mention}",
+            mention_author=False,
+        )
+
+    async def handle_reserve_exchange(self, message: discord.Message) -> None:
+        usage = (
+            "Reply to a list like `@member - pikachu, eevee` (one member per line) "
+            "with `v!r e @owner`."
+        )
+        match = EXCHANGE_COMMAND_PATTERN.fullmatch(message.content.strip())
+        if match is None or message.reference is None or message.guild is None:
+            await message.reply(usage, mention_author=False)
+            return
+        source_id = int(match.group(1))
+
+        referenced = message.reference.resolved
+        if not isinstance(referenced, discord.Message):
+            try:
+                referenced = await message.channel.fetch_message(
+                    message.reference.message_id
+                )
+            except discord.HTTPException:
+                await message.reply(
+                    "I couldn't read the message you replied to.",
+                    mention_author=False,
+                )
+                return
+
+        transfers = parse_exchange_list(referenced.content)
+        if not transfers:
+            await message.reply(usage, mention_author=False)
+            return
+
+        updated, moved, skipped = exchange_reservations(
+            self.reservations, message.guild.id, source_id, transfers
+        )
+        if moved:
+            try:
+                save_reservations(self.reserve_path, updated)
+            except ValueError:
+                logger.exception("Could not save Pokémon reservation exchange")
+                await message.reply(
+                    "I couldn't save that exchange. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.reservations = updated
+
+        lines = []
+        for recipient_id in dict.fromkeys(r for r, _ in moved):
+            names = ", ".join(n for r, n in moved if r == recipient_id)
+            lines.append(f"<@{recipient_id}> - {names}")
+        response = (
+            f"Exchanged from <@{source_id}>:\n" + "\n".join(lines)
+            if lines
+            else f"Nothing was exchanged; <@{source_id}> has none of those reserved."
+        )
+        if skipped and moved:
+            response += "\nNot reserved by them: " + ", ".join(
+                f"{n} (<@{r}>)" for r, n in skipped
+            )
+        await message.reply(
+            response,
+            allowed_mentions=discord.AllowedMentions.none(),
             mention_author=False,
         )
 

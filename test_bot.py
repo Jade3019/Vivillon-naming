@@ -7,6 +7,8 @@ import discord
 
 from bot import (
     add_shinyhunter,
+    exchange_reservations,
+    parse_exchange_list,
     add_collection_pokemon,
     all_forms_reservation_key,
     clear_guild_reservations,
@@ -490,6 +492,36 @@ class GuessFormatTests(unittest.TestCase):
             "Reserved: <@111>\n"
             "`<@789> c pikachu`",
         )
+
+
+class ReservationExchangeTests(unittest.TestCase):
+    def test_parses_member_lines_with_multiple_pokemon(self) -> None:
+        text = "<@1> - pikachu, Eevee\n<@2> - all arceus\nnoise\n<@3> – sylveon"
+
+        self.assertEqual(
+            parse_exchange_list(text),
+            [(1, ["pikachu", "Eevee"]), (2, ["all arceus"]), (3, ["sylveon"])],
+        )
+
+    def test_moves_only_reservations_held_by_the_source(self) -> None:
+        reservations = {
+            "10:pikachu": [100, 5],
+            "10:eevee": [5],
+            "10:*:arceus": [100],
+        }
+        updated, moved, skipped = exchange_reservations(
+            reservations,
+            10,
+            100,
+            [(1, ["pikachu", "eevee"]), (2, ["all arceus"])],
+        )
+
+        self.assertEqual(updated["10:pikachu"], [5, 1])
+        self.assertEqual(updated["10:eevee"], [5])
+        self.assertEqual(updated["10:*:arceus"], [2])
+        self.assertEqual(moved, [(1, "pikachu"), (2, "all arceus")])
+        self.assertEqual(skipped, [(1, "eevee")])
+        self.assertEqual(reservations["10:pikachu"], [100, 5])
 
 
 class ReservationPersistenceTests(unittest.TestCase):

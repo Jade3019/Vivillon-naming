@@ -535,6 +535,26 @@ class ReservationExchangeTests(unittest.TestCase):
         self.assertEqual(reservations["10:pikachu"], [100, 5])
 
 
+class AllFormsExchangeTests(unittest.TestCase):
+    def test_all_marshadow_moves_every_marshadow_form(self) -> None:
+        reservations = {
+            "10:*:marshadow": [100],
+            "10:marshadow": [100],
+            "10:zenith marshadow": [100, 7],
+            "10:mew": [100],
+        }
+        updated, moved, skipped = exchange_reservations(
+            reservations, 10, 100, [(1, ["all marshadow"])]
+        )
+
+        self.assertEqual(updated["10:*:marshadow"], [1])
+        self.assertEqual(updated["10:marshadow"], [1])
+        self.assertEqual(updated["10:zenith marshadow"], [7, 1])
+        self.assertEqual(updated["10:mew"], [100])
+        self.assertEqual(moved, [(1, "all marshadow")])
+        self.assertEqual(skipped, [])
+
+
 class ReservationPersistenceTests(unittest.TestCase):
     def test_parses_and_deduplicates_multiple_collection_pokemon(self) -> None:
         self.assertEqual(

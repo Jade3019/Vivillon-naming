@@ -854,6 +854,10 @@ async def request_prediction(
                     "lighter gray lower body, short stubby arms, and a thin "
                     "wavy shadow tail. Identify it as Marshadow, not another "
                     "dark ghost Pokémon. "
+                    "Zenith Marshadow is the same body as Marshadow but with a "
+                    "teal-green head, curls and collar, pale yellow flame-like "
+                    "tufts on its head and tail, and a red lightning-bolt mark "
+                    "above each eye. Return the name Zenith Marshadow for it. "
                     "Charcadet is a small humanoid Pokémon with a dark charcoal helmet-like "
                     "head, a glowing orange-red eye, red and orange armor-like body parts, "
                     "and a small flame-like plume on top; distinguish it from other "
@@ -1728,14 +1732,31 @@ def exchange_reservations(
     skipped: list[tuple[int, str]] = []
     for recipient_id, names in transfers:
         for name in names:
-            key = reservation_key_for_command(guild_id, name)
-            user_ids = updated.get(key)
-            if recipient_id == source_id or user_ids is None or source_id not in user_ids:
+            keys = [reservation_key_for_command(guild_id, name)]
+            if name.casefold().startswith("all "):
+                base_name = name[4:].strip()
+                prefix = f"{guild_id}:"
+                keys.extend(
+                    key
+                    for key in updated
+                    if key.startswith(prefix)
+                    and not key.startswith(f"{prefix}*:")
+                    and key not in keys
+                    and pokemon_matches_all_forms_reservation(
+                        key.removeprefix(prefix), base_name
+                    )
+                )
+            held_keys = [
+                key for key in keys if source_id in updated.get(key, [])
+            ]
+            if recipient_id == source_id or not held_keys:
                 skipped.append((recipient_id, name))
                 continue
-            user_ids.remove(source_id)
-            if recipient_id not in user_ids:
-                user_ids.append(recipient_id)
+            for key in held_keys:
+                user_ids = updated[key]
+                user_ids.remove(source_id)
+                if recipient_id not in user_ids:
+                    user_ids.append(recipient_id)
             moved.append((recipient_id, name))
     return updated, moved, skipped
 

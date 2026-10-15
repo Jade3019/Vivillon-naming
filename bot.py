@@ -6,6 +6,7 @@ import math
 import os
 import re
 import time
+from collections import OrderedDict
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -2210,6 +2211,103 @@ class ReservationPagesView(discord.ui.View):
         )
 
 
+RESERVE_LIST_CACHE: Final[OrderedDict[int, list[str]]] = OrderedDict()
+MENTION_PATTERN: Final[re.Pattern[str]] = re.compile(r"<@!?(\d+)>")
+GRAB_PAGE_CHARS: Final[int] = 3800
+
+
+def remember_reserve_list(message_id: int, embeds: list[discord.Embed]) -> None:
+    RESERVE_LIST_CACHE[message_id] = [
+        embed.description for embed in embeds if embed.description
+    ]
+    while len(RESERVE_LIST_CACHE) > 300:
+        RESERVE_LIST_CACHE.popitem(last=False)
+
+
+def parse_grab_entries(texts: list[str]) -> list[tuple[str, list[int]]]:
+    entries: list[tuple[str, list[int]]] = []
+    for text in texts:
+        for line in text.splitlines():
+            user_ids = [int(user_id) for user_id in MENTION_PATTERN.findall(line)]
+            name = MENTION_PATTERN.sub("", line)
+            name = unicodedata.normalize("NFC", name).strip(" \t-–—:,•*`")
+            if name.casefold().startswith("all forms of "):
+                name = "all " + name[len("all forms of ") :]
+            if name and len(name) <= 60 and is_valid_pokemon_name(name):
+                entries.append((name, list(dict.fromkeys(user_ids))))
+    return entries
+
+
+def grab_entry_name(name: str, all_forms: bool) -> str:
+    if (
+        all_forms
+        and not name.casefold().startswith("all ")
+        and len(POKEMON_FORMS.get(name.casefold(), [])) > 1
+    ):
+        return f"all {name}"
+    return name
+
+
+def build_grab_lines(
+    entries: list[tuple[str, list[int]]],
+    *,
+    ordered: bool,
+    all_forms: bool,
+    emojis: list[str],
+) -> list[str]:
+    rows = [(grab_entry_name(name, all_forms), ids) for name, ids in entries]
+    if ordered:
+        rows.sort(key=lambda row: row[0].casefold().removeprefix("all "))
+    lines: list[str] = []
+    for index, (name, user_ids) in enumerate(rows):
+        line = name[0].upper() + name[1:]
+        if emojis:
+            line = f"{emojis[index % len(emojis)]} {line}"
+        if user_ids:
+            line += " - " + ", ".join(f"<@{user_id}>" for user_id in user_ids)
+        lines.append(line)
+    return lines
+
+
+def paginate_grab_lines(lines: list[str]) -> list[str]:
+    pages: list[str] = []
+    current: list[str] = []
+    length = 0
+    for line in lines:
+        if current and length + len(line) + 1 > GRAB_PAGE_CHARS:
+            pages.append("\n".join(current))
+            current, length = [], 0
+        current.append(line)
+        length += len(line) + 1
+    if current:
+        pages.append("\n".join(current))
+    return pages or ["No Pokémon."]
+
+
+def grab_reserve_pairs(
+    entries: list[tuple[str, list[int]]],
+    all_forms: bool,
+) -> list[tuple[str, int]]:
+    return [
+        (grab_entry_name(name, all_forms), user_id)
+        for name, user_ids in entries
+        for user_id in user_ids
+    ]
+
+
+def add_reservations_bulk(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    pairs: list[tuple[str, int]],
+) -> dict[str, list[int]]:
+    updated = {key: list(user_ids) for key, user_ids in reservations.items()}
+    for name, user_id in pairs:
+        user_ids = updated.setdefault(reservation_key_for_command(guild_id, name), [])
+        if user_id not in user_ids:
+            user_ids.append(user_id)
+    return updated
+
+
 async def reply_with_reservation_embeds(
     message: discord.Message,
     embeds: list[discord.Embed],
@@ -2227,6 +2325,7 @@ async def reply_with_reservation_embeds(
     )
     if view is not None:
         view.message = response
+    remember_reserve_list(response.id, embeds)
 
 
 def load_reservations(path: Path) -> dict[str, list[int]]:
@@ -2309,6 +2408,9 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.fullmatch(r"v!grab\s*", message.content, re.IGNORECASE):
+                await self.handle_grab_command(message)
+                return
             if re.fullmatch(r"v!ping\s*", message.content, re.IGNORECASE):
                 await self.handle_ping_command(message)
                 return
@@ -2351,6 +2453,41 @@ class NamingBot(discord.Client):
             return
         if SPAWN_PATTERN.search(message_text(after)):
             await self.handle_spawn(after)
+
+    async def handle_grab_command(self, message: discord.Message) -> None:
+        usage = "Reply to a Pokémon list (like a `v!r search` result) with `v!grab`."
+        if message.guild is None or message.reference is None:
+            await message.reply(usage, mention_author=False)
+            return
+        referenced = message.reference.resolved
+        if not isinstance(referenced, discord.Message):
+            try:
+                referenced = await message.channel.fetch_message(
+                    message.reference.message_id
+                )
+            except discord.HTTPException:
+                await message.reply(
+                    "I couldn't read the message you replied to.",
+                    mention_author=False,
+                )
+                return
+        texts = RESERVE_LIST_CACHE.get(referenced.id)
+        if texts is None:
+            texts = [referenced.content] + [
+                embed.description for embed in referenced.embeds if embed.description
+            ]
+        entries = parse_grab_entries(texts)
+        if not entries:
+            await message.reply(usage, mention_author=False)
+            return
+        view = GrabListView(self, message.guild.id, message.author.id, entries)
+        response = await message.reply(
+            embed=view.current_embed(),
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none(),
+            mention_author=False,
+        )
+        view.message = response
 
     async def handle_ping_command(self, message: discord.Message) -> None:
         started_at = time.perf_counter()
@@ -3123,6 +3260,234 @@ class ExchangeReservesView(discord.ui.View):
         await interaction.response.edit_message(
             content="Exchange cancelled.", embed=None, view=None
         )
+
+
+class GrabEmojiModal(discord.ui.Modal, title="Custom emoji"):
+    emojis = discord.ui.TextInput(
+        label="Emojis (separate with commas)",
+        placeholder="🔥, 💧, <:custom:123456789012345678>",
+        required=False,
+        max_length=500,
+    )
+
+    def __init__(self, view: "GrabListView") -> None:
+        super().__init__()
+        self.grab_view = view
+        self.emojis.default = ", ".join(view.emojis) or None
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.grab_view.emojis = [
+            emoji.strip() for emoji in str(self.emojis).split(",") if emoji.strip()
+        ][:50]
+        await self.grab_view.refresh(interaction)
+
+
+class GrabAddReservesView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+        pairs: list[tuple[str, int]],
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+        self.pairs = pairs
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who clicked Add reserves can confirm this.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.success)
+    async def confirm(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        updated = add_reservations_bulk(
+            self.bot.reservations, self.guild_id, self.pairs
+        )
+        try:
+            save_reservations(self.bot.reserve_path, updated)
+        except ValueError:
+            logger.exception("Could not save grabbed reservations")
+            await interaction.response.send_message(
+                "I couldn't save those reserves. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+        self.bot.reservations = updated
+        self.stop()
+        await interaction.response.edit_message(content="Reserves added.", view=None)
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.danger)
+    async def cancel(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        self.stop()
+        await interaction.response.edit_message(
+            content="Add reserves cancelled.", view=None
+        )
+
+
+class GrabListView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+        entries: list[tuple[str, list[int]]],
+    ) -> None:
+        super().__init__(timeout=600)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+        self.entries = entries
+        self.ordered = False
+        self.all_forms = False
+        self.emojis: list[str] = []
+        self.page = 0
+        self.message: discord.Message | None = None
+        self.sync_buttons()
+
+    def pages(self) -> list[str]:
+        return paginate_grab_lines(
+            build_grab_lines(
+                self.entries,
+                ordered=self.ordered,
+                all_forms=self.all_forms,
+                emojis=self.emojis,
+            )
+        )
+
+    def current_embed(self) -> discord.Embed:
+        pages = self.pages()
+        self.page = min(self.page, len(pages) - 1)
+        embed = discord.Embed(
+            description=pages[self.page],
+            color=discord.Color.blurple(),
+        )
+        footer = f"{len(self.entries)} Pokémon"
+        if len(pages) > 1:
+            footer += f" • Page {self.page + 1} of {len(pages)}"
+        embed.set_footer(text=footer)
+        return embed
+
+    def sync_buttons(self) -> None:
+        page_count = len(self.pages())
+        self.order_button.style = (
+            discord.ButtonStyle.success if self.ordered else discord.ButtonStyle.secondary
+        )
+        self.all_forms_button.style = (
+            discord.ButtonStyle.success
+            if self.all_forms
+            else discord.ButtonStyle.secondary
+        )
+        self.all_forms_button.label = "All forms on" if self.all_forms else "All forms off"
+        self.emoji_button.style = (
+            discord.ButtonStyle.success if self.emojis else discord.ButtonStyle.secondary
+        )
+        self.previous_button.disabled = self.page <= 0
+        self.next_button.disabled = self.page >= page_count - 1
+
+    async def refresh(self, interaction: discord.Interaction) -> None:
+        embed = self.current_embed()
+        self.sync_buttons()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def on_timeout(self) -> None:
+        if self.message is None:
+            return
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.HTTPException:
+            logger.warning("Could not disable expired grab-list buttons")
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who ran `v!grab` can use these buttons.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Order", style=discord.ButtonStyle.secondary, row=0)
+    async def order_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        self.ordered = not self.ordered
+        self.page = 0
+        await self.refresh(interaction)
+
+    @discord.ui.button(label="All forms off", style=discord.ButtonStyle.secondary, row=0)
+    async def all_forms_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        self.all_forms = not self.all_forms
+        await self.refresh(interaction)
+
+    @discord.ui.button(label="Custom emoji", style=discord.ButtonStyle.secondary, row=0)
+    async def emoji_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        await interaction.response.send_modal(GrabEmojiModal(self))
+
+    @discord.ui.button(label="Add reserves", style=discord.ButtonStyle.primary, row=0)
+    async def add_reserves_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        if not isinstance(interaction.user, discord.Member) or not any(
+            role.id == RESERVE_ROLE_ID for role in interaction.user.roles
+        ):
+            await interaction.response.send_message(
+                "Only reserve managers can add reserves.", ephemeral=True
+            )
+            return
+        pairs = grab_reserve_pairs(self.entries, self.all_forms)
+        if not pairs:
+            await interaction.response.send_message(
+                "Add reserves only works when the list has an @user behind each Pokémon.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            "Are you sure you want to add all reserves?",
+            view=GrabAddReservesView(
+                self.bot, self.guild_id, interaction.user.id, pairs
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
+    async def previous_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        self.page = max(0, self.page - 1)
+        await self.refresh(interaction)
+
+    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.secondary, row=1)
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        self.page += 1
+        await self.refresh(interaction)
 
 
 class ClearReservesView(discord.ui.View):

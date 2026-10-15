@@ -179,3 +179,21 @@ press the buttons (they appear even when `@owner` has none of the listed Pokémo
 In an exchange, `all <pokemon>` moves every form the owner has reserved, including regional forms such as Galarian or Alolan ones, not only the all-forms reservation.
 
 Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an all-forms reservation as each form separately (for example, each Urshifu form) when form data is available. Species without form data still show as "all forms of <pokemon>".
+
+## Grabbing a list with `v!grab`
+
+Reply to a list, such as a `v!r search` result, with `v!grab`. The bot builds
+a separate list of every Pokémon (not just the visible page; lists of ~200 are
+paged). Only the person who ran `v!grab` can use its buttons:
+
+- **Order** – sorts the list alphabetically (click again to restore the original order).
+- **All forms off / on** – turns green when on and puts `All` in front of
+  Pokémon that have alternate forms.
+- **Custom emoji** – opens a box for emojis separated by commas; they are put in
+  front of the Pokémon in order and repeat (emoji 1, emoji 2, emoji 1, ...).
+- **Add reserves** – reserve managers only, and only when the list has an `@user`
+  behind the Pokémon (`pikachu - @user1`). Asks "Are you sure you want to add all
+  reserves?" with Yes/No; Yes adds each Pokémon to its user like `v!r add`
+  (using `all <pokemon>` where All forms is on). Pokémon without an `@user` are skipped.
+
+After a bot restart, `v!grab` on an old search message only sees the page shown in it.

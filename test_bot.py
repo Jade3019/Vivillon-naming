@@ -7,6 +7,10 @@ import discord
 
 from bot import (
     add_shinyhunter,
+    add_reservations_bulk,
+    build_grab_lines,
+    grab_reserve_pairs,
+    parse_grab_entries,
     exchange_reservations,
     parse_exchange_list,
     add_collection_pokemon,
@@ -577,6 +581,40 @@ class RegionalExchangeTests(unittest.TestCase):
             self.assertEqual(updated[key], [1])
         self.assertEqual(updated["10:zapdos"], [100])
         self.assertEqual(moved, [(1, "all articuno")])
+
+
+class GrabListTests(unittest.TestCase):
+    def test_parses_search_lines_and_mentions(self) -> None:
+        entries = parse_grab_entries(
+            ["pikachu <@1>\n- eevee\nall forms of arceus <@2> <@3>"]
+        )
+
+        self.assertEqual(
+            entries,
+            [("pikachu", [1]), ("eevee", []), ("all arceus", [2, 3])],
+        )
+
+    def test_order_all_forms_and_emoji_cycle(self) -> None:
+        entries = [("sylveon", [1]), ("trapinch", []), ("urshifu", []), ("ditto", [])]
+
+        self.assertEqual(
+            build_grab_lines(entries, ordered=True, all_forms=True, emojis=["🔥", "💧"]),
+            ["🔥 Ditto", "💧 Sylveon - <@1>", "🔥 Trapinch", "💧 All urshifu"],
+        )
+        self.assertEqual(
+            build_grab_lines(entries, ordered=False, all_forms=False, emojis=[]),
+            ["Sylveon - <@1>", "Trapinch", "Urshifu", "Ditto"],
+        )
+
+    def test_bulk_add_gives_each_pokemon_to_its_user(self) -> None:
+        pairs = grab_reserve_pairs(
+            [("pikachu", [1]), ("alcremie", [2]), ("eevee", [])], False
+        )
+        updated = add_reservations_bulk({"5:pikachu": [9]}, 5, pairs)
+
+        self.assertEqual(updated["5:pikachu"], [9, 1])
+        self.assertEqual(updated["5:alcremie"], [2])
+        self.assertNotIn("5:eevee", updated)
 
 
 class ReservationPersistenceTests(unittest.TestCase):

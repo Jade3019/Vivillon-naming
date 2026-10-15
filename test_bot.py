@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import discord
+
 from bot import (
     add_shinyhunter,
     clear_guild_reservations,
@@ -22,6 +24,7 @@ from bot import (
     remove_reservation,
     remove_reservations,
     reservation_key,
+    ReservationPagesView,
     reserved_pokemon_for_user,
     save_reservations,
     shinyhunt_pokemon_for_user,
@@ -344,6 +347,22 @@ class ReservationPersistenceTests(unittest.TestCase):
             [embed.footer.text for embed in embeds],
             ["Page 1 of 3", "Page 2 of 3", "Page 3 of 3"],
         )
+
+    def test_reserve_page_view_enables_arrows_for_available_pages(self) -> None:
+        embeds = [
+            discord.Embed(description="Page 1"),
+            discord.Embed(description="Page 2"),
+        ]
+        view = ReservationPagesView(embeds, guild_id=1)
+
+        buttons = {button.custom_id: button for button in view.children}
+        self.assertTrue(buttons["reserve_pages:previous"].disabled)
+        self.assertFalse(buttons["reserve_pages:next"].disabled)
+
+        view.current_page = 1
+        view.update_buttons()
+        self.assertFalse(buttons["reserve_pages:previous"].disabled)
+        self.assertTrue(buttons["reserve_pages:next"].disabled)
 
 
 class PokemonNameValidationTests(unittest.TestCase):

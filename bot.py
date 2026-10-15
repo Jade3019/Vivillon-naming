@@ -851,6 +851,100 @@ def format_pokemon_reserver_embeds(
     return embeds
 
 
+class ReservationPagesView(discord.ui.View):
+    def __init__(self, embeds: list[discord.Embed], guild_id: int) -> None:
+        super().__init__(timeout=300)
+        self.embeds = embeds
+        self.guild_id = guild_id
+        self.current_page = 0
+        self.message: discord.Message | None = None
+        self.update_buttons()
+
+    def update_buttons(self) -> None:
+        for child in self.children:
+            if not isinstance(child, discord.ui.Button):
+                continue
+            if child.custom_id == "reserve_pages:previous":
+                child.disabled = self.current_page == 0
+            elif child.custom_id == "reserve_pages:next":
+                child.disabled = self.current_page == len(self.embeds) - 1
+
+    async def on_timeout(self) -> None:
+        if self.message is None:
+            return
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.HTTPException:
+            logger.warning("Could not disable expired reserve-page buttons")
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These reserve pages can only be used in their original server.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary,
+        custom_id="reserve_pages:previous",
+    )
+    async def previous_page(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        self.current_page = max(0, self.current_page - 1)
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self,
+        )
+
+    @discord.ui.button(
+        emoji="▶️",
+        style=discord.ButtonStyle.secondary,
+        custom_id="reserve_pages:next",
+    )
+    async def next_page(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        self.current_page = min(len(self.embeds) - 1, self.current_page + 1)
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self,
+        )
+
+
+async def reply_with_reservation_embeds(
+    message: discord.Message,
+    embeds: list[discord.Embed],
+) -> None:
+    view = (
+        ReservationPagesView(embeds, message.guild.id)
+        if len(embeds) > 1 and message.guild is not None
+        else None
+    )
+    response = await message.reply(
+        embed=embeds[0],
+        view=view,
+        mention_author=False,
+        allowed_mentions=discord.AllowedMentions.none(),
+    )
+    if view is not None:
+        view.message = response
+
+
 def load_reservations(path: Path) -> dict[str, list[int]]:
     if not path.exists():
         return {}
@@ -1011,12 +1105,7 @@ class NamingBot(discord.Client):
                 self.reservations,
                 message.guild.id,
             )
-            for embed in embeds:
-                await message.reply(
-                    embed=embed,
-                    mention_author=False,
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
+            await reply_with_reservation_embeds(message, embeds)
             return
         if re.match(r"^v!r\s+list(?:\s|$)", message.content, re.IGNORECASE):
             await message.reply("Usage: `v!r list`", mention_author=False)
@@ -1203,16 +1292,7 @@ class NamingBot(discord.Client):
                     member.id,
                 ),
             )
-            await message.reply(
-                embed=embeds[0],
-                mention_author=False,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-            for embed in embeds[1:]:
-                await message.channel.send(
-                    embed=embed,
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
+            await reply_with_reservation_embeds(message, embeds)
             return
 
         pokemon_name = unicodedata.normalize("NFC", query)
@@ -1228,16 +1308,7 @@ class NamingBot(discord.Client):
             message.guild.id,
             pokemon_name,
         )
-        await message.reply(
-            embed=embeds[0],
-            mention_author=False,
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
-        for embed in embeds[1:]:
-            await message.channel.send(
-                embed=embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+        await reply_with_reservation_embeds(message, embeds)
 
     async def handle_spawn(self, message: discord.Message) -> None:
         url = image_url(message)

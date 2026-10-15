@@ -62,7 +62,8 @@ This application does not bypass those restrictions.
 
 Any server member can view reservations with `v!r list`, search who reserved a
 Pokémon with `v!r search pikachu`, or see one member's reserved Pokémon with
-`v!r search @member`. These read-only commands show results in paginated embeds.
+`v!r search @member`. Results with multiple pages show previous/next arrow
+buttons beneath the embed.
 
 Only members with the reserve-manager role (role ID `1532820386511720579`) can
 change reservations. They can reserve Pokémon for a server member with:

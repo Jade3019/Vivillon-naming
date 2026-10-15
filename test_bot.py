@@ -98,7 +98,7 @@ class ConfigTests(unittest.TestCase):
         config = self.load_config()
 
         self.assertIsNone(config.allowed_channel_ids)
-        self.assertEqual(config.max_concurrent_vision_requests, 3)
+        self.assertEqual(config.max_concurrent_vision_requests, 8)
 
     def test_configures_concurrent_vision_request_limit(self) -> None:
         config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="8")

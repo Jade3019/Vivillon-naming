@@ -223,7 +223,7 @@ class Config:
         try:
             poketwo_bot_id = int(poketwo_bot_id)
             max_concurrent_vision_requests = int(
-                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "3")
+                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "8")
             )
             if max_concurrent_vision_requests <= 0:
                 raise ValueError

@@ -200,6 +200,7 @@ class Config:
     allowed_channel_ids: frozenset[int] | None
     max_concurrent_vision_requests: int
     openai_model: str
+    openai_image_detail: str = "low"
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -220,6 +221,9 @@ class Config:
                 "Set only one of ALLOWED_CHANNEL_IDS or ALLOWED_CHANNEL_ID"
             )
         configured_channel_ids = channel_ids or legacy_channel_id
+        image_detail = os.environ.get("OPENAI_IMAGE_DETAIL", "low").strip().lower()
+        if image_detail not in {"low", "high", "auto"}:
+            raise ValueError("OPENAI_IMAGE_DETAIL must be low, high, or auto")
         try:
             poketwo_bot_id = int(poketwo_bot_id)
             max_concurrent_vision_requests = int(
@@ -244,6 +248,7 @@ class Config:
                 allowed_channel_ids=allowed_channel_ids or None,
                 max_concurrent_vision_requests=max_concurrent_vision_requests,
                 openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                openai_image_detail=image_detail,
             )
         except ValueError as error:
             raise ValueError(
@@ -281,10 +286,13 @@ async def recognize_pokemon(
     client: AsyncOpenAI,
     http: aiohttp.ClientSession,
     model: str,
+    detail: str = "low",
 ) -> tuple[str, float]:
     # Letting OpenAI fetch the image skips our own download and base64 step.
     try:
-        return await request_prediction(url, client=client, model=model)
+        return await request_prediction(
+            url, client=client, model=model, detail=detail
+        )
     except BadRequestError:
         logger.info("OpenAI could not fetch the image URL; uploading it instead")
 
@@ -300,7 +308,10 @@ async def recognize_pokemon(
 
     encoded_image = base64.b64encode(image_bytes).decode("ascii")
     return await request_prediction(
-        f"data:{content_type};base64,{encoded_image}", client=client, model=model
+        f"data:{content_type};base64,{encoded_image}",
+        client=client,
+        model=model,
+        detail=detail,
     )
 
 
@@ -309,6 +320,7 @@ async def request_prediction(
     *,
     client: AsyncOpenAI,
     model: str,
+    detail: str,
 ) -> tuple[str, float]:
     result = await client.chat.completions.create(
         model=model,
@@ -840,7 +852,7 @@ async def request_prediction(
                         "type": "image_url",
                         "image_url": {
                             "url": image_ref,
-                            "detail": "high",
+                            "detail": detail,
                         },
                     }
                 ],
@@ -2633,6 +2645,7 @@ class NamingBot(discord.Client):
                             client=self.openai,
                             http=self.image_http,
                             model=self.config.openai_model,
+                            detail=self.config.openai_image_detail,
                         )
                         break
                     except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):

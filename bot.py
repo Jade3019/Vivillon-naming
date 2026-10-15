@@ -3367,12 +3367,14 @@ class GrabAddReservesView(discord.ui.View):
             return
         no_pings = discord.AllowedMentions.none()
         try:
-            for start in range(0, len(self.pairs), 10):
-                lines = []
-                for name, user_id in self.pairs[start : start + 10]:
-                    lines.append(f"v!r add {name} <@{user_id}>")
-                    lines.append(f"{grab_display_name(name)} added to <@{user_id}>")
-                await channel.send("\n".join(lines), allowed_mentions=no_pings)
+            for name, user_id in self.pairs:
+                await channel.send(
+                    f"v!r add {name} <@{user_id}>", allowed_mentions=no_pings
+                )
+                await channel.send(
+                    f"{grab_display_name(name)} added to <@{user_id}>",
+                    allowed_mentions=no_pings,
+                )
             await interaction.edit_original_response(content="Reserves added.")
         except discord.HTTPException:
             logger.exception("Could not post grabbed reserve confirmations")

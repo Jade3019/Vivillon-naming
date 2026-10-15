@@ -80,7 +80,7 @@ class ReservationPersistenceTests(unittest.TestCase):
     def test_formats_reservation_embed_and_splits_long_lists(self) -> None:
         embeds = format_reservation_embeds("Jade", ["eevee", "pikachu"])
         self.assertEqual(embeds[0].title, "Pokémon reserved by Jade")
-        self.assertEqual(embeds[0].description, "Eevee, Pikachu")
+        self.assertEqual(embeds[0].description, "Eevee\nPikachu")
 
         long_embeds = format_reservation_embeds("Jade", ["pikachu"] * 600)
         self.assertGreater(len(long_embeds), 1)

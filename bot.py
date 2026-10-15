@@ -324,7 +324,7 @@ def format_reservation_embeds(
     for page_number, page_names in enumerate(pages, start=1):
         embed = discord.Embed(
             title=heading,
-            description=", ".join(page_names),
+            description="\n".join(page_names),
             color=discord.Color.blurple(),
         )
         if total_pages > 1:

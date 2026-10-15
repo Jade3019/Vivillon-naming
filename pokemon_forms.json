@@ -3670,6 +3670,17 @@
     "ogerpon-wellspring-mask",
     "wellspring-mask ogerpon"
   ],
+  "grass_and_normal_type_aliases": [
+    "arboliva",
+    "deerling",
+    "deerling winter",
+    "dolliv",
+    "sawsbuck",
+    "sawsbuck winter",
+    "smoliv",
+    "winter deerling",
+    "winter sawsbuck"
+  ],
   "normal_and_water_type_aliases": [
     "bibarel"
   ],

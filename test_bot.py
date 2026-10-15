@@ -96,6 +96,12 @@ class ConfigTests(unittest.TestCase):
         config = self.load_config()
 
         self.assertIsNone(config.allowed_channel_ids)
+        self.assertEqual(config.max_concurrent_vision_requests, 3)
+
+    def test_configures_concurrent_vision_request_limit(self) -> None:
+        config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="8")
+
+        self.assertEqual(config.max_concurrent_vision_requests, 8)
 
     def test_rejects_invalid_channel_allowlist(self) -> None:
         for value in ("100,,200", "abc", "0", "-10"):
@@ -105,6 +111,11 @@ class ConfigTests(unittest.TestCase):
     def test_rejects_both_channel_settings_at_once(self) -> None:
         with self.assertRaisesRegex(ValueError, "Set only one"):
             self.load_config(ALLOWED_CHANNEL_ID="100", ALLOWED_CHANNEL_IDS="200")
+
+    def test_rejects_invalid_vision_request_limit(self) -> None:
+        for value in ("0", "-1", "many"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
 
 
 class FireSpawnFormattingTests(unittest.TestCase):

@@ -194,6 +194,7 @@ class Config:
     openai_api_key: str
     poketwo_bot_id: int
     allowed_channel_ids: frozenset[int] | None
+    max_concurrent_vision_requests: int
     openai_model: str
 
     @classmethod
@@ -217,6 +218,11 @@ class Config:
         configured_channel_ids = channel_ids or legacy_channel_id
         try:
             poketwo_bot_id = int(poketwo_bot_id)
+            max_concurrent_vision_requests = int(
+                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "3")
+            )
+            if max_concurrent_vision_requests <= 0:
+                raise ValueError
             channel_id_values = (
                 configured_channel_ids.split(",") if configured_channel_ids else []
             )
@@ -232,12 +238,14 @@ class Config:
                 openai_api_key=openai_api_key,
                 poketwo_bot_id=poketwo_bot_id,
                 allowed_channel_ids=allowed_channel_ids or None,
+                max_concurrent_vision_requests=max_concurrent_vision_requests,
                 openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
             )
         except ValueError as error:
             raise ValueError(
                 "POKETWO_BOT_ID and configured channel IDs must be positive "
-                "numeric Discord IDs"
+                "numeric Discord IDs; MAX_CONCURRENT_VISION_REQUESTS must be "
+                "a positive integer"
             ) from error
 
 
@@ -1983,7 +1991,10 @@ class NamingBot(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.config = config
-        self.openai = AsyncOpenAI(api_key=config.openai_api_key)
+        self.openai = AsyncOpenAI(api_key=config.openai_api_key, max_retries=5)
+        self.vision_semaphore = asyncio.Semaphore(
+            config.max_concurrent_vision_requests
+        )
         self.image_http: aiohttp.ClientSession | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
@@ -2476,12 +2487,13 @@ class NamingBot(discord.Client):
             return
 
         try:
-            name, confidence = await recognize_pokemon(
-                url,
-                client=self.openai,
-                http=self.image_http,
-                model=self.config.openai_model,
-            )
+            async with self.vision_semaphore:
+                name, confidence = await recognize_pokemon(
+                    url,
+                    client=self.openai,
+                    http=self.image_http,
+                    model=self.config.openai_model,
+                )
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
             logger.exception("Could not recognize spawn in message %s", message.id)
             await message.reply(

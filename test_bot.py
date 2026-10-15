@@ -137,6 +137,10 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertEqual(type_icon_filename_for_pokemon("Glaceon"), "ice_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Cetitan"), "ice_type.png")
         self.assertIsNone(type_icon_filename_for_pokemon("Dewgong"))
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Darmanitan-Galar-Zen"),
+            "ice_fire_type_icons.png",
+        )
         self.assertIsNone(type_icon_filename_for_pokemon("Venusaur"))
         self.assertTrue(is_single_type_electric_pokemon("Jolteon"))
         self.assertFalse(is_single_type_electric_pokemon("Raichu-alola"))

@@ -54,10 +54,11 @@ before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pure Ice-type Pokémon show only the Ice icon; pure Grass-type Pokémon show only the Grass icon; pure Electric-type Pokémon show only the Electric icon; pure Water-type Pokémon show only the Water icon; pure Fire-type Pokémon show only the Fire icon; pure Normal-type
-Pokémon show only the Normal icon. Pokémon with exactly Fire and Normal as
-their two types show both icons, as do Pokémon with exactly Normal and Water,
-Water and Fire, Fire and Electric, Electric and Water, Electric and Normal,
-Grass and Fire, Grass and Water, Grass and Normal, or Grass and Electric.
+Pokémon show only the Normal icon. Pokémon with exactly Ice and Fire as
+their two types show both icons, as do Pokémon with exactly Fire and Normal,
+Normal and Water, Water and Fire, Fire and Electric, Electric and Water,
+Electric and Normal, Grass and Fire, Grass and Water, Grass and Normal, or
+Grass and Electric.
 Type-matched spawns show the icon beside the guessed name in an embed, with the
 catch command in the embed description. Other dual-type Pokémon keep the regular text
 reply. Reservation, shinyhunt, and collection mentions remain active for both

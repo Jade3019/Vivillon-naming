@@ -2327,6 +2327,12 @@ def grab_reserve_pairs(
     ]
 
 
+def grab_display_name(name: str) -> str:
+    if name.casefold().startswith("all "):
+        return f"all forms of {name[4:]}".capitalize()
+    return name[0].upper() + name[1:]
+
+
 def add_reservations_bulk(
     reservations: dict[str, list[int]],
     guild_id: int,
@@ -3356,7 +3362,29 @@ class GrabAddReservesView(discord.ui.View):
             return
         self.bot.reservations = updated
         self.stop()
-        await interaction.response.edit_message(content="Reserves added.", view=None)
+        await interaction.response.edit_message(content="Adding reserves...", view=None)
+
+        channel = interaction.channel
+        if channel is None:
+            return
+        no_pings = discord.AllowedMentions.none()
+        try:
+            for start in range(0, len(self.pairs), 15):
+                group = self.pairs[start : start + 15]
+                await channel.send(
+                    "\n".join(f"v!r add {name} <@{user_id}>" for name, user_id in group),
+                    allowed_mentions=no_pings,
+                )
+                await channel.send(
+                    "\n".join(
+                        f"{grab_display_name(name)} added to <@{user_id}>"
+                        for name, user_id in group
+                    ),
+                    allowed_mentions=no_pings,
+                )
+            await interaction.edit_original_response(content="Reserves added.")
+        except discord.HTTPException:
+            logger.exception("Could not post grabbed reserve confirmations")
 
     @discord.ui.button(label="No", style=discord.ButtonStyle.danger)
     async def cancel(

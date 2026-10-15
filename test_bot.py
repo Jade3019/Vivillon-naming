@@ -9,6 +9,7 @@ from bot import (
     add_shinyhunter,
     add_reservations_bulk,
     build_grab_lines,
+    grab_display_name,
     grab_reserve_pairs,
     parse_grab_entries,
     exchange_reservations,
@@ -625,6 +626,10 @@ class GrabListTests(unittest.TestCase):
             build_grab_lines(entries, ordered=False, all_forms=False, emojis=[]),
             ["Sylveon - <@1>", "Trapinch", "Urshifu", "Ditto"],
         )
+
+    def test_grab_display_names(self) -> None:
+        self.assertEqual(grab_display_name("pikachu"), "Pikachu")
+        self.assertEqual(grab_display_name("all urshifu"), "All forms of urshifu")
 
     def test_bulk_add_gives_each_pokemon_to_its_user(self) -> None:
         pairs = grab_reserve_pairs(

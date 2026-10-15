@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Final
 
@@ -21,28 +22,6 @@ logger = logging.getLogger("vivillon_naming")
 SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"\bwild\s+(?:pokemon|pok[eé]mon)\b", re.IGNORECASE
 )
-CAUGHT_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:caught|catch|congratulations)\b", re.IGNORECASE
-)
-LEVEL_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:level|lvl)\s*[:#]?\s*(\d{1,3})\b", re.IGNORECASE
-)
-GENDER_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\bgender\s*[:=]\s*(male|female|genderless|unknown|♂|♀)\b",
-    re.IGNORECASE,
-)
-IV_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\bIV(?:s| percentage)?\s*[:=]\s*(\d{1,3}(?:\.\d+)?)\s*%?(?!\s*/)(?!\w)",
-    re.IGNORECASE,
-)
-STAT_PATTERNS: Final[dict[str, re.Pattern[str]]] = {
-    stat: re.compile(
-        rf"\b{re.escape(stat)}\s*[:=]\s*(\d{{1,2}})\b",
-        re.IGNORECASE,
-    )
-    for stat in ("HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed")
-}
-
 
 @dataclass(frozen=True)
 class Config:
@@ -126,7 +105,36 @@ async def recognize_pokemon(
                 "content": (
                     "Identify the Pokémon species shown in this Pokétwo wild-spawn "
                     "image. The species may be any Pokémon in the National Pokédex "
-                    "through #1026. Choose the single most likely Pokémon name. Never "
+                    "through #1026. Base the answer on the Pokémon's visible body, "
+                    "face, and distinctive features, not the background or habitat. "
+                    "Carefully distinguish visually similar species before choosing. "
+                    "For example, Eldegoss has a large round white cotton puff with "
+                    "small brown seeds around a yellow-green leafy face; Shaymin's "
+                    "Land Forme is a small white quadruped with green hedgehog-like "
+                    "back fur and a pink flower by its ear, not a cotton puff. "
+                    "Lumineon is a fish with a dark blue body, pink eyes, and very "
+                    "large wing-like fins with pale blue edges and dark scalloped "
+                    "markings; do not mistake its fins for wings or use the underwater "
+                    "background alone to identify it. "
+                    "Houndour is a small dark canine with an orange muzzle and pale "
+                    "bone-like bands around its legs and back; distinguish its dog-like "
+                    "body from other dark quadruped Pokémon. "
+                    "Duskull is a small floating gray ghost with a skull-shaped white "
+                    "mask, one visible glowing red eye in a dark socket, and a single "
+                    "curved horn; do not confuse it with other skull-faced Ghost Pokémon. "
+                    "Staravia is a gray-and-white bird with an angular white face marking, "
+                    "orange beak and feet, a dark swept-up crest with a rounded curl, and "
+                    "a black chest marking; distinguish it from smaller Starly and the "
+                    "larger Staraptor. "
+                    "Tinkatink is a small pink humanoid Pokémon with a round head, "
+                    "pointed top tuft, gray diamond-shaped chest plate, and an oversized "
+                    "rough gray hammer it holds; identify the pink hammer-wielder rather "
+                    "than its hammer as a separate object. "
+                    "Dewpider is a small spider Pokémon with a round blue bubble of water "
+                    "over its head, a blue face with large eyes, and slender lime-green "
+                    "legs; do not mistake the water bubble around its head for a body part "
+                    "or identify it only from a watery setting. "
+                    "Choose the single most likely Pokémon name. Never "
                     "return multiple candidates, alternate names, aliases, or a list. "
                     "Estimate your confidence in that one guess as a whole-number "
                     "percentage from 0 to 100. Return JSON only, in the form "
@@ -167,44 +175,34 @@ async def recognize_pokemon(
         or not 0 <= confidence <= 100
     ):
         raise ValueError("Vision model response included an invalid confidence percentage")
-    name = name.strip()
-    if len(name) > 60 or (name and not re.fullmatch(r"[A-Za-z0-9 .'-]+", name)):
+    name = unicodedata.normalize("NFC", name.strip())
+    if len(name) > 60 or (name and not is_valid_pokemon_name(name)):
         raise ValueError("Vision model returned an invalid Pokémon name")
     return name, confidence
+
+
+def is_valid_pokemon_name(name: str) -> bool:
+    allowed_punctuation = " .'-:♀♂"
+    return bool(name) and any(char.isalpha() for char in name) and all(
+        unicodedata.category(char)[0] in {"L", "M", "N"}
+        or char in allowed_punctuation
+        for char in name
+    )
 
 
 def format_guess(name: str, confidence: int) -> str:
     return f"{name}: {confidence}%"
 
 
-def extract_stats(text: str) -> dict[str, str]:
-    stats: dict[str, str] = {}
-    level = LEVEL_PATTERN.search(text)
-    if level:
-        stats["Level"] = level.group(1)
+def format_catch_command(poketwo_bot_id: int, name: str) -> str:
+    return f"<@{poketwo_bot_id}> c {name.lower()}"
 
-    gender = GENDER_PATTERN.search(text)
-    if gender:
-        stats["Gender"] = {"♂": "Male", "♀": "Female"}.get(
-            gender.group(1), gender.group(1).capitalize()
-        )
-    else:
-        gender_symbol = re.search(r"(?<!\w)(♂|♀)(?!\w)", text)
-        if gender_symbol:
-            stats["Gender"] = "Male" if gender_symbol.group(1) == "♂" else "Female"
 
-    iv = IV_PATTERN.search(text)
-    if iv:
-        stats["IV"] = f"{iv.group(1)}%"
-    else:
-        individual_ivs = [
-            int(match.group(1))
-            for pattern in STAT_PATTERNS.values()
-            if (match := pattern.search(text))
-        ]
-        if len(individual_ivs) == len(STAT_PATTERNS):
-            stats["IV"] = f"{sum(individual_ivs) / (31 * len(STAT_PATTERNS)) * 100:.1f}%"
-    return stats
+def format_spawn_reply(name: str, confidence: int, poketwo_bot_id: int) -> str:
+    return (
+        f"{format_guess(name, confidence)}\n"
+        f"{format_catch_command(poketwo_bot_id, name)}"
+    )
 
 
 class NamingBot(discord.Client):
@@ -243,14 +241,6 @@ class NamingBot(discord.Client):
         text = message_text(message)
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
-            return
-
-        stats = extract_stats(text)
-        if stats and (CAUGHT_PATTERN.search(text) or len(stats) >= 2):
-            summary = "Pokétwo details: " + " · ".join(
-                f"{label}: {value}" for label, value in stats.items()
-            )
-            await message.reply(summary, mention_author=False)
 
     async def handle_spawn(self, message: discord.Message) -> None:
         url = image_url(message)
@@ -289,7 +279,10 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        await message.reply(format_guess(name, confidence), mention_author=False)
+        await message.reply(
+            format_spawn_reply(name, confidence, self.config.poketwo_bot_id),
+            mention_author=False,
+        )
 
 
 def main() -> None:

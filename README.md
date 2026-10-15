@@ -49,7 +49,7 @@ and its estimated confidence percentage (for example, `Pikachu: 85%`). The
 confidence is a model estimate, not a calibrated probability. The vision model
 is asked to identify Pokémon across the National Pokédex; image recognition can
 still make mistakes, so check guesses before relying on them. It then posts the
-matching Pokétwo catch command in a code block for easier copying. Discord's
+matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pokétwo or Discord may ignore or restrict commands sent by another
 bot account.
@@ -62,12 +62,15 @@ Members with the reserve-manager role (role ID `1532820386511720579`) can
 reserve a Pokémon for a server member with:
 
 ```text
-v!r add pikachu @member
+v!r add pikachu, eevee @member
 ```
 
-More than one member can reserve the same Pokémon. When that Pokémon spawns,
-the bot lists and mentions its reserved members in a `Reserved:` line above the
-catch command. Other members are not mentioned. Reservations are stored in
+Only members with the reserve-manager role can add reservations, and more than
+one member can reserve the same Pokémon. Use `v!r search @member` to see that
+member's reservations in an embed. When a reserved Pokémon spawns, the bot
+lists and mentions its reserved members in a `Reserved:` line above the catch
+command. The `Reserved:` line is omitted when no one reserved that Pokémon.
+Other members are not mentioned. Reservations are stored in
 `reserves.json` by default; set `RESERVES_FILE` to a different path if needed.
 Keep that file on persistent host storage to retain reservations across
 restarts. The bot must be able to read and send messages in the command channel

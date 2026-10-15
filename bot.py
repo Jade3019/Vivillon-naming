@@ -28,6 +28,11 @@ RESERVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+add\s+(.+?)\s+<@!?(\d+)>\s*$",
     re.IGNORECASE,
 )
+RESERVE_SEARCH_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!r\s+search\s+<@!?(\d+)>\s*$",
+    re.IGNORECASE,
+)
+RESERVATION_EMBED_DESCRIPTION_LIMIT: Final[int] = 3800
 
 @dataclass(frozen=True)
 class Config:
@@ -238,13 +243,94 @@ def format_spawn_reply(
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
         lines.append(f"Reserved: {mentions}")
-    lines.extend((f"`{command}`", f"```{command}```"))
+    lines.append(f"`{command}`")
     return "\n".join(lines)
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
     normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
     return f"{guild_id}:{normalized_name}"
+
+
+def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
+    match = RESERVE_COMMAND_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+
+    pokemon_names = [
+        unicodedata.normalize("NFC", name.strip())
+        for name in match.group(1).split(",")
+    ]
+    if (
+        not pokemon_names
+        or any(
+            not name or len(name) > 60 or not is_valid_pokemon_name(name)
+            for name in pokemon_names
+        )
+    ):
+        return None
+    unique_names: list[str] = []
+    seen_names: set[str] = set()
+    for name in pokemon_names:
+        normalized_name = name.casefold()
+        if normalized_name not in seen_names:
+            unique_names.append(name)
+            seen_names.add(normalized_name)
+    return unique_names, int(match.group(2))
+
+
+def reserved_pokemon_for_user(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    user_id: int,
+) -> list[str]:
+    guild_prefix = f"{guild_id}:"
+    names = [
+        key.removeprefix(guild_prefix)
+        for key, user_ids in reservations.items()
+        if key.startswith(guild_prefix) and user_id in user_ids
+    ]
+    return sorted(names)
+
+
+def format_reservation_embeds(
+    display_name: str,
+    pokemon_names: list[str],
+) -> list[discord.Embed]:
+    heading = f"Pokémon reserved by {display_name}"
+    if not pokemon_names:
+        return [
+            discord.Embed(
+                title=heading,
+                description="This member has no Pokémon reservations.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    pages: list[list[str]] = [[]]
+    current_length = 0
+    for name in pokemon_names:
+        display_pokemon = name[0].upper() + name[1:]
+        added_length = len(display_pokemon) + (2 if pages[-1] else 0)
+        if current_length + added_length > RESERVATION_EMBED_DESCRIPTION_LIMIT:
+            pages.append([])
+            current_length = 0
+            added_length = len(display_pokemon)
+        pages[-1].append(display_pokemon)
+        current_length += added_length
+
+    embeds: list[discord.Embed] = []
+    total_pages = len(pages)
+    for page_number, page_names in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title=heading,
+            description=", ".join(page_names),
+            color=discord.Color.blurple(),
+        )
+        if total_pages > 1:
+            embed.set_footer(text=f"Page {page_number} of {total_pages}")
+        embeds.append(embed)
+    return embeds
 
 
 def load_reservations(path: Path) -> dict[str, list[int]]:
@@ -317,7 +403,11 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
-            if re.match(r"^v!r\s+add(?:\s|$)", message.content, re.IGNORECASE):
+            if re.match(
+                r"^v!r\s+(?:add|search)(?:\s|$)",
+                message.content,
+                re.IGNORECASE,
+            ):
                 await self.handle_reserve_command(message)
             return
 
@@ -325,6 +415,10 @@ class NamingBot(discord.Client):
             await self.handle_spawn(message)
 
     async def handle_reserve_command(self, message: discord.Message) -> None:
+        if re.match(r"^v!r\s+search(?:\s|$)", message.content, re.IGNORECASE):
+            await self.handle_reserve_search(message)
+            return
+
         if message.guild is None or not isinstance(message.author, discord.Member):
             await message.reply(
                 "Reservations can only be added in a server.",
@@ -338,33 +432,31 @@ class NamingBot(discord.Client):
             )
             return
 
-        match = RESERVE_COMMAND_PATTERN.fullmatch(message.content)
-        if match is None or len(message.mentions) != 1:
+        parsed_command = parse_reserve_add_command(message.content)
+        if parsed_command is None or len(message.mentions) != 1:
             await message.reply(
-                "Usage: `v!r add <pokemon> @member`",
+                "Usage: `v!r add <pokemon>, <pokemon> @member`",
                 mention_author=False,
             )
             return
 
-        pokemon_name = unicodedata.normalize("NFC", match.group(1).strip())
-        if not is_valid_pokemon_name(pokemon_name) or len(pokemon_name) > 60:
-            await message.reply("That Pokémon name is invalid.", mention_author=False)
-            return
-
+        pokemon_names, target_id = parsed_command
         target = message.mentions[0]
-        if target.id != int(match.group(2)):
+        if target.id != target_id:
             await message.reply(
                 "Please mention exactly one server member.",
                 mention_author=False,
             )
             return
 
-        display_name = pokemon_name[0].upper() + pokemon_name[1:]
-        key = reservation_key(message.guild.id, pokemon_name)
-        user_ids = list(self.reservations.get(key, []))
-        if target.id not in user_ids:
-            user_ids.append(target.id)
-        updated_reservations = {**self.reservations, key: user_ids}
+        updated_reservations = {
+            key: list(user_ids) for key, user_ids in self.reservations.items()
+        }
+        for pokemon_name in pokemon_names:
+            key = reservation_key(message.guild.id, pokemon_name)
+            user_ids = updated_reservations.setdefault(key, [])
+            if target.id not in user_ids:
+                user_ids.append(target.id)
         try:
             save_reservations(self.reserve_path, updated_reservations)
         except ValueError:
@@ -376,10 +468,54 @@ class NamingBot(discord.Client):
             return
 
         self.reservations = updated_reservations
+        display_names = ", ".join(
+            name[0].upper() + name[1:] for name in pokemon_names
+        )
         await message.reply(
-            f"Reserve {display_name} added to {target.mention}",
+            f"Reserve {display_names} added to {target.mention}",
             mention_author=False,
         )
+
+    async def handle_reserve_search(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Reservations can only be searched in a server.",
+                mention_author=False,
+            )
+            return
+
+        match = RESERVE_SEARCH_PATTERN.fullmatch(message.content)
+        if match is None or len(message.mentions) != 1:
+            await message.reply(
+                "Usage: `v!r search @member`",
+                mention_author=False,
+            )
+            return
+
+        target = message.mentions[0]
+        if target.id != int(match.group(1)):
+            await message.reply(
+                "Please mention exactly one server member.",
+                mention_author=False,
+            )
+            return
+
+        pokemon_names = reserved_pokemon_for_user(
+            self.reservations,
+            message.guild.id,
+            target.id,
+        )
+        embeds = format_reservation_embeds(target.display_name, pokemon_names)
+        await message.reply(
+            embed=embeds[0],
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        for embed in embeds[1:]:
+            await message.channel.send(
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
     async def handle_spawn(self, message: discord.Message) -> None:
         url = image_url(message)

@@ -5,10 +5,13 @@ from pathlib import Path
 from bot import (
     format_catch_command,
     format_guess,
+    format_reservation_embeds,
     format_spawn_reply,
     is_valid_pokemon_name,
     load_reservations,
+    parse_reserve_add_command,
     reservation_key,
+    reserved_pokemon_for_user,
     save_reservations,
 )
 
@@ -27,8 +30,7 @@ class GuessFormatTests(unittest.TestCase):
         self.assertEqual(
             format_spawn_reply("Pikachu", 85, 716390085896962058),
             "Pikachu: 85%\n"
-            "`<@716390085896962058> c pikachu`\n"
-            "```<@716390085896962058> c pikachu```",
+            "`<@716390085896962058> c pikachu`",
         )
 
     def test_formats_only_the_reserved_members_as_mentions(self) -> None:
@@ -36,8 +38,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Pikachu", 95, 716390085896962058, [123, 456]),
             "Pikachu: 95%\n"
             "Reserved: <@123>, <@456>\n"
-            "`<@716390085896962058> c pikachu`\n"
-            "```<@716390085896962058> c pikachu```",
+            "`<@716390085896962058> c pikachu`",
         )
 
 
@@ -54,6 +55,36 @@ class ReservationPersistenceTests(unittest.TestCase):
             save_reservations(path, data)
 
             self.assertEqual(load_reservations(path), data)
+
+    def test_parses_multiple_pokemon_names_and_member_mention(self) -> None:
+        self.assertEqual(
+            parse_reserve_add_command("v!r add pikachu, eevee <@319>"),
+            (["pikachu", "eevee"], 319),
+        )
+
+    def test_rejects_invalid_or_empty_names_in_multi_add(self) -> None:
+        self.assertIsNone(parse_reserve_add_command("v!r add pikachu,,eevee <@319>"))
+        self.assertIsNone(parse_reserve_add_command("v!r add pikachu! <@319>"))
+
+    def test_search_lists_only_reservations_for_user_and_guild(self) -> None:
+        reservations = {
+            reservation_key(1, "Pikachu"): [123],
+            reservation_key(1, "Eevee"): [456],
+            reservation_key(2, "Bulbasaur"): [123],
+        }
+        self.assertEqual(
+            reserved_pokemon_for_user(reservations, 1, 123),
+            ["pikachu"],
+        )
+
+    def test_formats_reservation_embed_and_splits_long_lists(self) -> None:
+        embeds = format_reservation_embeds("Jade", ["eevee", "pikachu"])
+        self.assertEqual(embeds[0].title, "Pokémon reserved by Jade")
+        self.assertEqual(embeds[0].description, "Eevee, Pikachu")
+
+        long_embeds = format_reservation_embeds("Jade", ["pikachu"] * 600)
+        self.assertGreater(len(long_embeds), 1)
+        self.assertTrue(all(len(embed.description or "") <= 4096 for embed in long_embeds))
 
 
 class PokemonNameValidationTests(unittest.TestCase):

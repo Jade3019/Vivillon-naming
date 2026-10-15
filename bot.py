@@ -84,8 +84,39 @@ def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
     return forms
 
 
+def normalize_pokemon_alias(name: str) -> str:
+    normalized = unicodedata.normalize("NFC", name).casefold()
+    return re.sub(r"[\s_-]+", " ", normalized).strip()
+
+
+def load_single_type_aliases(path: Path, key: str) -> frozenset[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not load Pokémon form catalog from {path}") from error
+
+    aliases = data.get(key) if isinstance(data, dict) else None
+    if not isinstance(aliases, list) or any(
+        not isinstance(alias, str) for alias in aliases
+    ):
+        raise ValueError(f"Pokémon form catalog at {path} has invalid {key} data")
+    return frozenset(normalize_pokemon_alias(alias) for alias in aliases)
+
+
 POKEMON_FORMS: Final[dict[str, list[dict[str, str]]]] = load_pokemon_forms(
     Path(__file__).with_name("pokemon_forms.json")
+)
+SINGLE_TYPE_FIRE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "single_type_fire_aliases",
+)
+SINGLE_TYPE_NORMAL_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "single_type_normal_aliases",
+)
+FIRE_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "fire_and_normal_type_aliases",
 )
 
 @dataclass(frozen=True)
@@ -588,20 +619,74 @@ def format_spawn_reply(
 ) -> str:
     command = format_catch_command(poketwo_bot_id, name)
     lines = [format_guess(name, confidence)]
+    lines.extend(
+        format_spawn_mention_lines(
+            reserved_user_ids,
+            shinyhunter_user_ids,
+            collection_user_ids,
+        )
+    )
+    lines.append(f"`{command}`")
+    return "\n".join(lines)
+
+
+def format_spawn_mention_lines(
+    reserved_user_ids: list[int] | None = None,
+    shinyhunter_user_ids: list[int] | None = None,
+    collection_user_ids: list[int] | None = None,
+) -> list[str]:
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
-        lines.append(f"Reserved: {mentions}")
-    elif shinyhunter_user_ids or collection_user_ids:
+        return [f"Reserved: {mentions}"]
+    if shinyhunter_user_ids or collection_user_ids:
         shinyhunt_mentions = ", ".join(
             f"<@{user_id}>" for user_id in shinyhunter_user_ids or []
         )
         collection_mentions = ", ".join(
             f"<@{user_id}>" for user_id in collection_user_ids or []
         )
-        lines.append(f"Shinyhunt: {shinyhunt_mentions}")
-        lines.append(f"Collection: {collection_mentions}")
-    lines.append(f"`{command}`")
-    return "\n".join(lines)
+        return [
+            f"Shinyhunt: {shinyhunt_mentions}",
+            f"Collection: {collection_mentions}",
+        ]
+    return []
+
+
+def is_single_type_pokemon(name: str, type_aliases: frozenset[str]) -> bool:
+    return normalize_pokemon_alias(name) in type_aliases
+
+
+def is_single_type_fire_pokemon(name: str) -> bool:
+    return is_single_type_pokemon(name, SINGLE_TYPE_FIRE_ALIASES)
+
+
+def is_single_type_normal_pokemon(name: str) -> bool:
+    return is_single_type_pokemon(name, SINGLE_TYPE_NORMAL_ALIASES)
+
+
+def type_icon_filename_for_pokemon(name: str) -> str | None:
+    if normalize_pokemon_alias(name) in FIRE_AND_NORMAL_TYPE_ALIASES:
+        return "fire_normal_type_icons.png"
+    if is_single_type_fire_pokemon(name):
+        return "fire_type.png"
+    if is_single_type_normal_pokemon(name):
+        return "normal_type.png"
+    return None
+
+
+def format_type_spawn_embed(
+    name: str,
+    confidence: float,
+    poketwo_bot_id: int,
+    icon_filename: str,
+) -> discord.Embed:
+    command = format_catch_command(poketwo_bot_id, name)
+    embed = discord.Embed(description=f"`{command}`")
+    embed.set_author(
+        name=format_guess(name, confidence),
+        icon_url=f"attachment://{icon_filename}",
+    )
+    return embed
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
@@ -1951,17 +2036,41 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
-        await message.reply(
-            format_spawn_reply(
-                name,
-                confidence,
-                self.config.poketwo_bot_id,
-                reserved_user_ids,
-                shinyhunter_user_ids,
-                collection_user_ids,
-            ),
-            mention_author=False,
-        )
+        icon_filename = type_icon_filename_for_pokemon(name)
+        if icon_filename:
+            await message.reply(
+                content="\n".join(
+                    format_spawn_mention_lines(
+                        reserved_user_ids,
+                        shinyhunter_user_ids,
+                        collection_user_ids,
+                    )
+                )
+                or None,
+                embed=format_type_spawn_embed(
+                    name,
+                    confidence,
+                    self.config.poketwo_bot_id,
+                    icon_filename,
+                ),
+                file=discord.File(
+                    Path(__file__).with_name("assets") / icon_filename,
+                    filename=icon_filename,
+                ),
+                mention_author=False,
+            )
+        else:
+            await message.reply(
+                format_spawn_reply(
+                    name,
+                    confidence,
+                    self.config.poketwo_bot_id,
+                    reserved_user_ids,
+                    shinyhunter_user_ids,
+                    collection_user_ids,
+                ),
+                mention_author=False,
+            )
 
 
 def clear_guild_reservations(

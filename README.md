@@ -53,10 +53,14 @@ species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
-clipboard. Pokétwo or Discord may ignore or restrict commands sent by another
-bot account. If the prediction is `Missingno.` or `???`, the bot sends the
-Pokétwo `inc p` command, waits 500 milliseconds, and asks for a staff member; it
-does not send a catch command for that spawn.
+clipboard. Pure Fire-type Pokémon show only the Fire icon; pure Normal-type
+Pokémon show only the Normal icon. Pokémon with exactly Fire and Normal as
+their two types show both icons. Other dual-type Pokémon keep the regular text
+reply. Reservation, shinyhunt, and collection mentions remain active for both
+reply styles. Pokétwo or Discord may ignore or restrict commands sent by
+another bot account. If the prediction is `Missingno.` or `???`, the bot sends
+the Pokétwo `inc p` command, waits 500 milliseconds, and asks for a staff
+member; it does not send a catch command for that spawn.
 
 This application does not bypass those restrictions.
 
@@ -71,8 +75,8 @@ covers alternate forms across Pokémon and excludes regional variants. Results
 with multiple pages show previous/next arrow buttons beneath the embed. The
 catalog in `pokemon_forms.json` is a static snapshot based on the
 [PokeAPI CSV data](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv).
-To regenerate it, download `pokemon.csv`, `pokemon_forms.csv`, and
-`pokemon_species.csv` into one directory and run
+To regenerate it, download `pokemon.csv`, `pokemon_forms.csv`,
+`pokemon_species.csv`, and `pokemon_types.csv` into one directory and run
 `python generate_pokemon_forms.py <csv-directory>`.
 
 Only members with the reserve-manager role (role ID `1532820386511720579`) can

@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import discord
 
@@ -21,10 +22,15 @@ from bot import (
     format_reservation_embeds,
     format_server_reservation_embeds,
     format_shinyhunt_confirmation,
+    format_type_spawn_embed,
+    format_spawn_mention_lines,
     format_spawn_reply,
     format_shinyhunt_status,
     is_valid_pokemon_name,
     is_missingno_name,
+    is_single_type_fire_pokemon,
+    is_single_type_normal_pokemon,
+    type_icon_filename_for_pokemon,
     load_pokemon_forms,
     load_reservations,
     parse_reserve_add_command,
@@ -44,6 +50,61 @@ from bot import (
     shinyhunter_user_ids_for_pokemon,
     pokemon_matches_all_forms_reservation,
 )
+
+
+class FireSpawnFormattingTests(unittest.TestCase):
+    def test_marks_pure_fire_pokemon_but_not_dual_type_pokemon(self) -> None:
+        self.assertTrue(is_single_type_fire_pokemon("Vulpix"))
+        self.assertTrue(is_single_type_fire_pokemon("Growlithe"))
+        self.assertFalse(is_single_type_fire_pokemon("Charizard"))
+        self.assertFalse(is_single_type_fire_pokemon("Rotom Heat"))
+
+    def test_fire_embed_shows_guess_icon_and_catch_command(self) -> None:
+        embed = format_type_spawn_embed("Vulpix", 87.5, 789, "fire_type.png")
+
+        self.assertEqual(embed.author.name, "Vulpix: 87.50%")
+        self.assertEqual(
+            embed.author.icon_url,
+            "attachment://fire_type.png",
+        )
+        self.assertEqual(embed.description, "`<@789> c vulpix`")
+        self.assertEqual(format_spawn_mention_lines([123]), ["Reserved: <@123>"])
+
+    def test_marks_only_single_type_normal_pokemon(self) -> None:
+        self.assertTrue(is_single_type_normal_pokemon("Eevee"))
+        self.assertFalse(is_single_type_normal_pokemon("Pidgeot"))
+        self.assertFalse(is_single_type_normal_pokemon("Girafarig"))
+
+    def test_normal_embed_uses_the_normal_icon(self) -> None:
+        embed = format_type_spawn_embed("Eevee", 87.5, 789, "normal_type.png")
+
+        self.assertEqual(embed.author.name, "Eevee: 87.50%")
+        self.assertEqual(
+            embed.author.icon_url,
+            "attachment://normal_type.png",
+        )
+        self.assertEqual(embed.description, "`<@789> c eevee`")
+
+    def test_uses_both_icons_only_for_fire_and_normal_dual_type(self) -> None:
+        self.assertEqual(type_icon_filename_for_pokemon("Vulpix"), "fire_type.png")
+        self.assertEqual(type_icon_filename_for_pokemon("Eevee"), "normal_type.png")
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Litleo"),
+            "fire_normal_type_icons.png",
+        )
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Pyroar"),
+            "fire_normal_type_icons.png",
+        )
+        self.assertIsNone(type_icon_filename_for_pokemon("Charizard"))
+        with patch(
+            "bot.FIRE_AND_NORMAL_TYPE_ALIASES",
+            frozenset({"test pokemon"}),
+        ):
+            self.assertEqual(
+                type_icon_filename_for_pokemon("Test Pokemon"),
+                "fire_normal_type_icons.png",
+            )
 
 
 class GuessFormatTests(unittest.TestCase):

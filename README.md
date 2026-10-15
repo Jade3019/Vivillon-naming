@@ -43,9 +43,10 @@ approval for privileged intents on larger bots.
    `ALLOWED_CHANNEL_IDS="123456789012345678,234567890123456789"`. Leave it unset
    to allow every channel the bot can access. Existing setups can keep using
    `ALLOWED_CHANNEL_ID` for one channel; do not set both variables.
-   The bot queues spawn recognition and processes up to eight vision requests
+   The bot queues spawn recognition and processes up to 199 vision requests
    concurrently by default. Set `MAX_CONCURRENT_VISION_REQUESTS` to adjust this
-   for your OpenAI project’s rate limits; the client retries temporary API errors.
+   between 1 and 199 for your OpenAI project’s rate limits; the client retries
+   temporary API errors.
    A larger channel count does not increase OpenAI API quota, so billing,
    project limits, and the exact error in the bot logs still matter if requests
    continue to fail. `OPENAI_MODEL` can select another vision-capable

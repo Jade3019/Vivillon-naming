@@ -10,6 +10,7 @@ from bot import (
     is_valid_pokemon_name,
     load_reservations,
     parse_reserve_add_command,
+    remove_reservation,
     reservation_key,
     reserved_pokemon_for_user,
     save_reservations,
@@ -76,6 +77,35 @@ class ReservationPersistenceTests(unittest.TestCase):
             reserved_pokemon_for_user(reservations, 1, 123),
             ["pikachu"],
         )
+
+    def test_removes_pokemon_reservation_for_one_user(self) -> None:
+        reservations = {reservation_key(1, "Pikachu"): [123, 456]}
+
+        updated, removed = remove_reservation(reservations, 1, "pikachu", 123)
+
+        self.assertTrue(removed)
+        self.assertEqual(updated, {reservation_key(1, "Pikachu"): [456]})
+        self.assertEqual(reservations[reservation_key(1, "Pikachu")], [123, 456])
+
+    def test_removes_pokemon_reservation_for_everyone(self) -> None:
+        reservations = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(2, "Pikachu"): [789],
+        }
+
+        updated, removed = remove_reservation(reservations, 1, "Pikachu")
+
+        self.assertTrue(removed)
+        self.assertNotIn(reservation_key(1, "Pikachu"), updated)
+        self.assertEqual(updated[reservation_key(2, "Pikachu")], [789])
+
+    def test_does_not_report_removal_when_user_is_not_reserved(self) -> None:
+        reservations = {reservation_key(1, "Pikachu"): [123]}
+
+        updated, removed = remove_reservation(reservations, 1, "Pikachu", 456)
+
+        self.assertFalse(removed)
+        self.assertEqual(updated, reservations)
 
     def test_formats_reservation_embed_and_splits_long_lists(self) -> None:
         embeds = format_reservation_embeds("Jade", ["eevee", "pikachu"])

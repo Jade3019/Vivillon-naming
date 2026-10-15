@@ -75,3 +75,8 @@ Other members are not mentioned. Reservations are stored in
 Keep that file on persistent host storage to retain reservations across
 restarts. The bot must be able to read and send messages in the command channel
 as well as the spawn channel.
+
+Members with the reserve-manager role can remove reservations with
+`v!r remove pikachu @member` to remove it for one member, or
+`v!r remove pikachu` to remove that Pokémon's reservation for everyone in the
+current server.

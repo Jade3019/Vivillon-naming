@@ -3681,6 +3681,17 @@
     "winter deerling",
     "winter sawsbuck"
   ],
+  "grass_and_electric_type_aliases": [
+    "electrode hisui",
+    "electrode-hisui",
+    "hisui electrode",
+    "hisui voltorb",
+    "mow rotom",
+    "rotom mow",
+    "rotom-mow",
+    "voltorb hisui",
+    "voltorb-hisui"
+  ],
   "normal_and_water_type_aliases": [
     "bibarel"
   ],

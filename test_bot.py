@@ -127,6 +127,11 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 type_icon_filename_for_pokemon(name),
                 "grass_normal_type_icons.png",
             )
+        for name in ("Voltorb-Hisui", "Electrode-Hisui", "Rotom Mow"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "grass_electric_type_icons.png",
+            )
         self.assertEqual(type_icon_filename_for_pokemon("Snivy"), "grass_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Treecko"), "grass_type.png")
         self.assertIsNone(type_icon_filename_for_pokemon("Venusaur"))

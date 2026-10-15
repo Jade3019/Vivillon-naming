@@ -138,6 +138,10 @@ GRASS_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "grass_and_normal_type_aliases",
 )
+GRASS_AND_ELECTRIC_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "grass_and_electric_type_aliases",
+)
 NORMAL_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "normal_and_water_type_aliases",
@@ -753,6 +757,8 @@ def type_icon_filename_for_pokemon(name: str) -> str | None:
         return "grass_water_type_icons.png"
     if normalize_pokemon_alias(name) in GRASS_AND_NORMAL_TYPE_ALIASES:
         return "grass_normal_type_icons.png"
+    if normalize_pokemon_alias(name) in GRASS_AND_ELECTRIC_TYPE_ALIASES:
+        return "grass_electric_type_icons.png"
     if is_single_type_fire_pokemon(name):
         return "fire_type.png"
     if is_single_type_normal_pokemon(name):

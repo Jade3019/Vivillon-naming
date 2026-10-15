@@ -154,6 +154,7 @@ def main() -> None:
     grass_and_fire = generate_type_aliases(args.data_directory, {"10", "12"})
     grass_and_water = generate_type_aliases(args.data_directory, {"11", "12"})
     grass_and_normal = generate_type_aliases(args.data_directory, {"1", "12"})
+    grass_and_electric = generate_type_aliases(args.data_directory, {"12", "13"})
     normal_and_water = generate_type_aliases(args.data_directory, {"1", "11"})
     water_and_fire = generate_type_aliases(args.data_directory, {"10", "11"})
     fire_and_electric = generate_type_aliases(args.data_directory, {"10", "13"})
@@ -175,6 +176,7 @@ def main() -> None:
         "grass_and_fire_type_aliases": grass_and_fire,
         "grass_and_water_type_aliases": grass_and_water,
         "grass_and_normal_type_aliases": grass_and_normal,
+        "grass_and_electric_type_aliases": grass_and_electric,
         "normal_and_water_type_aliases": normal_and_water,
         "water_and_fire_type_aliases": water_and_fire,
         "fire_and_electric_type_aliases": fire_and_electric,

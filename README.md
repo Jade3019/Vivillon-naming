@@ -167,6 +167,11 @@ with one member per line (commas separate Pokémon, and `all <pokemon>` works):
 @snowii - all arceus
 ```
 
-Then reply to that message with `v!r e @owner` (or `v!r exchange @owner`). Each
-listed Pokémon that `@owner` has reserved moves to the member on its line;
-Pokémon `@owner` doesn't have reserved are reported and left unchanged.
+Then reply to that message with `v!r e @owner` (or `v!r exchange @owner`). The
+bot shows an embed ("You want to exchange from @owner to those users") with
+**Yes** and **No** buttons. **Yes** replies "Reserves exchanged." and moves each
+listed Pokémon that `@owner` has reserved to the member on its line; **No**
+replies "Exchange cancelled." If `@owner` doesn't have some listed Pokémon, small
+text under the list names them and suggests "Do you mean @member?" for members
+who do have them. Only the command user (with the reserve manager role) can
+press the buttons, and unanswered prompts expire after 3 minutes.

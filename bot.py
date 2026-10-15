@@ -1728,6 +1728,41 @@ def exchange_reservations(
     return updated, moved, skipped
 
 
+def format_exchange_embed(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    source_id: int,
+    transfers: list[tuple[int, list[str]]],
+    skipped: list[tuple[int, str]],
+) -> discord.Embed:
+    lines = [
+        f"You want to exchange from <@{source_id}> to those users:",
+        "",
+        *(f"<@{recipient_id}> - {', '.join(names)}" for recipient_id, names in transfers),
+    ]
+    if skipped:
+        missing = list(dict.fromkeys(name for _, name in skipped))
+        holders: list[int] = []
+        for name in missing:
+            key = reservation_key_for_command(guild_id, name)
+            for user_id in reservations.get(key, []):
+                if user_id != source_id and user_id not in holders:
+                    holders.append(user_id)
+        lines.append("")
+        lines.append(
+            f"-# <@{source_id}> doesn't have reserved: {', '.join(missing)}"
+        )
+        if holders:
+            lines.append(
+                "-# Do you mean " + ", ".join(f"<@{user_id}>" for user_id in holders) + "?"
+            )
+    return discord.Embed(
+        title="Exchange reserves",
+        description="\n".join(lines),
+        color=discord.Color.blurple(),
+    )
+
+
 def format_remove_confirmation(pokemon_name: str, member_mention: str | None) -> str:
     display_names = ", ".join(
         (
@@ -2604,36 +2639,19 @@ class NamingBot(discord.Client):
             await message.reply(usage, mention_author=False)
             return
 
-        updated, moved, skipped = exchange_reservations(
+        _, moved, skipped = exchange_reservations(
             self.reservations, message.guild.id, source_id, transfers
         )
-        if moved:
-            try:
-                save_reservations(self.reserve_path, updated)
-            except ValueError:
-                logger.exception("Could not save Pokémon reservation exchange")
-                await message.reply(
-                    "I couldn't save that exchange. Check the bot logs.",
-                    mention_author=False,
-                )
-                return
-            self.reservations = updated
-
-        lines = []
-        for recipient_id in dict.fromkeys(r for r, _ in moved):
-            names = ", ".join(n for r, n in moved if r == recipient_id)
-            lines.append(f"<@{recipient_id}> - {names}")
-        response = (
-            f"Exchanged from <@{source_id}>:\n" + "\n".join(lines)
-            if lines
-            else f"Nothing was exchanged; <@{source_id}> has none of those reserved."
+        embed = format_exchange_embed(
+            self.reservations, message.guild.id, source_id, transfers, skipped
         )
-        if skipped and moved:
-            response += "\nNot reserved by them: " + ", ".join(
-                f"{n} (<@{r}>)" for r, n in skipped
-            )
         await message.reply(
-            response,
+            embed=embed,
+            view=ExchangeReservesView(
+                self, message.guild.id, message.author.id, source_id, transfers
+            )
+            if moved
+            else None,
             allowed_mentions=discord.AllowedMentions.none(),
             mention_author=False,
         )
@@ -2954,6 +2972,76 @@ def clear_guild_reservations(
         for key, user_ids in reservations.items()
         if not key.startswith(guild_prefix)
     }
+
+
+class ExchangeReservesView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+        source_id: int,
+        transfers: list[tuple[int, list[str]]],
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+        self.source_id = source_id
+        self.transfers = transfers
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            interaction.user.id != self.requester_id
+            or interaction.guild_id != self.guild_id
+            or not isinstance(interaction.user, discord.Member)
+            or not any(
+                role.id == RESERVE_ROLE_ID for role in interaction.user.roles
+            )
+        ):
+            await interaction.response.send_message(
+                "Only the authorized command user can confirm this action.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.success)
+    async def confirm_exchange(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        updated, _, _ = exchange_reservations(
+            self.bot.reservations, self.guild_id, self.source_id, self.transfers
+        )
+        try:
+            save_reservations(self.bot.reserve_path, updated)
+        except ValueError:
+            logger.exception("Could not save Pokémon reservation exchange")
+            await interaction.response.send_message(
+                "I couldn't save that exchange. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+        self.bot.reservations = updated
+        self.stop()
+        await interaction.response.edit_message(
+            content="Reserves exchanged.", embed=None, view=None
+        )
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.danger)
+    async def cancel_exchange(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        self.stop()
+        await interaction.response.edit_message(
+            content="Exchange cancelled.", embed=None, view=None
+        )
 
 
 class ClearReservesView(discord.ui.View):

@@ -3549,7 +3549,7 @@ class GrabListView(discord.ui.View):
             all_forms=self.all_forms,
             emojis=self.emojis,
         )
-        chunks = paginate_grab_lines(lines, 1900)
+        chunks = paginate_grab_lines(lines, 2000)
         await interaction.response.send_message(chunks[0], ephemeral=True)
         for chunk in chunks[1:]:
             await interaction.followup.send(chunk, ephemeral=True)

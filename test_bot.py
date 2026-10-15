@@ -24,7 +24,7 @@ from bot import (
     format_reservation_embeds,
     format_server_reservation_embeds,
     format_shinyhunt_confirmation,
-    format_type_spawn_text,
+    format_type_spawn_embed,
     format_spawn_mention_lines,
     format_spawn_reply,
     format_shinyhunt_status,
@@ -63,15 +63,12 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertFalse(is_single_type_fire_pokemon("Charizard"))
         self.assertFalse(is_single_type_fire_pokemon("Rotom Heat"))
 
-    def test_type_spawn_text_has_large_guess_and_catch_command(self) -> None:
-        self.assertEqual(
-            format_type_spawn_text("Vulpix", 87.5, 789),
-            "# Vulpix: 87.50%\n`<@789> c vulpix`",
-        )
-        self.assertEqual(
-            format_type_spawn_text("Vulpix", 87.5, 789, [123]),
-            "Reserved: <@123>\n# Vulpix: 87.50%\n`<@789> c vulpix`",
-        )
+    def test_type_spawn_embed_shows_guess_icon_and_catch_command(self) -> None:
+        embed = format_type_spawn_embed("Vulpix", 87.5, 789, "fire_type.png")
+
+        self.assertEqual(embed.author.name, "Vulpix: 87.50%")
+        self.assertEqual(embed.author.icon_url, "attachment://fire_type.png")
+        self.assertEqual(embed.description, "`<@789> c vulpix`")
 
     def test_marks_only_single_type_normal_pokemon(self) -> None:
         self.assertTrue(is_single_type_normal_pokemon("Eevee"))

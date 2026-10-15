@@ -55,7 +55,7 @@ matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pure Grass-type Pokémon show only the Grass icon; pure Electric-type Pokémon show only the Electric icon; pure Water-type Pokémon show only the Water icon; pure Fire-type Pokémon show only the Fire icon; pure Normal-type
 Pokémon show only the Normal icon. Pokémon with exactly Fire and Normal as
-their two types show both icons, as do Pokémon with exactly Normal and Water exactly Water and Fire, exactly Fire and Electric, exactly Electric and Water, exactly Electric and Normal, exactly Grass and Fire, exactly Grass and Water, or exactly Grass and Normal. The icon is attached as a large image under a large-text name and catch command, with no embed box. Other dual-type Pokémon keep the regular text
+their two types show both icons, as do Pokémon with exactly Normal and Water exactly Water and Fire, exactly Fire and Electric, exactly Electric and Water, exactly Electric and Normal, exactly Grass and Fire, exactly Grass and Water, or exactly Grass and Normal. Type-matched spawns show the icon beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text
 reply. Reservation, shinyhunt, and collection mentions remain active for both
 reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends

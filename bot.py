@@ -766,22 +766,20 @@ def type_icon_filename_for_pokemon(name: str) -> str | None:
     return None
 
 
-def format_type_spawn_text(
+def format_type_spawn_embed(
     name: str,
     confidence: float,
     poketwo_bot_id: int,
-    reserved_user_ids: list[int] | None = None,
-    shinyhunter_user_ids: list[int] | None = None,
-    collection_user_ids: list[int] | None = None,
-) -> str:
-    lines = format_spawn_mention_lines(
-        reserved_user_ids,
-        shinyhunter_user_ids,
-        collection_user_ids,
+    icon_filename: str,
+) -> discord.Embed:
+    embed = discord.Embed(
+        description=f"`{format_catch_command(poketwo_bot_id, name)}`"
     )
-    lines.append(f"# {format_guess(name, confidence)}")
-    lines.append(f"`{format_catch_command(poketwo_bot_id, name)}`")
-    return "\n".join(lines)
+    embed.set_author(
+        name=format_guess(name, confidence),
+        icon_url=f"attachment://{icon_filename}",
+    )
+    return embed
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
@@ -2181,13 +2179,16 @@ class NamingBot(discord.Client):
         icon_filename = type_icon_filename_for_pokemon(name)
         if icon_filename:
             await message.reply(
-                format_type_spawn_text(
-                    name,
-                    confidence,
-                    self.config.poketwo_bot_id,
-                    reserved_user_ids,
-                    shinyhunter_user_ids,
-                    collection_user_ids,
+                content="\n".join(
+                    format_spawn_mention_lines(
+                        reserved_user_ids,
+                        shinyhunter_user_ids,
+                        collection_user_ids,
+                    )
+                )
+                or None,
+                embed=format_type_spawn_embed(
+                    name, confidence, self.config.poketwo_bot_id, icon_filename
                 ),
                 file=discord.File(
                     Path(__file__).with_name("assets") / icon_filename,

@@ -3550,10 +3550,10 @@ class GrabListView(discord.ui.View):
             emojis=self.emojis,
         )
         blocks = [
-            f"``{chunk}``" for chunk in paginate_grab_lines(lines, 1800)
+            f"```\n{chunk}\n```" for chunk in paginate_grab_lines(lines, 1800)
         ]
         await interaction.response.send_message(
-            blocks[0] + "\nTap the text to copy it.",
+            blocks[0] + "\nOn phone: press and hold the list, then tap Copy.",
             ephemeral=True,
         )
         for block in blocks[1:]:

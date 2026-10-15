@@ -191,7 +191,7 @@ paged). Only the person who ran `v!grab` can use its buttons:
   Pokémon that have alternate forms.
 - **Custom emoji** – opens a box for emojis separated by commas; they are put in
   front of the Pokémon in order and repeat (emoji 1, emoji 2, emoji 1, ...).
-- **Copy** – sends you the current list (with the order, All forms and emojis as shown) as private inline code wrapped in double backticks (`` like this ``), which is easy to tap and copy on a phone. Discord doesn't let bots write to your clipboard directly. Custom server emojis stay as text and display once pasted.
+- **Copy** – sends you the current list (with the order, All forms and emojis as shown) as a private code block (press and hold it on a phone, then tap Copy). Emojis added with Custom emoji are included in the copied text. Discord doesn't let bots write to your clipboard directly. Custom server emojis stay as text and display once pasted.
 - **Add reserves** – reserve managers only, and only when the list has an `@user`
   behind the Pokémon (`pikachu - @user1`). Shows an embed of which Pokémon goes to which user and asks "Are you sure you want to add all
   reserves?" with Yes/No; Yes adds each Pokémon to its user like `v!r add`

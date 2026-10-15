@@ -3378,6 +3378,7 @@ class GrabAddReservesView(discord.ui.View):
                     f"{grab_display_name(name)} added to <@{user_id}>",
                     allowed_mentions=no_pings,
                 )
+                await asyncio.sleep(0.5)
             await interaction.edit_original_response(content="Reserves added.")
         except discord.HTTPException:
             logger.exception("Could not post grabbed reserve confirmations")

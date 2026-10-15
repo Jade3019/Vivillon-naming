@@ -4,9 +4,10 @@ import json
 import logging
 import math
 import os
+import random
 import re
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -2224,6 +2225,76 @@ def remember_reserve_list(message_id: int, embeds: list[discord.Embed]) -> None:
         RESERVE_LIST_CACHE.popitem(last=False)
 
 
+POKEBALL_BURST_SPAWNS: Final[int] = 10
+POKEBALL_BURST_WINDOW_SECONDS: Final[float] = 60.0
+POKEBALL_EVENT_GRACE_SECONDS: Final[float] = 120.0
+POKEBALL_INTERVAL_SECONDS: Final[float] = 60.0
+ARTWORK_URL: Final[str] = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/"
+    "other/official-artwork/{}.png"
+)
+
+
+def load_pokemon_ids() -> dict[str, int]:
+    try:
+        data = json.loads(
+            Path(__file__).with_name("pokemon_ids.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Could not load pokemon_ids.json; Pokéball event disabled")
+        return {}
+    return {name: int(number) for name, number in data.items()}
+
+
+POKEMON_IDS: Final[dict[str, int]] = load_pokemon_ids()
+
+
+def random_pokeball_pokemon() -> tuple[str, str]:
+    name, number = random.choice(list(POKEMON_IDS.items()))
+    return name, ARTWORK_URL.format(number)
+
+
+def pokeball_file() -> discord.File:
+    return discord.File(Path(__file__).with_name("pokeball.png"), filename="pokeball.png")
+
+
+async def send_pokeball(channel: discord.abc.Messageable) -> None:
+    embed = discord.Embed(
+        title="A Pokéball appeared!", description="Click it to see what's inside."
+    )
+    embed.set_image(url="attachment://pokeball.png")
+    await channel.send(file=pokeball_file(), embed=embed, view=PokeballView())
+
+
+class PokeballView(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=3600)
+        self.opened = False
+
+    @discord.ui.button(label="Open", emoji="🔴", style=discord.ButtonStyle.danger)
+    async def open_ball(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        if self.opened:
+            await interaction.response.send_message(
+                "Someone already opened this Pokéball.", ephemeral=True
+            )
+            return
+        if not POKEMON_IDS:
+            await interaction.response.send_message(
+                "The Pokéball is empty right now.", ephemeral=True
+            )
+            return
+        self.opened = True
+        self.stop()
+        name, url = random_pokeball_pokemon()
+        embed = discord.Embed(title=name)
+        embed.set_image(url=url)
+        await interaction.response.edit_message(embed=embed, attachments=[], view=None)
+        await interaction.followup.send(f"You found {name}!")
+
+
 def load_known_pokemon_names() -> list[str]:
     names: set[str] = {"Missingno"}
     try:
@@ -2421,8 +2492,45 @@ class NamingBot(discord.Client):
             os.environ.get("COLLECTIONS_FILE", "collections.json")
         )
         self.collections = load_reservations(self.collection_path)
+        self.recent_spawns: deque[tuple[float, int]] = deque()
+        self.pokeball_event_until = 0.0
+        self.pokeball_task: asyncio.Task[None] | None = None
+
+    def record_spawn_activity(self, channel_id: int) -> None:
+        now = time.monotonic()
+        self.recent_spawns.append((now, channel_id))
+        while self.recent_spawns and now - self.recent_spawns[0][0] > 300:
+            self.recent_spawns.popleft()
+        burst = sum(
+            1
+            for stamp, _ in self.recent_spawns
+            if now - stamp <= POKEBALL_BURST_WINDOW_SECONDS
+        )
+        if burst >= POKEBALL_BURST_SPAWNS:
+            self.pokeball_event_until = now + POKEBALL_EVENT_GRACE_SECONDS
+
+    async def pokeball_loop(self) -> None:
+        await self.wait_until_ready()
+        while not self.is_closed():
+            await asyncio.sleep(POKEBALL_INTERVAL_SECONDS)
+            now = time.monotonic()
+            if now >= self.pokeball_event_until:
+                continue
+            channel_ids = {
+                channel_id
+                for stamp, channel_id in self.recent_spawns
+                if now - stamp <= 300
+            }
+            channel = self.get_channel(random.choice(list(channel_ids))) if channel_ids else None
+            if channel is None:
+                continue
+            try:
+                await send_pokeball(channel)
+            except discord.HTTPException:
+                logger.exception("Could not post Pokéball")
 
     async def setup_hook(self) -> None:
+        self.pokeball_task = asyncio.create_task(self.pokeball_loop())
         self.image_http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=20),
             connector=aiohttp.TCPConnector(limit=0),
@@ -2430,6 +2538,8 @@ class NamingBot(discord.Client):
         )
 
     async def close(self) -> None:
+        if self.pokeball_task is not None:
+            self.pokeball_task.cancel()
         if self.image_http is not None:
             await self.image_http.close()
         await self.openai.close()
@@ -2448,6 +2558,12 @@ class NamingBot(discord.Client):
         if message.author.id != self.config.poketwo_bot_id:
             if re.fullmatch(r"v!grab\s*", message.content, re.IGNORECASE):
                 await self.handle_grab_command(message)
+                return
+            if re.fullmatch(r"v\.test\s*", message.content, re.IGNORECASE):
+                if isinstance(message.author, discord.Member) and any(
+                    role.id == RESERVE_ROLE_ID for role in message.author.roles
+                ):
+                    await send_pokeball(message.channel)
                 return
             if re.fullmatch(r"v!ping\s*", message.content, re.IGNORECASE):
                 await self.handle_ping_command(message)
@@ -3055,6 +3171,7 @@ class NamingBot(discord.Client):
         self.handled_spawn_ids[message.id] = None
         while len(self.handled_spawn_ids) > 5000:
             del self.handled_spawn_ids[next(iter(self.handled_spawn_ids))]
+        self.record_spawn_activity(message.channel.id)
 
         try:
             async with self.vision_semaphore:

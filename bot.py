@@ -44,6 +44,42 @@ RESERVE_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 
+
+def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not load Pokémon form catalog from {path}") from error
+
+    if not isinstance(data, dict) or not isinstance(data.get("forms"), dict):
+        raise ValueError(f"Pokémon form catalog at {path} has an invalid format")
+
+    forms: dict[str, list[dict[str, str]]] = {}
+    for species_name, entries in data["forms"].items():
+        if not isinstance(species_name, str) or not isinstance(entries, list):
+            raise ValueError(f"Pokémon form catalog at {path} has an invalid entry")
+        validated_entries = []
+        for entry in entries:
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("identifier"), str)
+                or not isinstance(entry.get("display_name"), str)
+            ):
+                raise ValueError(f"Pokémon form catalog at {path} has an invalid form")
+            validated_entries.append(
+                {
+                    "identifier": entry["identifier"],
+                    "display_name": entry["display_name"],
+                }
+            )
+        forms[species_name] = validated_entries
+    return forms
+
+
+POKEMON_FORMS: Final[dict[str, list[dict[str, str]]]] = load_pokemon_forms(
+    Path(__file__).with_name("pokemon_forms.json")
+)
+
 @dataclass(frozen=True)
 class Config:
     discord_token: str
@@ -571,8 +607,21 @@ def pokemon_matches_all_forms_reservation(
 ) -> bool:
     pokemon_name = unicodedata.normalize("NFC", pokemon_name).casefold()
     reserved_name = unicodedata.normalize("NFC", reserved_name).casefold()
+    if is_regional_form_name(pokemon_name):
+        return False
     if pokemon_name == reserved_name:
         return True
+    for form_index, form in enumerate(POKEMON_FORMS.get(reserved_name, [])):
+        aliases = pokemon_form_reservation_aliases(
+            reserved_name,
+            form,
+            is_default=form_index == 0,
+        )
+        if pokemon_name in {
+            unicodedata.normalize("NFC", alias).casefold()
+            for alias in aliases
+        }:
+            return True
     return pokemon_name.startswith(
         tuple(f"{reserved_name}{separator}" for separator in (" ", "-", "(", ":", "["))
     )
@@ -627,18 +676,30 @@ def add_shinyhunter(
             user_ids.remove(user_id)
             if not user_ids:
                 del updated_shinyhunters[key]
-    user_ids = updated_shinyhunters.setdefault(reservation_key(guild_id, pokemon_name), [])
+    user_ids = updated_shinyhunters.setdefault(
+        reservation_key_for_command(guild_id, pokemon_name),
+        [],
+    )
     if user_id not in user_ids:
         user_ids.append(user_id)
     return updated_shinyhunters
 
 
 def format_shinyhunt_status(pokemon_name: str) -> str:
-    return f"You are currently shinyhunting {pokemon_name.casefold()}"
+    return f"You are currently shinyhunting {format_shinyhunt_name(pokemon_name)}"
 
 
 def format_shinyhunt_confirmation(pokemon_name: str) -> str:
-    return f"You are now shinyhunting {pokemon_name.casefold()}"
+    return f"You are now shinyhunting {format_shinyhunt_name(pokemon_name)}"
+
+
+def format_shinyhunt_name(pokemon_name: str) -> str:
+    normalized_name = pokemon_name.casefold()
+    if normalized_name.startswith("all "):
+        return f"all forms of {normalized_name[4:].strip()}"
+    if normalized_name.startswith("*:"):
+        return f"all forms of {normalized_name[2:]}"
+    return normalized_name
 
 
 def shinyhunt_pokemon_for_user(
@@ -647,11 +708,21 @@ def shinyhunt_pokemon_for_user(
     user_id: int,
 ) -> list[str]:
     guild_prefix = f"{guild_id}:"
-    return sorted(
-        key.removeprefix(guild_prefix)
-        for key, user_ids in shinyhunters.items()
-        if key.startswith(guild_prefix) and user_id in user_ids
-    )
+    pokemon_names = []
+    for key, user_ids in shinyhunters.items():
+        if not key.startswith(guild_prefix) or user_id not in user_ids:
+            continue
+        name = key.removeprefix(guild_prefix)
+        pokemon_names.append(f"all {name[2:]}" if name.startswith("*:") else name)
+    return sorted(pokemon_names)
+
+
+def shinyhunter_user_ids_for_pokemon(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+) -> list[int]:
+    return reserved_user_ids_for_pokemon(shinyhunters, guild_id, pokemon_name)
 
 
 def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
@@ -921,31 +992,54 @@ def format_all_forms_reservation_embeds(
     guild_prefix = f"{guild_id}:"
     wildcard_key = all_forms_reservation_key(guild_id, base_name)
     wildcard_user_ids = set(reservations.get(wildcard_key, []))
-    matching_forms = sorted(
-        (
-            (key.removeprefix(guild_prefix), user_ids)
-            for key, user_ids in reservations.items()
-            if key.startswith(guild_prefix)
-            and not key.startswith(f"{guild_id}:*:")
-            and pokemon_matches_all_forms_reservation(
-                key.removeprefix(guild_prefix),
-                base_name,
+    form_definitions = POKEMON_FORMS.get(base_name, [])
+    known_alias_keys: set[str] = set()
+    entries: list[str] = []
+    for form_index, form in enumerate(form_definitions):
+        aliases = pokemon_form_reservation_aliases(
+            base_name,
+            form,
+            is_default=form_index == 0,
+        )
+        alias_keys = {
+            reservation_key(guild_id, alias)
+            for alias in aliases
+        }
+        known_alias_keys.update(alias_keys)
+        form_user_ids = set(wildcard_user_ids)
+        for alias_key in alias_keys:
+            form_user_ids.update(reservations.get(alias_key, []))
+        if form_user_ids:
+            entries.extend(
+                f"{form['display_name']} <@{user_id}>"
+                for user_id in sorted(form_user_ids)
             )
-        ),
-        key=lambda entry: entry[0].casefold(),
-    )
+        else:
+            entries.append(form["display_name"])
 
-    entries = [
-        f"{form_name} <@{user_id}>"
-        for form_name, form_user_ids in matching_forms
-        for user_id in sorted(set(form_user_ids) | wildcard_user_ids)
-    ]
-    if not matching_forms and wildcard_user_ids:
+    for key, user_ids in reservations.items():
+        if (
+            not key.startswith(guild_prefix)
+            or key.startswith(f"{guild_id}:*:")
+            or key in known_alias_keys
+        ):
+            continue
+        reserved_name = key.removeprefix(guild_prefix)
+        if (
+            pokemon_matches_all_forms_reservation(reserved_name, base_name)
+            and not is_regional_form_name(reserved_name)
+        ):
+            entries.extend(
+                f"{reserved_name} <@{user_id}>"
+                for user_id in sorted(set(user_ids) | wildcard_user_ids)
+            )
+
+    if not form_definitions and not entries and wildcard_user_ids:
         entries = [
             f"{format_reserved_pokemon_name(f'*:{base_name}')} <@{user_id}>"
             for user_id in sorted(wildcard_user_ids)
         ]
-    if not entries:
+    elif not entries:
         return [
             discord.Embed(
                 title=f"Reserve search: all forms of {pokemon_name}",
@@ -970,6 +1064,47 @@ def format_all_forms_reservation_embeds(
             embed.set_footer(text=f"Page {page_number} of {total_pages}")
         embeds.append(embed)
     return embeds
+
+
+def pokemon_form_reservation_aliases(
+    species_name: str,
+    form: dict[str, str],
+    *,
+    is_default: bool,
+) -> set[str]:
+    identifier = form["identifier"]
+    display_name = form["display_name"]
+    aliases = {identifier, identifier.replace("-", " "), display_name}
+    if identifier.startswith(f"{species_name}-"):
+        suffix = identifier.removeprefix(f"{species_name}-")
+        aliases.update(
+            {
+                f"{species_name} {suffix}",
+                f"{species_name} ({suffix})",
+                f"{suffix} {species_name}",
+            }
+        )
+    if is_default:
+        aliases.add(species_name)
+    return aliases
+
+
+def is_regional_form_name(name: str) -> bool:
+    normalized_name = unicodedata.normalize("NFC", name).casefold()
+    name_parts = set(re.split(r"[\s()\-]+", normalized_name))
+    if "cap" in name_parts:
+        name_parts.discard("alola")
+    regional_markers = {
+        "alola",
+        "alolan",
+        "galar",
+        "galarian",
+        "hisui",
+        "hisuian",
+        "paldea",
+        "paldean",
+    }
+    return bool(regional_markers.intersection(name_parts))
 
 
 class ReservationPagesView(discord.ui.View):
@@ -1491,7 +1626,11 @@ class NamingBot(discord.Client):
             else []
         )
         shinyhunter_user_ids = (
-            self.shinyhunters.get(reservation_key(message.guild.id, name), [])
+            shinyhunter_user_ids_for_pokemon(
+                self.shinyhunters,
+                message.guild.id,
+                name,
+            )
             if message.guild
             else []
         )

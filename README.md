@@ -62,9 +62,13 @@ This application does not bypass those restrictions.
 
 Any server member can view reservations with `v!r list`, search who reserved a
 Pokémon with `v!r search pikachu`, or see one member's reserved Pokémon with
-`v!r search @member`. Use `v!r search all arceus` to list all Arceus forms
-currently represented in the server's reserves, along with their reservers.
-Results with multiple pages show previous/next arrow buttons beneath the embed.
+`v!r search @member`. Use `v!r search all arceus` to list Arceus by type
+(for example, `fairy arceus @member`) and show the reservers for each type.
+Use `v!r search all pichu` for its regular and spiky-eared forms. This catalog
+covers alternate forms across Pokémon and excludes regional variants. Results
+with multiple pages show previous/next arrow buttons beneath the embed. The
+catalog in `pokemon_forms.json` is a static snapshot based on the
+[PokeAPI CSV data](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv).
 
 Only members with the reserve-manager role (role ID `1532820386511720579`) can
 change reservations. They can reserve Pokémon for a server member with:
@@ -99,11 +103,11 @@ Use `v!r clear` to clear every reservation in the current server. The bot asks
 for confirmation with Yes and No buttons; Yes clears the server's reservations,
 and No cancels the command.
 
-Any server member can select one Pokémon to shinyhunt with `v!sh absol`. A new
-selection replaces their previous shinyhunt in that server. The command replies
-with `You are currently shinyhunting absol`; running `v!sh` without a Pokémon
-name reports their current selection. When it spawns, registered hunters are
-mentioned in a `Shinyhunt:` line. If the Pokémon has a reservation, the existing
-`Reserved:` mentions take precedence over shiny-hunt mentions. Shiny-hunt
-registrations are stored in `shinyhunts.json` by default; set `SHINYHUNTS_FILE`
-to use a different path.
+Any server member can select one Pokémon to shinyhunt with `v!sh absol`, or
+track every non-regional form with `v!sh all arceus`. A new selection replaces
+their previous shinyhunt in that server. Running `v!sh` without a Pokémon name
+reports their current selection. When a matching Pokémon spawns, registered
+hunters are mentioned in a `Shinyhunt:` line. If the Pokémon has a reservation,
+the existing `Reserved:` mentions take precedence over shiny-hunt mentions.
+Shiny-hunt registrations are stored in `shinyhunts.json` by default; set
+`SHINYHUNTS_FILE` to use a different path.

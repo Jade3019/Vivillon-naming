@@ -19,6 +19,7 @@ from bot import (
     format_spawn_reply,
     format_shinyhunt_status,
     is_valid_pokemon_name,
+    load_pokemon_forms,
     load_reservations,
     parse_reserve_add_command,
     parse_reserve_remove_command,
@@ -32,6 +33,8 @@ from bot import (
     reserved_user_ids_for_pokemon,
     save_reservations,
     shinyhunt_pokemon_for_user,
+    shinyhunter_user_ids_for_pokemon,
+    pokemon_matches_all_forms_reservation,
 )
 
 
@@ -115,6 +118,15 @@ class ReservationPersistenceTests(unittest.TestCase):
             reserved_user_ids_for_pokemon(reservations, 1, "Arceusian"),
             [],
         )
+        self.assertFalse(
+            pokemon_matches_all_forms_reservation("Raichu-Alola", "Raichu")
+        )
+        self.assertTrue(
+            pokemon_matches_all_forms_reservation(
+                "Pikachu-Alola-Cap",
+                "Pikachu",
+            )
+        )
 
     def test_all_forms_command_uses_a_separate_reservation_key(self) -> None:
         self.assertEqual(
@@ -145,6 +157,40 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(shinyhunters[reservation_key(1, "Pikachu")], [123])
         self.assertEqual(shinyhunters[reservation_key(2, "Absol")], [789])
 
+    def test_all_forms_shinyhunt_matches_every_form_of_a_pokemon(self) -> None:
+        shinyhunters = add_shinyhunter({}, 1, "all arceus", 123)
+
+        self.assertEqual(
+            shinyhunters,
+            {all_forms_reservation_key(1, "Arceus"): [123]},
+        )
+        for form_name in ("Arceus", "Arceus-Fire", "Fairy Arceus"):
+            with self.subTest(form_name=form_name):
+                self.assertEqual(
+                    shinyhunter_user_ids_for_pokemon(
+                        shinyhunters,
+                        1,
+                        form_name,
+                    ),
+                    [123],
+                )
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(shinyhunters, 2, "Arceus-Fire"),
+            [],
+        )
+
+    def test_all_forms_shinyhunt_matches_catalogued_pichu_form(self) -> None:
+        shinyhunters = add_shinyhunter({}, 1, "all pichu", 123)
+
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(
+                shinyhunters,
+                1,
+                "Spiky-eared Pichu",
+            ),
+            [123],
+        )
+
     def test_formats_shinyhunt_status_in_lowercase(self) -> None:
         self.assertEqual(
             format_shinyhunt_status("Absol"),
@@ -153,6 +199,14 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             format_shinyhunt_confirmation("Pikachu"),
             "You are now shinyhunting pikachu",
+        )
+        self.assertEqual(
+            format_shinyhunt_confirmation("all arceus"),
+            "You are now shinyhunting all forms of arceus",
+        )
+        self.assertEqual(
+            format_shinyhunt_status("all arceus"),
+            "You are currently shinyhunting all forms of arceus",
         )
 
     def test_lists_the_single_shinyhunt_pokemon_for_one_user_and_guild(self) -> None:
@@ -168,6 +222,11 @@ class ReservationPersistenceTests(unittest.TestCase):
             ["absol"],
         )
         self.assertEqual(shinyhunt_pokemon_for_user(shinyhunters, 1, 999), [])
+        all_forms = add_shinyhunter({}, 1, "all arceus", 123)
+        self.assertEqual(
+            shinyhunt_pokemon_for_user(all_forms, 1, 123),
+            ["all arceus"],
+        )
 
     def test_persists_shinyhunt_registrations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -402,29 +461,77 @@ class ReservationPersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            embeds[0].description,
-            "arceus <@123>\narceus <@456>\n"
-            "arceus (fire) <@123>\narceus (fire) <@789>\n"
-            "arceus-water <@123>\narceus-water <@987>",
+            "\n".join(embed.description for embed in embeds),
+            "normal arceus <@123>\nnormal arceus <@456>\n"
+            "fire arceus <@123>\nfire arceus <@789>\n"
+            "water arceus <@123>\nwater arceus <@987>\n"
+            "electric arceus <@123>\ngrass arceus <@123>\n"
+            "ice arceus <@123>\nfighting arceus <@123>\n"
+            "poison arceus <@123>\nground arceus <@123>\n"
+            "flying arceus <@123>\npsychic arceus <@123>\n"
+            "bug arceus <@123>\nrock arceus <@123>\n"
+            "ghost arceus <@123>\ndragon arceus <@123>\n"
+            "dark arceus <@123>\nsteel arceus <@123>\nfairy arceus <@123>",
         )
 
-    def test_all_forms_search_shows_wildcard_reservation_when_no_forms_listed(self) -> None:
+    def test_all_forms_search_lists_each_arceus_type_for_all_forms_reserver(self) -> None:
         embeds = format_all_forms_reservation_embeds(
             {all_forms_reservation_key(1, "Arceus"): [123]},
             1,
             "Arceus",
         )
 
-        self.assertEqual(
-            embeds[0].description,
-            "all forms of arceus <@123>",
+        lines = "\n".join(embed.description for embed in embeds).splitlines()
+        self.assertEqual(len(lines), 18)
+        self.assertEqual(lines[0], "normal arceus <@123>")
+        self.assertEqual(lines[-1], "fairy arceus <@123>")
+
+    def test_all_forms_search_lists_only_exactly_reserved_types_without_wildcard(self) -> None:
+        embeds = format_all_forms_reservation_embeds(
+            {
+                reservation_key(1, "Arceus (Ghost)"): [123],
+                reservation_key(1, "Arceus-Fairy"): [456],
+            },
+            1,
+            "Arceus",
         )
 
+        rows = "\n".join(embed.description for embed in embeds).splitlines()
+        self.assertEqual(len(rows), 18)
+        self.assertIn("ghost arceus <@123>", rows)
+        self.assertIn("fairy arceus <@456>", rows)
+        self.assertIn("normal arceus", rows)
+
+    def test_all_forms_search_lists_pichu_forms_and_reserver(self) -> None:
+        embeds = format_all_forms_reservation_embeds(
+            {all_forms_reservation_key(1, "Pichu"): [123]},
+            1,
+            "Pichu",
+        )
+
+        self.assertEqual(
+            embeds[0].description,
+            "pichu <@123>\nspiky-eared pichu <@123>",
+        )
+
+    def test_all_forms_search_excludes_regional_forms(self) -> None:
+        embeds = format_all_forms_reservation_embeds(
+            {
+                all_forms_reservation_key(1, "Raichu"): [123],
+                reservation_key(1, "Raichu-Alola"): [456],
+            },
+            1,
+            "Raichu",
+        )
+
+        description = "\n".join(embed.description for embed in embeds)
+        self.assertIn("raichu <@123>", description)
+        self.assertIn("mega-x raichu <@123>", description)
+        self.assertNotIn("alola", description)
+
+
     def test_all_forms_search_paginates_form_entries_at_twenty(self) -> None:
-        reservations = {
-            reservation_key(1, f"Arceus form{i}"): [i]
-            for i in range(25)
-        }
+        reservations = {all_forms_reservation_key(1, "Arceus"): [1, 2]}
 
         embeds = format_all_forms_reservation_embeds(
             reservations,
@@ -434,11 +541,19 @@ class ReservationPersistenceTests(unittest.TestCase):
 
         self.assertEqual(
             [len(embed.description.splitlines()) for embed in embeds],
-            [20, 5],
+            [20, 16],
         )
         self.assertEqual(
             [embed.footer.text for embed in embeds],
             ["Page 1 of 2", "Page 2 of 2"],
+        )
+
+    def test_loads_non_regional_form_catalog(self) -> None:
+        forms = load_pokemon_forms(Path(__file__).with_name("pokemon_forms.json"))
+
+        self.assertEqual(forms["pichu"][1]["display_name"], "spiky-eared pichu")
+        self.assertFalse(
+            any("alola" in form["identifier"] for form in forms["raichu"])
         )
 
     def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:

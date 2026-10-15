@@ -201,6 +201,7 @@ class Config:
     max_concurrent_vision_requests: int
     openai_model: str
     openai_image_detail: str = "low"
+    allowed_category_ids: frozenset[int] | None = None
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -221,6 +222,19 @@ class Config:
                 "Set only one of ALLOWED_CHANNEL_IDS or ALLOWED_CHANNEL_ID"
             )
         configured_channel_ids = channel_ids or legacy_channel_id
+        category_values = [
+            value.strip()
+            for value in os.environ.get("ALLOWED_CATEGORY_IDS", "").split(",")
+            if value.strip()
+        ]
+        try:
+            allowed_category_ids = frozenset(int(value) for value in category_values)
+            if any(value <= 0 for value in allowed_category_ids):
+                raise ValueError
+        except ValueError as error:
+            raise ValueError(
+                "ALLOWED_CATEGORY_IDS must be comma-separated positive Discord IDs"
+            ) from error
         image_detail = os.environ.get("OPENAI_IMAGE_DETAIL", "low").strip().lower()
         if image_detail not in {"low", "high", "auto"}:
             raise ValueError("OPENAI_IMAGE_DETAIL must be low, high, or auto")
@@ -249,6 +263,7 @@ class Config:
                 max_concurrent_vision_requests=max_concurrent_vision_requests,
                 openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
                 openai_image_detail=image_detail,
+                allowed_category_ids=allowed_category_ids or None,
             )
         except ValueError as error:
             raise ValueError(
@@ -2112,10 +2127,7 @@ class NamingBot(discord.Client):
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
-        if (
-            self.config.allowed_channel_ids is not None
-            and message.channel.id not in self.config.allowed_channel_ids
-        ):
+        if not self.is_allowed_channel(message.channel):
             return
 
         text = message_text(message)
@@ -2140,16 +2152,25 @@ class NamingBot(discord.Client):
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
 
+    def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
+        channel_ids = self.config.allowed_channel_ids
+        category_ids = self.config.allowed_category_ids
+        if channel_ids is None and category_ids is None:
+            return True
+        if channel_ids is not None and getattr(channel, "id", None) in channel_ids:
+            return True
+        if category_ids is None:
+            return False
+        parent = getattr(channel, "parent", None) or channel
+        return getattr(parent, "category_id", None) in category_ids
+
     async def on_message_edit(
         self, before: discord.Message, after: discord.Message
     ) -> None:
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         if after.author.id != self.config.poketwo_bot_id:
             return
-        if (
-            self.config.allowed_channel_ids is not None
-            and after.channel.id not in self.config.allowed_channel_ids
-        ):
+        if not self.is_allowed_channel(after.channel):
             return
         if SPAWN_PATTERN.search(message_text(after)):
             await self.handle_spawn(after)

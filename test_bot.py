@@ -105,6 +105,14 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.max_concurrent_vision_requests, 8)
 
+    def test_configures_allowed_categories(self) -> None:
+        config = self.load_config(ALLOWED_CATEGORY_IDS="10, 20")
+
+        self.assertEqual(config.allowed_category_ids, frozenset({10, 20}))
+        self.assertIsNone(self.load_config().allowed_category_ids)
+        with self.assertRaises(ValueError):
+            self.load_config(ALLOWED_CATEGORY_IDS="abc")
+
     def test_rejects_invalid_channel_allowlist(self) -> None:
         for value in ("100,,200", "abc", "0", "-10"):
             with self.subTest(value=value), self.assertRaises(ValueError):

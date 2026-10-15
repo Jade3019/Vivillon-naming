@@ -9,6 +9,7 @@ from bot import (
     add_collection_pokemon,
     all_forms_reservation_key,
     clear_guild_reservations,
+    clear_user_collection,
     collection_pokemon_for_user,
     collection_user_ids_for_pokemon,
     format_catch_command,
@@ -33,6 +34,7 @@ from bot import (
     ReservationPagesView,
     remove_reservation,
     remove_reservations,
+    remove_collection_pokemon,
     reservation_key,
     reservation_key_for_command,
     reserved_pokemon_for_user,
@@ -149,6 +151,57 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             collection_pokemon_for_user(collections, 1, 123),
             ["eevee", "pikachu"],
+        )
+
+    def test_collection_remove_only_removes_requesting_user(self) -> None:
+        collections = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [123],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated, removed, missing = remove_collection_pokemon(
+            collections,
+            1,
+            ["pikachu", "eevee"],
+            123,
+        )
+
+        self.assertEqual(removed, ["pikachu", "eevee"])
+        self.assertEqual(missing, [])
+        self.assertEqual(updated, {
+            reservation_key(1, "Pikachu"): [456],
+            reservation_key(2, "Pikachu"): [123],
+        })
+        self.assertEqual(collections[reservation_key(1, "Pikachu")], [123, 456])
+
+    def test_collection_remove_reports_names_not_in_users_collection(self) -> None:
+        updated, removed, missing = remove_collection_pokemon(
+            {reservation_key(1, "Pikachu"): [456]},
+            1,
+            ["Pikachu", "Eevee"],
+            123,
+        )
+
+        self.assertEqual(updated, {reservation_key(1, "Pikachu"): [456]})
+        self.assertEqual(removed, [])
+        self.assertEqual(missing, ["Pikachu", "Eevee"])
+
+    def test_clear_user_collection_preserves_other_users_and_guilds(self) -> None:
+        collections = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [123],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated = clear_user_collection(collections, 1, 123)
+
+        self.assertEqual(
+            updated,
+            {
+                reservation_key(1, "Pikachu"): [456],
+                reservation_key(2, "Pikachu"): [123],
+            },
         )
 
     def test_formats_collection_embed_and_paginates_at_twenty(self) -> None:

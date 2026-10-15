@@ -118,9 +118,12 @@ Shiny-hunt registrations are stored in `shinyhunts.json` by default; set
 `SHINYHUNTS_FILE` to use a different path.
 
 Any server member can add Pokémon to their collection with
-`v!cl add pikachu, eevee` and view their list with `v!cl list`. Collection
-entries are stored in `collections.json` by default; set `COLLECTIONS_FILE` to
-use a different path. The list is paginated at 20 Pokémon per page with
-previous/next buttons. On a spawn, a reservation takes precedence over both
-shinyhunt and collection mentions; otherwise the bot shows both `Shinyhunt:`
-and `Collection:` lines when either group has a matching member.
+`v!cl add pikachu, eevee`, remove one or more with `v!cl remove pikachu, eevee`,
+clear their own collection in the current server with `v!cl clear`, and view
+their list with `v!cl list`. Removing Pokémon from a collection leaves other
+members' entries intact. Collection entries are stored in `collections.json`
+by default; set `COLLECTIONS_FILE` to use a different path. The list is
+paginated at 20 Pokémon per page with previous/next buttons. On a spawn, a
+reservation takes precedence over both shinyhunt and collection mentions;
+otherwise the bot shows both `Shinyhunt:` and `Collection:` lines when either
+group has a matching member.

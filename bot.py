@@ -46,6 +46,10 @@ COLLECTION_ADD_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!cl\s+add\s+(.+?)\s*$",
     re.IGNORECASE,
 )
+COLLECTION_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!cl\s+remove\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 
 
@@ -743,7 +747,14 @@ def shinyhunter_user_ids_for_pokemon(
 
 
 def parse_collection_add_command(content: str) -> list[str] | None:
-    match = COLLECTION_ADD_PATTERN.fullmatch(content)
+    return parse_collection_pokemon_command(content, COLLECTION_ADD_PATTERN)
+
+
+def parse_collection_pokemon_command(
+    content: str,
+    pattern: re.Pattern[str],
+) -> list[str] | None:
+    match = pattern.fullmatch(content)
     if match is None:
         return None
 
@@ -805,6 +816,46 @@ def collection_user_ids_for_pokemon(
     pokemon_name: str,
 ) -> list[int]:
     return sorted(set(collections.get(reservation_key(guild_id, pokemon_name), [])))
+
+
+def remove_collection_pokemon(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    pokemon_names: list[str],
+    user_id: int,
+) -> tuple[dict[str, list[int]], list[str], list[str]]:
+    updated_collections = {
+        key: list(user_ids) for key, user_ids in collections.items()
+    }
+    removed_names: list[str] = []
+    missing_names: list[str] = []
+    for pokemon_name in pokemon_names:
+        key = reservation_key(guild_id, pokemon_name)
+        user_ids = updated_collections.get(key)
+        if user_ids is None or user_id not in user_ids:
+            missing_names.append(pokemon_name)
+            continue
+        user_ids.remove(user_id)
+        removed_names.append(pokemon_name)
+        if not user_ids:
+            del updated_collections[key]
+    return updated_collections, removed_names, missing_names
+
+
+def clear_user_collection(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    user_id: int,
+) -> dict[str, list[int]]:
+    guild_prefix = f"{guild_id}:"
+    updated_collections: dict[str, list[int]] = {}
+    for key, user_ids in collections.items():
+        remaining_user_ids = list(user_ids)
+        if key.startswith(guild_prefix) and user_id in remaining_user_ids:
+            remaining_user_ids.remove(user_id)
+        if remaining_user_ids:
+            updated_collections[key] = remaining_user_ids
+    return updated_collections
 
 
 def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
@@ -1489,10 +1540,81 @@ class NamingBot(discord.Client):
             await message.reply("Usage: `v!cl list`", mention_author=False)
             return
 
+        if re.fullmatch(r"v!cl\s+clear\s*", message.content, re.IGNORECASE):
+            updated_collections = clear_user_collection(
+                self.collections,
+                message.guild.id,
+                message.author.id,
+            )
+            try:
+                save_reservations(self.collection_path, updated_collections)
+            except ValueError:
+                logger.exception("Could not clear Pokémon collection")
+                await message.reply(
+                    "I couldn't clear your collection. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.collections = updated_collections
+            await message.reply(
+                "Your Pokémon collection has been cleared.",
+                mention_author=False,
+            )
+            return
+        if re.match(r"^v!cl\s+clear(?:\s|$)", message.content, re.IGNORECASE):
+            await message.reply("Usage: `v!cl clear`", mention_author=False)
+            return
+
+        if re.match(r"^v!cl\s+remove(?:\s|$)", message.content, re.IGNORECASE):
+            pokemon_names = parse_collection_pokemon_command(
+                message.content,
+                COLLECTION_REMOVE_PATTERN,
+            )
+            if pokemon_names is None:
+                await message.reply(
+                    "Usage: `v!cl remove <pokemon>, <pokemon>`",
+                    mention_author=False,
+                )
+                return
+
+            updated_collections, removed_names, missing_names = (
+                remove_collection_pokemon(
+                    self.collections,
+                    message.guild.id,
+                    pokemon_names,
+                    message.author.id,
+                )
+            )
+            if not removed_names:
+                await message.reply(
+                    f"Those Pokémon were not found in your collection: "
+                    f"{', '.join(missing_names)}.",
+                    mention_author=False,
+                )
+                return
+
+            try:
+                save_reservations(self.collection_path, updated_collections)
+            except ValueError:
+                logger.exception("Could not remove Pokémon from collection")
+                await message.reply(
+                    "I couldn't update your collection. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+
+            self.collections = updated_collections
+            response = f"Removed {', '.join(removed_names)} from your collection."
+            if missing_names:
+                response += f" Not found: {', '.join(missing_names)}."
+            await message.reply(response, mention_author=False)
+            return
+
         pokemon_names = parse_collection_add_command(message.content)
         if pokemon_names is None:
             await message.reply(
-                "Usage: `v!cl add <pokemon>, <pokemon>` or `v!cl list`",
+                "Usage: `v!cl add <pokemon>, <pokemon>`, "
+                "`v!cl remove <pokemon>, <pokemon>`, `v!cl list`, or `v!cl clear`",
                 mention_author=False,
             )
             return

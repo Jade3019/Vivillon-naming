@@ -13,7 +13,7 @@ from typing import Final
 
 import aiohttp
 import discord
-from openai import AsyncOpenAI, OpenAIError
+from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
 
 logging.basicConfig(
@@ -282,6 +282,12 @@ async def recognize_pokemon(
     http: aiohttp.ClientSession,
     model: str,
 ) -> tuple[str, float]:
+    # Letting OpenAI fetch the image skips our own download and base64 step.
+    try:
+        return await request_prediction(url, client=client, model=model)
+    except BadRequestError:
+        logger.info("OpenAI could not fetch the image URL; uploading it instead")
+
     async with http.get(url) as response:
         response.raise_for_status()
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
@@ -293,9 +299,21 @@ async def recognize_pokemon(
         raise ValueError("Spawn image was empty")
 
     encoded_image = base64.b64encode(image_bytes).decode("ascii")
+    return await request_prediction(
+        f"data:{content_type};base64,{encoded_image}", client=client, model=model
+    )
+
+
+async def request_prediction(
+    image_ref: str,
+    *,
+    client: AsyncOpenAI,
+    model: str,
+) -> tuple[str, float]:
     result = await client.chat.completions.create(
         model=model,
         response_format={"type": "json_object"},
+        max_completion_tokens=60,
         messages=[
             {
                 "role": "system",
@@ -821,7 +839,7 @@ async def recognize_pokemon(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:{content_type};base64,{encoded_image}",
+                            "url": image_ref,
                             "detail": "high",
                         },
                     }

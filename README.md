@@ -60,6 +60,8 @@ approval for privileged intents on larger bots.
 
 The bot also handles spawns whose image or text Pokétwo adds by editing the message, processes each spawn message once, and retries temporary image-download or recognition failures up to three times before replying with an error.
 
+For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
+
 When Pokétwo posts a wild-spawn image, the bot replies with one predicted name
 and its estimated confidence percentage (for example, `Pikachu: 85.00%`). The
 confidence is a model estimate, not a calibrated probability. The vision model

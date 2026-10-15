@@ -258,7 +258,9 @@ def message_text(message: discord.Message) -> str:
     for embed in message.embeds:
         parts.extend((embed.title or "", embed.description or ""))
         parts.extend(f"{field.name}: {field.value}" for field in embed.fields)
-    return "\n".join(part for part in parts if part)
+    return unicodedata.normalize(
+        "NFC", "\n".join(part for part in parts if part)
+    )
 
 
 def image_url(message: discord.Message) -> str | None:
@@ -2049,6 +2051,7 @@ class NamingBot(discord.Client):
             config.max_concurrent_vision_requests
         )
         self.image_http: aiohttp.ClientSession | None = None
+        self.handled_spawn_ids: dict[int, None] = {}
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
         self.shinyhunt_path = Path(
@@ -2063,6 +2066,7 @@ class NamingBot(discord.Client):
     async def setup_hook(self) -> None:
         self.image_http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=20),
+            connector=aiohttp.TCPConnector(limit=0),
             headers={"User-Agent": "Vivillon-naming/1.0"},
         )
 
@@ -2105,6 +2109,20 @@ class NamingBot(discord.Client):
 
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
+
+    async def on_message_edit(
+        self, before: discord.Message, after: discord.Message
+    ) -> None:
+        # Pokétwo sometimes adds the spawn image or text by editing the message.
+        if after.author.id != self.config.poketwo_bot_id:
+            return
+        if (
+            self.config.allowed_channel_ids is not None
+            and after.channel.id not in self.config.allowed_channel_ids
+        ):
+            return
+        if SPAWN_PATTERN.search(message_text(after)):
+            await self.handle_spawn(after)
 
     async def handle_ping_command(self, message: discord.Message) -> None:
         started_at = time.perf_counter()
@@ -2582,15 +2600,27 @@ class NamingBot(discord.Client):
         if self.image_http is None:
             logger.error("HTTP client was not initialized")
             return
+        if message.id in self.handled_spawn_ids:
+            return
+        self.handled_spawn_ids[message.id] = None
+        while len(self.handled_spawn_ids) > 5000:
+            del self.handled_spawn_ids[next(iter(self.handled_spawn_ids))]
 
         try:
             async with self.vision_semaphore:
-                name, confidence = await recognize_pokemon(
-                    url,
-                    client=self.openai,
-                    http=self.image_http,
-                    model=self.config.openai_model,
-                )
+                for attempt in range(3):
+                    try:
+                        name, confidence = await recognize_pokemon(
+                            url,
+                            client=self.openai,
+                            http=self.image_http,
+                            model=self.config.openai_model,
+                        )
+                        break
+                    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                        if attempt == 2:
+                            raise
+                        await asyncio.sleep(0.5)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
             logger.exception("Could not recognize spawn in message %s", message.id)
             await message.reply(

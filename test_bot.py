@@ -124,6 +124,9 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 "electric_water_type_icons.png",
             )
         self.assertEqual(type_icon_filename_for_pokemon("Pikachu"), "electric_type.png")
+        self.assertEqual(type_icon_filename_for_pokemon("Snivy"), "grass_type.png")
+        self.assertEqual(type_icon_filename_for_pokemon("Treecko"), "grass_type.png")
+        self.assertIsNone(type_icon_filename_for_pokemon("Venusaur"))
         self.assertTrue(is_single_type_electric_pokemon("Jolteon"))
         self.assertFalse(is_single_type_electric_pokemon("Raichu-alola"))
         self.assertFalse(is_single_type_electric_pokemon("Magnemite"))

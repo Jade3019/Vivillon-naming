@@ -2295,8 +2295,6 @@ def build_grab_lines(
         line = name[0].upper() + name[1:]
         if emojis:
             line = f"{emojis[index % len(emojis)]} {line}"
-        if user_ids:
-            line += " - " + ", ".join(f"<@{user_id}>" for user_id in user_ids)
         lines.append(line)
     return lines
 
@@ -3525,8 +3523,18 @@ class GrabListView(discord.ui.View):
                 ephemeral=True,
             )
             return
+        assignments = "\n".join(
+            f"{grab_display_name(name)} → <@{user_id}>" for name, user_id in pairs
+        )
+        if len(assignments) > 3800:
+            assignments = assignments[:3800].rsplit("\n", 1)[0] + "\n…"
         await interaction.response.send_message(
             "Are you sure you want to add all reserves?",
+            embed=discord.Embed(
+                title="Reserves to add",
+                description=assignments,
+                color=discord.Color.blurple(),
+            ),
             view=GrabAddReservesView(
                 self.bot, self.guild_id, interaction.user.id, pairs
             ),

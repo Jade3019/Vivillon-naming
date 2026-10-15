@@ -620,11 +620,11 @@ class GrabListTests(unittest.TestCase):
 
         self.assertEqual(
             build_grab_lines(entries, ordered=True, all_forms=True, emojis=["🔥", "💧"]),
-            ["🔥 Ditto", "💧 Sylveon - <@1>", "🔥 Trapinch", "💧 All urshifu"],
+            ["🔥 Ditto", "💧 Sylveon", "🔥 Trapinch", "💧 All urshifu"],
         )
         self.assertEqual(
             build_grab_lines(entries, ordered=False, all_forms=False, emojis=[]),
-            ["Sylveon - <@1>", "Trapinch", "Urshifu", "Ditto"],
+            ["Sylveon", "Trapinch", "Urshifu", "Ditto"],
         )
 
     def test_grab_display_names(self) -> None:

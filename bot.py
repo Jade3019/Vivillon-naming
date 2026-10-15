@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -852,6 +853,9 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.fullmatch(r"v!ping\s*", message.content, re.IGNORECASE):
+                await self.handle_ping_command(message)
+                return
             if re.match(r"^v!sh(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_shinyhunt_command(message)
                 return
@@ -865,6 +869,12 @@ class NamingBot(discord.Client):
 
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
+
+    async def handle_ping_command(self, message: discord.Message) -> None:
+        started_at = time.perf_counter()
+        response = await message.reply("....loading", mention_author=False)
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        await response.edit(content=f"{elapsed_ms}ms")
 
     async def handle_shinyhunt_command(self, message: discord.Message) -> None:
         if message.guild is None:

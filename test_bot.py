@@ -93,7 +93,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             embed.description,
-            "Copy Below\n`<@716390085896962058> c pikachu`",
+            "Copy Below\n```\n<@716390085896962058> c pikachu\n```",
         )
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:

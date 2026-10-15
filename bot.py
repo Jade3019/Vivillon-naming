@@ -1053,7 +1053,7 @@ def format_pc_catch_embed(name: str) -> discord.Embed:
         title=f"Catch {name}",
         description=(
             f"Copy Below\n"
-            f"`{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}`"
+            f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
         ),
     )
 

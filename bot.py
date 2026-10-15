@@ -773,12 +773,24 @@ def is_fire_icon_pokemon(name: str) -> bool:
     )
 
 
+def is_water_icon_pokemon(name: str) -> bool:
+    normalized_name = normalize_pokemon_alias(name)
+    return (
+        normalized_name in NORMAL_AND_WATER_TYPE_ALIASES
+        or normalized_name in WATER_AND_FIRE_TYPE_ALIASES
+        or normalized_name in ELECTRIC_AND_WATER_TYPE_ALIASES
+        or normalized_name in GRASS_AND_WATER_TYPE_ALIASES
+        or normalized_name in ICE_AND_WATER_TYPE_ALIASES
+        or is_single_type_water_pokemon(name)
+    )
+
+
 def fire_companion_icon_filename_for_pokemon(name: str) -> str | None:
     normalized_name = normalize_pokemon_alias(name)
     if normalized_name in FIRE_AND_NORMAL_TYPE_ALIASES:
         return "normal_type.png"
     if normalized_name in WATER_AND_FIRE_TYPE_ALIASES:
-        return "water_type.png"
+        return None
     if normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES:
         return "electric_type.png"
     if normalized_name in GRASS_AND_FIRE_TYPE_ALIASES:
@@ -788,20 +800,40 @@ def fire_companion_icon_filename_for_pokemon(name: str) -> str | None:
     return None
 
 
-def format_fire_spawn_reply(
+def water_companion_icon_filename_for_pokemon(name: str) -> str | None:
+    normalized_name = normalize_pokemon_alias(name)
+    if normalized_name in NORMAL_AND_WATER_TYPE_ALIASES:
+        return "normal_type.png"
+    if normalized_name in ELECTRIC_AND_WATER_TYPE_ALIASES:
+        return "electric_type.png"
+    if normalized_name in GRASS_AND_WATER_TYPE_ALIASES:
+        return "grass_type.png"
+    if normalized_name in ICE_AND_WATER_TYPE_ALIASES:
+        return "ice_type.png"
+    return None
+
+
+def format_custom_type_spawn_reply(
     name: str,
     confidence: float,
     poketwo_bot_id: int,
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
     collection_user_ids: list[int] | None = None,
+    include_fire: bool = False,
+    include_water: bool = False,
 ) -> str:
     lines = format_spawn_mention_lines(
         reserved_user_ids,
         shinyhunter_user_ids,
         collection_user_ids,
     )
-    lines.append(f"## <:fire:1560301436074729532> {format_guess(name, confidence)}")
+    type_emojis = []
+    if include_fire:
+        type_emojis.append("<:fire:1560301436074729532>")
+    if include_water:
+        type_emojis.append("<:water:1560303864094130357>")
+    lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence)}")
     lines.append(f"`{format_catch_command(poketwo_bot_id, name)}`")
     return "\n".join(lines)
 
@@ -2298,16 +2330,24 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
-        if is_fire_icon_pokemon(name):
-            reply = format_fire_spawn_reply(
+        is_fire_spawn = is_fire_icon_pokemon(name)
+        is_water_spawn = is_water_icon_pokemon(name)
+        if is_fire_spawn or is_water_spawn:
+            reply = format_custom_type_spawn_reply(
                 name,
                 confidence,
                 self.config.poketwo_bot_id,
                 reserved_user_ids,
                 shinyhunter_user_ids,
                 collection_user_ids,
+                include_fire=is_fire_spawn,
+                include_water=is_water_spawn,
             )
-            companion_icon_filename = fire_companion_icon_filename_for_pokemon(name)
+            companion_icon_filename = (
+                fire_companion_icon_filename_for_pokemon(name)
+                if is_fire_spawn
+                else water_companion_icon_filename_for_pokemon(name)
+            )
             if companion_icon_filename:
                 await message.reply(
                     reply,

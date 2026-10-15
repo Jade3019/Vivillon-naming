@@ -25,9 +25,11 @@ from bot import (
     format_server_reservation_embeds,
     format_shinyhunt_confirmation,
     format_type_spawn_embed,
-    format_fire_spawn_reply,
+    format_custom_type_spawn_reply,
     fire_companion_icon_filename_for_pokemon,
     is_fire_icon_pokemon,
+    is_water_icon_pokemon,
+    water_companion_icon_filename_for_pokemon,
     format_spawn_mention_lines,
     format_spawn_reply,
     format_shinyhunt_status,
@@ -75,7 +77,9 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
         self.assertEqual(
-            format_fire_spawn_reply("Vulpix", 87.5, 789, [123]),
+            format_custom_type_spawn_reply(
+                "Vulpix", 87.5, 789, [123], include_fire=True
+            ),
             "Reserved: <@123>\n"
             "## <:fire:1560301436074729532> Vulpix: 87.50%\n"
             "`<@789> c vulpix`",
@@ -84,13 +88,22 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertTrue(is_fire_icon_pokemon("Litleo"))
         self.assertFalse(is_fire_icon_pokemon("Charizard"))
         self.assertIsNone(fire_companion_icon_filename_for_pokemon("Vulpix"))
+        self.assertTrue(is_water_icon_pokemon("Magikarp"))
+        self.assertTrue(is_water_icon_pokemon("Dewgong"))
+        self.assertFalse(is_water_icon_pokemon("Gyarados"))
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Volcanion", 87.5, 789, include_fire=True, include_water=True
+            ),
+            "## <:fire:1560301436074729532> "
+            "<:water:1560303864094130357> Volcanion: 87.50%\n"
+            "`<@789> c volcanion`",
+        )
+        self.assertIsNone(fire_companion_icon_filename_for_pokemon("Volcanion"))
+        self.assertIsNone(water_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Litleo"),
             "normal_type.png",
-        )
-        self.assertEqual(
-            fire_companion_icon_filename_for_pokemon("Volcanion"),
-            "water_type.png",
         )
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Rotom Heat"),
@@ -102,6 +115,22 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Darmanitan-Galar-Zen"),
+            "ice_type.png",
+        )
+        self.assertEqual(
+            water_companion_icon_filename_for_pokemon("Bibarel"),
+            "normal_type.png",
+        )
+        self.assertEqual(
+            water_companion_icon_filename_for_pokemon("Lanturn"),
+            "electric_type.png",
+        )
+        self.assertEqual(
+            water_companion_icon_filename_for_pokemon("Ogerpon Wellspring Mask"),
+            "grass_type.png",
+        )
+        self.assertEqual(
+            water_companion_icon_filename_for_pokemon("Lapras"),
             "ice_type.png",
         )
 

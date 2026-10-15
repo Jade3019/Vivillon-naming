@@ -13,10 +13,12 @@ from bot import (
     clear_user_collection,
     collection_pokemon_for_user,
     collection_user_ids_for_pokemon,
+    split_collection_add_names,
     format_catch_command,
     format_guess,
     format_all_forms_reservation_embeds,
     format_collection_embeds,
+    format_collection_add_confirmation,
     format_pokemon_reserver_embeds,
     format_remove_confirmation,
     format_reservation_embeds,
@@ -212,6 +214,29 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             collection_pokemon_for_user(collections, 1, 123),
             ["eevee", "pikachu"],
+        )
+
+    def test_collection_add_detects_existing_names_for_the_same_user(self) -> None:
+        collections = add_collection_pokemon({}, 1, ["Pikachu"], 123)
+
+        new_names, already_added = split_collection_add_names(
+            collections,
+            1,
+            ["pikachu", "Eevee"],
+            123,
+        )
+
+        self.assertEqual(new_names, ["Eevee"])
+        self.assertEqual(already_added, ["pikachu"])
+        self.assertEqual(
+            format_collection_add_confirmation(new_names, already_added),
+            "Added Eevee to your collection. Pikachu already added to your collection.",
+        )
+
+    def test_collection_add_duplicate_response_for_single_pokemon(self) -> None:
+        self.assertEqual(
+            format_collection_add_confirmation([], ["pikachu"]),
+            "Pikachu already added to your collection.",
         )
 
     def test_collection_remove_only_removes_requesting_user(self) -> None:

@@ -895,6 +895,43 @@ def collection_pokemon_for_user(
     )
 
 
+def split_collection_add_names(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    pokemon_names: list[str],
+    user_id: int,
+) -> tuple[list[str], list[str]]:
+    existing_names = {
+        name.casefold()
+        for name in collection_pokemon_for_user(collections, guild_id, user_id)
+    }
+    already_added = [
+        name for name in pokemon_names if name.casefold() in existing_names
+    ]
+    new_names = [
+        name for name in pokemon_names if name.casefold() not in existing_names
+    ]
+    return new_names, already_added
+
+
+def format_collection_add_confirmation(
+    added_names: list[str],
+    already_added_names: list[str],
+) -> str:
+    lines = []
+    if added_names:
+        display_names = ", ".join(
+            name[0].upper() + name[1:] for name in added_names
+        )
+        lines.append(f"Added {display_names} to your collection.")
+    if already_added_names:
+        display_names = ", ".join(
+            name[0].upper() + name[1:] for name in already_added_names
+        )
+        lines.append(f"{display_names} already added to your collection.")
+    return " ".join(lines)
+
+
 def collection_user_ids_for_pokemon(
     collections: dict[str, list[int]],
     guild_id: int,
@@ -1704,10 +1741,23 @@ class NamingBot(discord.Client):
             )
             return
 
-        updated_collections = add_collection_pokemon(
+        new_names, already_added_names = split_collection_add_names(
             self.collections,
             message.guild.id,
             pokemon_names,
+            message.author.id,
+        )
+        if not new_names:
+            await message.reply(
+                format_collection_add_confirmation([], already_added_names),
+                mention_author=False,
+            )
+            return
+
+        updated_collections = add_collection_pokemon(
+            self.collections,
+            message.guild.id,
+            new_names,
             message.author.id,
         )
         try:
@@ -1721,11 +1771,8 @@ class NamingBot(discord.Client):
             return
 
         self.collections = updated_collections
-        display_names = ", ".join(
-            name[0].upper() + name[1:] for name in pokemon_names
-        )
         await message.reply(
-            f"Added {display_names} to your collection.",
+            format_collection_add_confirmation(new_names, already_added_names),
             mention_author=False,
         )
 

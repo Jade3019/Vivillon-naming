@@ -54,7 +54,9 @@ compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
-matching Pokétwo catch command as inline code for easier copying. Discord's
+matching Pokétwo catch command as inline code for easier copying. Each spawn reply
+also includes a “Catch [Pokémon]” card underneath with a “Copy Below” command for
+desktop users; Discord displays both formats on mobile and desktop. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pure Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Configured paired types that include any of those types show both corresponding custom emojis inline. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends

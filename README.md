@@ -54,7 +54,9 @@ before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pokétwo or Discord may ignore or restrict commands sent by another
-bot account.
+bot account. If the prediction is `Missingno.` or `???`, the bot sends the
+Pokétwo `inc p` command, waits three seconds, and asks for a staff member; it
+does not send a catch command for that spawn.
 
 This application does not bypass those restrictions.
 

@@ -23,6 +23,7 @@ from bot import (
     format_spawn_reply,
     format_shinyhunt_status,
     is_valid_pokemon_name,
+    is_missingno_name,
     load_pokemon_forms,
     load_reservations,
     parse_reserve_add_command,
@@ -44,6 +45,12 @@ from bot import (
 
 
 class GuessFormatTests(unittest.TestCase):
+    def test_recognizes_missingno_aliases(self) -> None:
+        for name in ("Missingno.", "missingno", "???"):
+            with self.subTest(name=name):
+                self.assertTrue(is_missingno_name(name))
+        self.assertFalse(is_missingno_name("Pikachu"))
+
     def test_formats_one_guess_without_a_label(self) -> None:
         self.assertEqual(format_guess("Pikachu", 85), "Pikachu: 85.00%")
         self.assertEqual(format_guess("Absol", 56.86), "Absol: 56.86%")

@@ -546,7 +546,9 @@ async def recognize_pokemon(
     ):
         raise ValueError("Vision model response included an invalid confidence percentage")
     name = unicodedata.normalize("NFC", name.strip())
-    if len(name) > 60 or (name and not is_valid_pokemon_name(name)):
+    if len(name) > 60 or (
+        name and not is_valid_pokemon_name(name) and not is_missingno_name(name)
+    ):
         raise ValueError("Vision model returned an invalid Pokémon name")
     return name, float(confidence)
 
@@ -558,6 +560,10 @@ def is_valid_pokemon_name(name: str) -> bool:
         or char in allowed_punctuation
         for char in name
     )
+
+
+def is_missingno_name(name: str) -> bool:
+    return name.strip().casefold().rstrip(".") in {"missingno", "???"}
 
 
 def format_guess(name: str, confidence: float) -> str:
@@ -1784,6 +1790,18 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        if is_missingno_name(name):
+            await message.reply(
+                f"<@{self.config.poketwo_bot_id}> inc p",
+                mention_author=False,
+            )
+            await asyncio.sleep(3)
+            await message.reply(
+                "Ping a staff member. Dont catch the pokemon.",
+                mention_author=False,
+            )
+            return
+
         reserved_user_ids = (
             reserved_user_ids_for_pokemon(
                 self.reservations,

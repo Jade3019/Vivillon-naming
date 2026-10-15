@@ -67,7 +67,44 @@ from bot import (
     shinyhunter_user_ids_for_pokemon,
     pokemon_matches_all_forms_reservation,
     POKETWO_COMMAND_BOT_ID,
+    Config,
 )
+
+
+class ConfigTests(unittest.TestCase):
+    def load_config(self, **environment: str) -> Config:
+        variables = {
+            "DISCORD_TOKEN": "test-token",
+            "OPENAI_API_KEY": "test-key",
+            "POKETWO_BOT_ID": "12345",
+            **environment,
+        }
+        with patch.dict("os.environ", variables, clear=True):
+            return Config.from_environment()
+
+    def test_allows_configuring_multiple_spawn_channels(self) -> None:
+        config = self.load_config(ALLOWED_CHANNEL_IDS="100, 200,300")
+
+        self.assertEqual(config.allowed_channel_ids, frozenset({100, 200, 300}))
+
+    def test_keeps_legacy_single_channel_setting(self) -> None:
+        config = self.load_config(ALLOWED_CHANNEL_ID="100")
+
+        self.assertEqual(config.allowed_channel_ids, frozenset({100}))
+
+    def test_unset_channel_allowlist_allows_all_channels(self) -> None:
+        config = self.load_config()
+
+        self.assertIsNone(config.allowed_channel_ids)
+
+    def test_rejects_invalid_channel_allowlist(self) -> None:
+        for value in ("100,,200", "abc", "0", "-10"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.load_config(ALLOWED_CHANNEL_IDS=value)
+
+    def test_rejects_both_channel_settings_at_once(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Set only one"):
+            self.load_config(ALLOWED_CHANNEL_ID="100", ALLOWED_CHANNEL_IDS="200")
 
 
 class FireSpawnFormattingTests(unittest.TestCase):

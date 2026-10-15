@@ -38,8 +38,12 @@ approval for privileged intents on larger bots.
    `POKETWO_BOT_ID` identifies the account whose spawn messages the bot
    monitors. Generated catch commands target `<@716390085896962058>`.
 
-   Optionally set `ALLOWED_CHANNEL_ID` to limit the bot to one channel and
-   `OPENAI_MODEL` to select another vision-capable Chat Completions model.
+   Optionally set `ALLOWED_CHANNEL_IDS` to a comma-separated list of channels
+   where the bot should respond, for example
+   `ALLOWED_CHANNEL_IDS="123456789012345678,234567890123456789"`. Leave it unset
+   to allow every channel the bot can access. Existing setups can keep using
+   `ALLOWED_CHANNEL_ID` for one channel; do not set both variables.
+   `OPENAI_MODEL` can select another vision-capable Chat Completions model.
 
 4. Start the bot:
 

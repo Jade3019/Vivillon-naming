@@ -193,7 +193,7 @@ class Config:
     discord_token: str
     openai_api_key: str
     poketwo_bot_id: int
-    allowed_channel_id: int | None
+    allowed_channel_ids: frozenset[int] | None
     openai_model: str
 
     @classmethod
@@ -208,18 +208,36 @@ class Config:
         if not poketwo_bot_id:
             raise ValueError("POKETWO_BOT_ID is required")
 
-        channel_id = os.environ.get("ALLOWED_CHANNEL_ID")
+        channel_ids = os.environ.get("ALLOWED_CHANNEL_IDS")
+        legacy_channel_id = os.environ.get("ALLOWED_CHANNEL_ID")
+        if channel_ids and legacy_channel_id:
+            raise ValueError(
+                "Set only one of ALLOWED_CHANNEL_IDS or ALLOWED_CHANNEL_ID"
+            )
+        configured_channel_ids = channel_ids or legacy_channel_id
         try:
+            poketwo_bot_id = int(poketwo_bot_id)
+            channel_id_values = (
+                configured_channel_ids.split(",") if configured_channel_ids else []
+            )
+            if any(not channel_id.strip() for channel_id in channel_id_values):
+                raise ValueError
+            allowed_channel_ids = frozenset(
+                int(channel_id.strip()) for channel_id in channel_id_values
+            )
+            if any(channel_id <= 0 for channel_id in allowed_channel_ids):
+                raise ValueError
             return cls(
                 discord_token=discord_token,
                 openai_api_key=openai_api_key,
-                poketwo_bot_id=int(poketwo_bot_id),
-                allowed_channel_id=int(channel_id) if channel_id else None,
+                poketwo_bot_id=poketwo_bot_id,
+                allowed_channel_ids=allowed_channel_ids or None,
                 openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
             )
         except ValueError as error:
             raise ValueError(
-                "POKETWO_BOT_ID and ALLOWED_CHANNEL_ID must be numeric Discord IDs"
+                "POKETWO_BOT_ID and configured channel IDs must be positive "
+                "numeric Discord IDs"
             ) from error
 
 
@@ -1979,8 +1997,8 @@ class NamingBot(discord.Client):
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
         if (
-            self.config.allowed_channel_id is not None
-            and message.channel.id != self.config.allowed_channel_id
+            self.config.allowed_channel_ids is not None
+            and message.channel.id not in self.config.allowed_channel_ids
         ):
             return
 

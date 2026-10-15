@@ -194,6 +194,6 @@ paged). Only the person who ran `v!grab` can use its buttons:
 - **Add reserves** – reserve managers only, and only when the list has an `@user`
   behind the Pokémon (`pikachu - @user1`). Shows an embed of which Pokémon goes to which user and asks "Are you sure you want to add all
   reserves?" with Yes/No; Yes adds each Pokémon to its user like `v!r add`
-  (using `all <pokemon>` where All forms is on). Pokémon without an `@user` are skipped. After Yes, the bot posts a `v!r add <pokemon> @user` line for each reserve, followed by a `<Pokémon> added to @user` line for each (in groups of 15, without pinging anyone).
+  (using `all <pokemon>` where All forms is on). Pokémon without an `@user` are skipped. After Yes, the bot posts each reserve as a `v!r add <pokemon> @user` line immediately followed by its `<Pokémon> added to @user` line (10 reserves per message, without pinging anyone).
 
 After a bot restart, `v!grab` on an old search message only sees the page shown in it.

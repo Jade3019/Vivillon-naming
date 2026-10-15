@@ -25,7 +25,7 @@ from bot import (
     format_server_reservation_embeds,
     format_shinyhunt_confirmation,
     format_type_spawn_embed,
-    format_pc_catch_embed,
+    format_pc_catch_code_block,
     format_custom_type_spawn_reply,
     fire_companion_icon_filename_for_pokemon,
     is_normal_icon_pokemon,
@@ -84,13 +84,10 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertEqual(embed.author.icon_url, "attachment://ice_type.png")
         self.assertEqual(embed.description, "`<@789> c glaceon`")
 
-    def test_pc_catch_embed_shows_copy_label_and_numeric_mention(self) -> None:
-        embed = format_pc_catch_embed("Pikachu", 716390085896962058)
-
-        self.assertEqual(embed.title, "Catch Pikachu")
+    def test_pc_catch_copy_uses_fenced_block_and_spawned_pokemon_name(self) -> None:
         self.assertEqual(
-            embed.description,
-            "Copy Below\n`<@716390085896962058> c pikachu`",
+            format_pc_catch_code_block("Pikachu"),
+            "```\n<@716390085896962058> c pikachu\n```",
         )
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:

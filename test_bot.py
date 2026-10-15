@@ -7,8 +7,10 @@ from bot import (
     clear_guild_reservations,
     format_catch_command,
     format_guess,
+    format_pokemon_reserver_embeds,
     format_remove_confirmation,
     format_reservation_embeds,
+    format_server_reservation_embeds,
     format_shinyhunt_confirmation,
     format_spawn_reply,
     format_shinyhunt_status,
@@ -244,14 +246,104 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(updated, {reservation_key(2, "Bulbasaur"): [123]})
         self.assertIn(reservation_key(1, "Eevee"), reservations)
 
-    def test_formats_reservation_embed_and_splits_long_lists(self) -> None:
+    def test_formats_reservation_embed_and_paginates_at_twenty_pokemon(self) -> None:
         embeds = format_reservation_embeds("Jade", ["eevee", "pikachu"])
         self.assertEqual(embeds[0].title, "Pokémon reserved by Jade")
         self.assertEqual(embeds[0].description, "Eevee\nPikachu")
 
-        long_embeds = format_reservation_embeds("Jade", ["pikachu"] * 600)
-        self.assertGreater(len(long_embeds), 1)
-        self.assertTrue(all(len(embed.description or "") <= 4096 for embed in long_embeds))
+        paged_embeds = format_reservation_embeds(
+            "Jade",
+            [f"pokemon{i}" for i in range(45)],
+        )
+        self.assertEqual(
+            [len(embed.description.splitlines()) for embed in paged_embeds],
+            [20, 20, 5],
+        )
+        self.assertEqual(
+            [embed.footer.text for embed in paged_embeds],
+            ["Page 1 of 3", "Page 2 of 3", "Page 3 of 3"],
+        )
+
+    def test_formats_all_server_reserves_one_pokemon_user_per_line(self) -> None:
+        reservations = {
+            reservation_key(1, "Pikachu"): [123, 456, 123],
+            reservation_key(1, "Scatterbug"): [789],
+            reservation_key(2, "Eevee"): [123],
+        }
+
+        embeds = format_server_reservation_embeds(reservations, 1)
+
+        self.assertEqual(len(embeds), 1)
+        self.assertEqual(
+            embeds[0].description,
+            "pikachu <@123>\npikachu <@456>\nscatterbug <@789>",
+        )
+
+    def test_formats_empty_server_reserve_list(self) -> None:
+        embeds = format_server_reservation_embeds(
+            {reservation_key(2, "Eevee"): [123]},
+            1,
+        )
+
+        self.assertEqual(
+            embeds[0].description,
+            "There are no Pokémon reservations in this server.",
+        )
+
+    def test_formats_reserve_search_with_all_users_for_pokemon(self) -> None:
+        reservations = {
+            reservation_key(1, "Scatterbug"): [456, 123, 456],
+            reservation_key(2, "Scatterbug"): [789],
+        }
+
+        embeds = format_pokemon_reserver_embeds(reservations, 1, "scatterbug")
+
+        self.assertEqual(embeds[0].title, "Reserve search: scatterbug")
+        self.assertEqual(
+            embeds[0].description,
+            "scatterbug <@123>\nscatterbug <@456>",
+        )
+
+    def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:
+        embeds = format_pokemon_reserver_embeds({}, 1, "scatterbug")
+
+        self.assertEqual(
+            embeds[0].description,
+            "No one has scatterbug reserved.",
+        )
+
+    def test_paginates_reserve_search_at_twenty_users(self) -> None:
+        reservations = {
+            reservation_key(1, "scatterbug"): list(range(45))
+        }
+
+        embeds = format_pokemon_reserver_embeds(
+            reservations,
+            1,
+            "scatterbug",
+        )
+
+        self.assertEqual(
+            [len(embed.description.splitlines()) for embed in embeds],
+            [20, 20, 5],
+        )
+
+    def test_paginates_server_reserve_list_at_twenty_entries(self) -> None:
+        reservations = {
+            reservation_key(1, f"pokemon{i}"): [i]
+            for i in range(45)
+        }
+
+        embeds = format_server_reservation_embeds(reservations, 1)
+
+        self.assertEqual(
+            [len(embed.description.splitlines()) for embed in embeds],
+            [20, 20, 5],
+        )
+        self.assertEqual(
+            [embed.footer.text for embed in embeds],
+            ["Page 1 of 3", "Page 2 of 3", "Page 3 of 3"],
+        )
 
 
 class PokemonNameValidationTests(unittest.TestCase):

@@ -35,14 +35,14 @@ RESERVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 RESERVE_SEARCH_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"^v!r\s+search\s+<@!?(\d+)>\s*$",
+    r"^v!r\s+search\s+(.+?)\s*$",
     re.IGNORECASE,
 )
 RESERVE_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+remove\s+(.+?)(?:(?:\s*,\s*|\s+)<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
-RESERVATION_EMBED_DESCRIPTION_LIMIT: Final[int] = 3800
+RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 
 @dataclass(frozen=True)
 class Config:
@@ -753,17 +753,11 @@ def format_reservation_embeds(
             )
         ]
 
-    pages: list[list[str]] = [[]]
-    current_length = 0
-    for name in pokemon_names:
-        display_pokemon = name[0].upper() + name[1:]
-        added_length = len(display_pokemon) + (2 if pages[-1] else 0)
-        if current_length + added_length > RESERVATION_EMBED_DESCRIPTION_LIMIT:
-            pages.append([])
-            current_length = 0
-            added_length = len(display_pokemon)
-        pages[-1].append(display_pokemon)
-        current_length += added_length
+    display_names = [name[0].upper() + name[1:] for name in pokemon_names]
+    pages = [
+        display_names[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(display_names), RESERVATION_EMBED_PAGE_SIZE)
+    ]
 
     embeds: list[discord.Embed] = []
     total_pages = len(pages)
@@ -771,6 +765,84 @@ def format_reservation_embeds(
         embed = discord.Embed(
             title=heading,
             description="\n".join(page_names),
+            color=discord.Color.blurple(),
+        )
+        if total_pages > 1:
+            embed.set_footer(text=f"Page {page_number} of {total_pages}")
+        embeds.append(embed)
+    return embeds
+
+
+def format_server_reservation_embeds(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+) -> list[discord.Embed]:
+    guild_prefix = f"{guild_id}:"
+    entries = sorted(
+        (
+            f"{key.removeprefix(guild_prefix)} <@{user_id}>"
+            for key, user_ids in reservations.items()
+            if key.startswith(guild_prefix)
+            for user_id in set(user_ids)
+        ),
+        key=str.casefold,
+    )
+    if not entries:
+        return [
+            discord.Embed(
+                title="Server Pokémon Reserves",
+                description="There are no Pokémon reservations in this server.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    pages = [
+        entries[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(entries), RESERVATION_EMBED_PAGE_SIZE)
+    ]
+
+    embeds: list[discord.Embed] = []
+    total_pages = len(pages)
+    for page_number, page_entries in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title="Server Pokémon Reserves",
+            description="\n".join(page_entries),
+            color=discord.Color.blurple(),
+        )
+        if total_pages > 1:
+            embed.set_footer(text=f"Page {page_number} of {total_pages}")
+        embeds.append(embed)
+    return embeds
+
+
+def format_pokemon_reserver_embeds(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+) -> list[discord.Embed]:
+    key = reservation_key(guild_id, pokemon_name)
+    user_ids = sorted(set(reservations.get(key, [])))
+    if not user_ids:
+        return [
+            discord.Embed(
+                title=f"Reserve search: {pokemon_name}",
+                description=f"No one has {pokemon_name} reserved.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    entries = [f"{pokemon_name} <@{user_id}>" for user_id in user_ids]
+    pages = [
+        entries[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(entries), RESERVATION_EMBED_PAGE_SIZE)
+    ]
+
+    embeds: list[discord.Embed] = []
+    total_pages = len(pages)
+    for page_number, page_entries in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title=f"Reserve search: {pokemon_name}",
+            description="\n".join(page_entries),
             color=discord.Color.blurple(),
         )
         if total_pages > 1:
@@ -860,7 +932,7 @@ class NamingBot(discord.Client):
                 await self.handle_shinyhunt_command(message)
                 return
             if re.match(
-                r"^v!r\s+(?:add|search|remove|clear)(?:\s|$)",
+                r"^v!r\s+(?:add|list|search|remove|clear)(?:\s|$)",
                 message.content,
                 re.IGNORECASE,
             ):
@@ -933,16 +1005,34 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
-            await message.reply(
-                "You need the designated reserve-manager role to use reserve commands.",
-                mention_author=False,
+
+        if re.fullmatch(r"v!r\s+list\s*", message.content, re.IGNORECASE):
+            embeds = format_server_reservation_embeds(
+                self.reservations,
+                message.guild.id,
             )
+            for embed in embeds:
+                await message.reply(
+                    embed=embed,
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            return
+        if re.match(r"^v!r\s+list(?:\s|$)", message.content, re.IGNORECASE):
+            await message.reply("Usage: `v!r list`", mention_author=False)
             return
 
         if re.match(r"^v!r\s+search(?:\s|$)", message.content, re.IGNORECASE):
             await self.handle_reserve_search(message)
             return
+
+        if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
+            await message.reply(
+                "Only reserve managers can add, remove, or clear reservations.",
+                mention_author=False,
+            )
+            return
+
         if re.match(r"^v!r\s+remove(?:\s|$)", message.content, re.IGNORECASE):
             await self.handle_reserve_remove(message)
             return
@@ -1082,27 +1172,62 @@ class NamingBot(discord.Client):
             return
 
         match = RESERVE_SEARCH_PATTERN.fullmatch(message.content)
-        if match is None or len(message.mentions) != 1:
+        if match is None:
             await message.reply(
-                "Usage: `v!r search @member`",
+                "Usage: `v!r search <pokemon|@member>`",
                 mention_author=False,
             )
             return
 
-        target = message.mentions[0]
-        if target.id != int(match.group(1)):
+        query = match.group(1).strip()
+        if message.mentions:
+            member_match = re.fullmatch(r"<@!?(\d+)>", query)
+            if (
+                len(message.mentions) != 1
+                or member_match is None
+                or int(member_match.group(1)) != message.mentions[0].id
+                or not isinstance(message.mentions[0], discord.Member)
+            ):
+                await message.reply(
+                    "Usage: `v!r search <pokemon|@member>`",
+                    mention_author=False,
+                )
+                return
+
+            member = message.mentions[0]
+            embeds = format_reservation_embeds(
+                member.display_name,
+                reserved_pokemon_for_user(
+                    self.reservations,
+                    message.guild.id,
+                    member.id,
+                ),
+            )
             await message.reply(
-                "Please mention exactly one server member.",
+                embed=embeds[0],
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            for embed in embeds[1:]:
+                await message.channel.send(
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            return
+
+        pokemon_name = unicodedata.normalize("NFC", query)
+        if len(pokemon_name) > 60 or not is_valid_pokemon_name(pokemon_name):
+            await message.reply(
+                "Usage: `v!r search <pokemon|@member>`",
                 mention_author=False,
             )
             return
 
-        pokemon_names = reserved_pokemon_for_user(
+        embeds = format_pokemon_reserver_embeds(
             self.reservations,
             message.guild.id,
-            target.id,
+            pokemon_name,
         )
-        embeds = format_reservation_embeds(target.display_name, pokemon_names)
         await message.reply(
             embed=embeds[0],
             mention_author=False,

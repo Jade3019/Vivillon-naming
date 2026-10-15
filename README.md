@@ -60,18 +60,21 @@ This application does not bypass those restrictions.
 
 ## Pokémon reservations
 
+Any server member can view reservations with `v!r list`, search who reserved a
+Pokémon with `v!r search pikachu`, or see one member's reserved Pokémon with
+`v!r search @member`. These read-only commands show results in paginated embeds.
+
 Only members with the reserve-manager role (role ID `1532820386511720579`) can
-use the `v!r` commands. They can reserve Pokémon for a server member with:
+change reservations. They can reserve Pokémon for a server member with:
 
 ```text
 v!r add pikachu, eevee @member
 ```
 
-More than one member can reserve the same Pokémon. Use `v!r search @member` to see that
-member's reservations in an embed. When a reserved Pokémon spawns, the bot
-lists and mentions its reserved members in a `Reserved:` line above the catch
-command. The `Reserved:` line is omitted when no one reserved that Pokémon.
-Other members are not mentioned. Reservations are stored in
+More than one member can reserve the same Pokémon. When a reserved Pokémon
+spawns, the bot lists and mentions its reserved members in a `Reserved:` line
+above the catch command. The `Reserved:` line is omitted when no one reserved
+that Pokémon. Other members are not mentioned. Reservations are stored in
 `reserves.json` by default; set `RESERVES_FILE` to a different path if needed.
 Keep that file on persistent host storage to retain reservations across
 restarts. The bot must be able to read and send messages in the command channel

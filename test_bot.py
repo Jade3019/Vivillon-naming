@@ -9,6 +9,7 @@ from bot import (
     format_guess,
     format_remove_confirmation,
     format_reservation_embeds,
+    format_shinyhunt_confirmation,
     format_spawn_reply,
     format_shinyhunt_status,
     is_valid_pokemon_name,
@@ -106,6 +107,10 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             format_shinyhunt_status("Absol"),
             "You are currently shinyhunting absol",
+        )
+        self.assertEqual(
+            format_shinyhunt_confirmation("Pikachu"),
+            "You are now shinyhunting pikachu",
         )
 
     def test_lists_the_single_shinyhunt_pokemon_for_one_user_and_guild(self) -> None:

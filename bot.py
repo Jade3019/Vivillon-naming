@@ -307,6 +307,10 @@ def format_shinyhunt_status(pokemon_name: str) -> str:
     return f"You are currently shinyhunting {pokemon_name.casefold()}"
 
 
+def format_shinyhunt_confirmation(pokemon_name: str) -> str:
+    return f"You are now shinyhunting {pokemon_name.casefold()}"
+
+
 def shinyhunt_pokemon_for_user(
     shinyhunters: dict[str, list[int]],
     guild_id: int,
@@ -620,9 +624,8 @@ class NamingBot(discord.Client):
             )
             return
         self.shinyhunters = updated_shinyhunters
-        self.shinyhunters = updated_shinyhunters
         await message.reply(
-            format_shinyhunt_status(pokemon_name),
+            format_shinyhunt_confirmation(pokemon_name),
             mention_author=False,
         )
 

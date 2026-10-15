@@ -749,11 +749,6 @@ def format_catch_command(poketwo_bot_id: int, name: str) -> str:
     return f"<@{poketwo_bot_id}> c {name.lower()}"
 
 
-def format_pc_catch_code_block(name: str) -> str:
-    command = format_catch_command(POKETWO_COMMAND_BOT_ID, name)
-    return f"```\n{command}\n```"
-
-
 def format_spawn_reply(
     name: str,
     confidence: float,
@@ -1051,6 +1046,16 @@ def format_type_spawn_embed(
         icon_url=f"attachment://{icon_filename}",
     )
     return embed
+
+
+def format_pc_catch_embed(name: str) -> discord.Embed:
+    return discord.Embed(
+        title=f"Catch {name}",
+        description=(
+            f"Copy Below\n"
+            f"`{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}`"
+        ),
+    )
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
@@ -2475,7 +2480,6 @@ class NamingBot(discord.Client):
                 include_grass=is_grass_spawn,
                 include_ice=is_ice_spawn,
             )
-            reply = f"{reply}\n{format_pc_catch_code_block(name)}"
             companion_icon_filename = (
                 fire_companion_icon_filename_for_pokemon(name)
                 or water_companion_icon_filename_for_pokemon(name)
@@ -2485,6 +2489,7 @@ class NamingBot(discord.Client):
             if companion_icon_filename:
                 await message.reply(
                     reply,
+                    embed=format_pc_catch_embed(name),
                     file=discord.File(
                         Path(__file__).with_name("assets") / companion_icon_filename,
                         filename=companion_icon_filename,
@@ -2494,6 +2499,7 @@ class NamingBot(discord.Client):
             else:
                 await message.reply(
                     reply,
+                    embed=format_pc_catch_embed(name),
                     mention_author=False,
                 )
             return
@@ -2508,10 +2514,9 @@ class NamingBot(discord.Client):
                 shinyhunter_user_ids,
                 collection_user_ids,
             )
-            content_lines.append(format_pc_catch_code_block(name))
             await message.reply(
                 content="\n".join(content_lines),
-                embed=type_embed,
+                embeds=[type_embed, format_pc_catch_embed(name)],
                 file=discord.File(
                     Path(__file__).with_name("assets") / icon_filename,
                     filename=icon_filename,
@@ -2527,8 +2532,8 @@ class NamingBot(discord.Client):
                     reserved_user_ids,
                     shinyhunter_user_ids,
                     collection_user_ids,
-                )
-                + f"\n{format_pc_catch_code_block(name)}",
+                ),
+                embed=format_pc_catch_embed(name),
                 mention_author=False,
             )
 

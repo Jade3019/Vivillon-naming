@@ -761,6 +761,51 @@ def format_spawn_reply(
     return "\n".join(lines)
 
 
+def is_fire_icon_pokemon(name: str) -> bool:
+    normalized_name = normalize_pokemon_alias(name)
+    return (
+        normalized_name in FIRE_AND_NORMAL_TYPE_ALIASES
+        or normalized_name in WATER_AND_FIRE_TYPE_ALIASES
+        or normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES
+        or normalized_name in GRASS_AND_FIRE_TYPE_ALIASES
+        or normalized_name in ICE_AND_FIRE_TYPE_ALIASES
+        or is_single_type_fire_pokemon(name)
+    )
+
+
+def fire_companion_icon_filename_for_pokemon(name: str) -> str | None:
+    normalized_name = normalize_pokemon_alias(name)
+    if normalized_name in FIRE_AND_NORMAL_TYPE_ALIASES:
+        return "normal_type.png"
+    if normalized_name in WATER_AND_FIRE_TYPE_ALIASES:
+        return "water_type.png"
+    if normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES:
+        return "electric_type.png"
+    if normalized_name in GRASS_AND_FIRE_TYPE_ALIASES:
+        return "grass_type.png"
+    if normalized_name in ICE_AND_FIRE_TYPE_ALIASES:
+        return "ice_type.png"
+    return None
+
+
+def format_fire_spawn_reply(
+    name: str,
+    confidence: float,
+    poketwo_bot_id: int,
+    reserved_user_ids: list[int] | None = None,
+    shinyhunter_user_ids: list[int] | None = None,
+    collection_user_ids: list[int] | None = None,
+) -> str:
+    lines = format_spawn_mention_lines(
+        reserved_user_ids,
+        shinyhunter_user_ids,
+        collection_user_ids,
+    )
+    lines.append(f"## <:fire:1560301436074729532> {format_guess(name, confidence)}")
+    lines.append(f"`{format_catch_command(poketwo_bot_id, name)}`")
+    return "\n".join(lines)
+
+
 def format_spawn_mention_lines(
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
@@ -818,30 +863,18 @@ def type_icon_filename_for_pokemon(name: str) -> str | None:
         return "normal_ice_type_icons.png"
     if normalize_pokemon_alias(name) in ICE_AND_WATER_TYPE_ALIASES:
         return "ice_water_type_icons.png"
-    if normalize_pokemon_alias(name) in ICE_AND_FIRE_TYPE_ALIASES:
-        return "ice_fire_type_icons.png"
-    if normalize_pokemon_alias(name) in FIRE_AND_NORMAL_TYPE_ALIASES:
-        return "fire_normal_type_icons.png"
     if normalize_pokemon_alias(name) in NORMAL_AND_WATER_TYPE_ALIASES:
         return "normal_water_type_icons.png"
-    if normalize_pokemon_alias(name) in WATER_AND_FIRE_TYPE_ALIASES:
-        return "water_fire_type_icons.png"
-    if normalize_pokemon_alias(name) in FIRE_AND_ELECTRIC_TYPE_ALIASES:
-        return "fire_electric_type_icons.png"
     if normalize_pokemon_alias(name) in ELECTRIC_AND_WATER_TYPE_ALIASES:
         return "electric_water_type_icons.png"
     if normalize_pokemon_alias(name) in ELECTRIC_AND_NORMAL_TYPE_ALIASES:
         return "electric_normal_type_icons.png"
-    if normalize_pokemon_alias(name) in GRASS_AND_FIRE_TYPE_ALIASES:
-        return "grass_fire_type_icons.png"
     if normalize_pokemon_alias(name) in GRASS_AND_WATER_TYPE_ALIASES:
         return "grass_water_type_icons.png"
     if normalize_pokemon_alias(name) in GRASS_AND_NORMAL_TYPE_ALIASES:
         return "grass_normal_type_icons.png"
     if normalize_pokemon_alias(name) in GRASS_AND_ELECTRIC_TYPE_ALIASES:
         return "grass_electric_type_icons.png"
-    if is_single_type_fire_pokemon(name):
-        return "fire_type.png"
     if is_single_type_normal_pokemon(name):
         return "normal_type.png"
     if is_single_type_water_pokemon(name):
@@ -2265,6 +2298,29 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
+        if is_fire_icon_pokemon(name):
+            reply = format_fire_spawn_reply(
+                name,
+                confidence,
+                self.config.poketwo_bot_id,
+                reserved_user_ids,
+                shinyhunter_user_ids,
+                collection_user_ids,
+            )
+            companion_icon_filename = fire_companion_icon_filename_for_pokemon(name)
+            if companion_icon_filename:
+                await message.reply(
+                    reply,
+                    file=discord.File(
+                        Path(__file__).with_name("assets") / companion_icon_filename,
+                        filename=companion_icon_filename,
+                    ),
+                    mention_author=False,
+                )
+            else:
+                await message.reply(reply, mention_author=False)
+            return
+
         icon_filename = type_icon_filename_for_pokemon(name)
         if icon_filename:
             await message.reply(

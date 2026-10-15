@@ -1104,18 +1104,14 @@ def format_spawn_mention_lines(
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
         return [f"Reserved: {mentions}"]
-    if shinyhunter_user_ids or collection_user_ids:
-        shinyhunt_mentions = ", ".join(
-            f"<@{user_id}>" for user_id in shinyhunter_user_ids or []
-        )
-        collection_mentions = ", ".join(
-            f"<@{user_id}>" for user_id in collection_user_ids or []
-        )
-        return [
-            f"Shinyhunt: {shinyhunt_mentions}",
-            f"Collection: {collection_mentions}",
-        ]
-    return []
+    lines = []
+    if shinyhunter_user_ids:
+        mentions = ", ".join(f"<@{user_id}>" for user_id in shinyhunter_user_ids)
+        lines.append(f"Shinyhunt: {mentions}")
+    if collection_user_ids:
+        mentions = ", ".join(f"<@{user_id}>" for user_id in collection_user_ids)
+        lines.append(f"Collection: {mentions}")
+    return lines
 
 
 def is_single_type_pokemon(name: str, type_aliases: frozenset[str]) -> bool:

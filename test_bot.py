@@ -442,12 +442,11 @@ class GuessFormatTests(unittest.TestCase):
             "`<@716390085896962058> c pikachu`",
         )
 
-    def test_formats_shinyhunters_when_no_reservations_exist(self) -> None:
+    def test_formats_shinyhunters_without_empty_collection_line(self) -> None:
         self.assertEqual(
             format_spawn_reply("Absol", 95, 789, [], [123, 456]),
             "Absol: 95.00%\n"
             "Shinyhunt: <@123>, <@456>\n"
-            "Collection: \n"
             "`<@789> c absol`",
         )
 
@@ -459,11 +458,10 @@ class GuessFormatTests(unittest.TestCase):
             "`<@789> c absol`",
         )
 
-    def test_collection_ping_is_included_with_empty_shinyhunt_line(self) -> None:
+    def test_collection_ping_is_included_without_empty_shinyhunt_line(self) -> None:
         self.assertEqual(
             format_spawn_reply("Pikachu", 95, 789, [], [], [123]),
             "Pikachu: 95.00%\n"
-            "Shinyhunt: \n"
             "Collection: <@123>\n"
             "`<@789> c pikachu`",
         )

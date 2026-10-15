@@ -143,6 +143,7 @@ reports that it is already added and does not create a duplicate. Collection
 entries are stored in `collections.json`
 by default; set `COLLECTIONS_FILE` to use a different path. The list is
 paginated at 20 Pokémon per page with previous/next buttons. On a spawn, a
-reservation takes precedence over both shinyhunt and collection mentions;
-otherwise the bot shows both `Shinyhunt:` and `Collection:` lines when either
-group has a matching member.
+reservation takes precedence over shinyhunt and collection mentions. Otherwise,
+the bot shows a `Shinyhunt:` line and/or a `Collection:` line only for groups
+with matching members. If no one matches, it shows the normal naming reply
+without empty mention lines.

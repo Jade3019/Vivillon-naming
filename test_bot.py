@@ -6,11 +6,15 @@ import discord
 
 from bot import (
     add_shinyhunter,
+    add_collection_pokemon,
     all_forms_reservation_key,
     clear_guild_reservations,
+    collection_pokemon_for_user,
+    collection_user_ids_for_pokemon,
     format_catch_command,
     format_guess,
     format_all_forms_reservation_embeds,
+    format_collection_embeds,
     format_pokemon_reserver_embeds,
     format_remove_confirmation,
     format_reservation_embeds,
@@ -23,6 +27,7 @@ from bot import (
     load_reservations,
     parse_reserve_add_command,
     parse_reserve_remove_command,
+    parse_collection_add_command,
     parse_shinyhunt_command,
     ReservationPagesView,
     remove_reservation,
@@ -69,6 +74,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Absol", 95, 789, [], [123, 456]),
             "Absol: 95.00%\n"
             "Shinyhunt: <@123>, <@456>\n"
+            "Collection: \n"
             "`<@789> c absol`",
         )
 
@@ -80,8 +86,81 @@ class GuessFormatTests(unittest.TestCase):
             "`<@789> c absol`",
         )
 
+    def test_collection_ping_is_included_with_empty_shinyhunt_line(self) -> None:
+        self.assertEqual(
+            format_spawn_reply("Pikachu", 95, 789, [], [], [123]),
+            "Pikachu: 95.00%\n"
+            "Shinyhunt: \n"
+            "Collection: <@123>\n"
+            "`<@789> c pikachu`",
+        )
+
+    def test_collection_and_shinyhunt_ping_multiple_members(self) -> None:
+        self.assertEqual(
+            format_spawn_reply("Pikachu", 95, 789, [], [123], [456, 789]),
+            "Pikachu: 95.00%\n"
+            "Shinyhunt: <@123>\n"
+            "Collection: <@456>, <@789>\n"
+            "`<@789> c pikachu`",
+        )
+
+    def test_reservation_overrides_shinyhunt_and_collection_pings(self) -> None:
+        self.assertEqual(
+            format_spawn_reply("Pikachu", 95, 789, [111], [123], [456]),
+            "Pikachu: 95.00%\n"
+            "Reserved: <@111>\n"
+            "`<@789> c pikachu`",
+        )
+
 
 class ReservationPersistenceTests(unittest.TestCase):
+    def test_parses_and_deduplicates_multiple_collection_pokemon(self) -> None:
+        self.assertEqual(
+            parse_collection_add_command("v!cl add Pikachu, eevee, pikachu"),
+            ["Pikachu", "eevee"],
+        )
+        self.assertIsNone(parse_collection_add_command("v!cl add pikachu,,eevee"))
+        self.assertIsNone(parse_collection_add_command("v!cl add pikachu!"))
+
+    def test_collection_add_keeps_multiple_members_and_guilds_separate(self) -> None:
+        collections = add_collection_pokemon({}, 1, ["Pikachu", "Eevee"], 123)
+        collections = add_collection_pokemon(collections, 1, ["Pikachu"], 456)
+        collections = add_collection_pokemon(collections, 2, ["Pikachu"], 789)
+
+        self.assertEqual(
+            collections[reservation_key(1, "pikachu")],
+            [123, 456],
+        )
+        self.assertEqual(
+            collection_user_ids_for_pokemon(collections, 1, "Pikachu"),
+            [123, 456],
+        )
+        self.assertEqual(
+            collection_user_ids_for_pokemon(collections, 2, "Pikachu"),
+            [789],
+        )
+        self.assertEqual(
+            collection_pokemon_for_user(collections, 1, 123),
+            ["eevee", "pikachu"],
+        )
+
+    def test_formats_collection_embed_and_paginates_at_twenty(self) -> None:
+        embeds = format_collection_embeds(["eevee", "pikachu"])
+        self.assertEqual(embeds[0].title, "Your Pokémon Collection")
+        self.assertEqual(embeds[0].description, "eevee\npikachu")
+
+        paged_embeds = format_collection_embeds(
+            [f"pokemon{i}" for i in range(45)]
+        )
+        self.assertEqual(
+            [len(embed.description.splitlines()) for embed in paged_embeds],
+            [20, 20, 5],
+        )
+        self.assertEqual(
+            [embed.footer.text for embed in paged_embeds],
+            ["Page 1 of 3", "Page 2 of 3", "Page 3 of 3"],
+        )
+
     def test_formats_removal_confirmations(self) -> None:
         self.assertEqual(format_remove_confirmation("pikachu", None), "Pikachu removed")
         self.assertEqual(
@@ -460,18 +539,32 @@ class ReservationPersistenceTests(unittest.TestCase):
             "Arceus",
         )
 
+        rows = set("\n".join(embed.description for embed in embeds).splitlines())
         self.assertEqual(
-            "\n".join(embed.description for embed in embeds),
-            "normal arceus <@123>\nnormal arceus <@456>\n"
-            "fire arceus <@123>\nfire arceus <@789>\n"
-            "water arceus <@123>\nwater arceus <@987>\n"
-            "electric arceus <@123>\ngrass arceus <@123>\n"
-            "ice arceus <@123>\nfighting arceus <@123>\n"
-            "poison arceus <@123>\nground arceus <@123>\n"
-            "flying arceus <@123>\npsychic arceus <@123>\n"
-            "bug arceus <@123>\nrock arceus <@123>\n"
-            "ghost arceus <@123>\ndragon arceus <@123>\n"
-            "dark arceus <@123>\nsteel arceus <@123>\nfairy arceus <@123>",
+            rows,
+            {
+                "normal arceus <@123>",
+                "normal arceus <@456>",
+                "fire arceus <@123>",
+                "fire arceus <@789>",
+                "water arceus <@123>",
+                "water arceus <@987>",
+                "electric arceus <@123>",
+                "grass arceus <@123>",
+                "ice arceus <@123>",
+                "fighting arceus <@123>",
+                "poison arceus <@123>",
+                "ground arceus <@123>",
+                "flying arceus <@123>",
+                "psychic arceus <@123>",
+                "bug arceus <@123>",
+                "rock arceus <@123>",
+                "ghost arceus <@123>",
+                "dragon arceus <@123>",
+                "dark arceus <@123>",
+                "steel arceus <@123>",
+                "fairy arceus <@123>",
+            },
         )
 
     def test_all_forms_search_lists_each_arceus_type_for_all_forms_reserver(self) -> None:
@@ -554,6 +647,11 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(forms["pichu"][1]["display_name"], "spiky-eared pichu")
         self.assertFalse(
             any("alola" in form["identifier"] for form in forms["raichu"])
+        )
+        self.assertEqual(forms["arceus"][0]["identifier"], "arceus-normal")
+        self.assertEqual(forms["arceus"][0]["display_name"], "normal arceus")
+        self.assertFalse(
+            any(form["identifier"] == "arceus-unknown" for form in forms["arceus"])
         )
 
     def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:

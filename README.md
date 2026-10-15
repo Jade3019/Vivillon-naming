@@ -69,6 +69,9 @@ covers alternate forms across Pokémon and excludes regional variants. Results
 with multiple pages show previous/next arrow buttons beneath the embed. The
 catalog in `pokemon_forms.json` is a static snapshot based on the
 [PokeAPI CSV data](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv).
+To regenerate it, download `pokemon.csv`, `pokemon_forms.csv`, and
+`pokemon_species.csv` into one directory and run
+`python generate_pokemon_forms.py <csv-directory>`.
 
 Only members with the reserve-manager role (role ID `1532820386511720579`) can
 change reservations. They can reserve Pokémon for a server member with:
@@ -111,3 +114,11 @@ hunters are mentioned in a `Shinyhunt:` line. If the Pokémon has a reservation,
 the existing `Reserved:` mentions take precedence over shiny-hunt mentions.
 Shiny-hunt registrations are stored in `shinyhunts.json` by default; set
 `SHINYHUNTS_FILE` to use a different path.
+
+Any server member can add Pokémon to their collection with
+`v!cl add pikachu, eevee` and view their list with `v!cl list`. Collection
+entries are stored in `collections.json` by default; set `COLLECTIONS_FILE` to
+use a different path. The list is paginated at 20 Pokémon per page with
+previous/next buttons. On a spawn, a reservation takes precedence over both
+shinyhunt and collection mentions; otherwise the bot shows both `Shinyhunt:`
+and `Collection:` lines when either group has a matching member.

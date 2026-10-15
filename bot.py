@@ -42,6 +42,10 @@ RESERVE_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+remove\s+(.+?)(?:(?:\s*,\s*|\s+)<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
+COLLECTION_ADD_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!cl\s+add\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 
 
@@ -570,15 +574,22 @@ def format_spawn_reply(
     poketwo_bot_id: int,
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
+    collection_user_ids: list[int] | None = None,
 ) -> str:
     command = format_catch_command(poketwo_bot_id, name)
     lines = [format_guess(name, confidence)]
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
         lines.append(f"Reserved: {mentions}")
-    elif shinyhunter_user_ids:
-        mentions = ", ".join(f"<@{user_id}>" for user_id in shinyhunter_user_ids)
-        lines.append(f"Shinyhunt: {mentions}")
+    elif shinyhunter_user_ids or collection_user_ids:
+        shinyhunt_mentions = ", ".join(
+            f"<@{user_id}>" for user_id in shinyhunter_user_ids or []
+        )
+        collection_mentions = ", ".join(
+            f"<@{user_id}>" for user_id in collection_user_ids or []
+        )
+        lines.append(f"Shinyhunt: {shinyhunt_mentions}")
+        lines.append(f"Collection: {collection_mentions}")
     lines.append(f"`{command}`")
     return "\n".join(lines)
 
@@ -723,6 +734,71 @@ def shinyhunter_user_ids_for_pokemon(
     pokemon_name: str,
 ) -> list[int]:
     return reserved_user_ids_for_pokemon(shinyhunters, guild_id, pokemon_name)
+
+
+def parse_collection_add_command(content: str) -> list[str] | None:
+    match = COLLECTION_ADD_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+
+    pokemon_names = [
+        unicodedata.normalize("NFC", name.strip())
+        for name in match.group(1).split(",")
+    ]
+    if any(
+        not name or len(name) > 60 or not is_valid_pokemon_name(name)
+        for name in pokemon_names
+    ):
+        return None
+
+    unique_names: list[str] = []
+    seen_names: set[str] = set()
+    for pokemon_name in pokemon_names:
+        normalized_name = pokemon_name.casefold()
+        if normalized_name not in seen_names:
+            unique_names.append(pokemon_name)
+            seen_names.add(normalized_name)
+    return unique_names
+
+
+def add_collection_pokemon(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    pokemon_names: list[str],
+    user_id: int,
+) -> dict[str, list[int]]:
+    updated_collections = {
+        key: list(user_ids) for key, user_ids in collections.items()
+    }
+    for pokemon_name in pokemon_names:
+        user_ids = updated_collections.setdefault(
+            reservation_key(guild_id, pokemon_name),
+            [],
+        )
+        if user_id not in user_ids:
+            user_ids.append(user_id)
+    return updated_collections
+
+
+def collection_pokemon_for_user(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    user_id: int,
+) -> list[str]:
+    guild_prefix = f"{guild_id}:"
+    return sorted(
+        key.removeprefix(guild_prefix)
+        for key, user_ids in collections.items()
+        if key.startswith(guild_prefix) and user_id in user_ids
+    )
+
+
+def collection_user_ids_for_pokemon(
+    collections: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+) -> list[int]:
+    return sorted(set(collections.get(reservation_key(guild_id, pokemon_name), [])))
 
 
 def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
@@ -886,6 +962,35 @@ def format_reservation_embeds(
     for page_number, page_names in enumerate(pages, start=1):
         embed = discord.Embed(
             title=heading,
+            description="\n".join(page_names),
+            color=discord.Color.blurple(),
+        )
+        if total_pages > 1:
+            embed.set_footer(text=f"Page {page_number} of {total_pages}")
+        embeds.append(embed)
+    return embeds
+
+
+def format_collection_embeds(pokemon_names: list[str]) -> list[discord.Embed]:
+    title = "Your Pokémon Collection"
+    if not pokemon_names:
+        return [
+            discord.Embed(
+                title=title,
+                description="You have no Pokémon in your collection yet.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    pages = [
+        pokemon_names[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(pokemon_names), RESERVATION_EMBED_PAGE_SIZE)
+    ]
+    embeds: list[discord.Embed] = []
+    total_pages = len(pages)
+    for page_number, page_names in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title=title,
             description="\n".join(page_names),
             color=discord.Color.blurple(),
         )
@@ -1248,6 +1353,10 @@ class NamingBot(discord.Client):
             os.environ.get("SHINYHUNTS_FILE", "shinyhunts.json")
         )
         self.shinyhunters = load_reservations(self.shinyhunt_path)
+        self.collection_path = Path(
+            os.environ.get("COLLECTIONS_FILE", "collections.json")
+        )
+        self.collections = load_reservations(self.collection_path)
 
     async def setup_hook(self) -> None:
         self.image_http = aiohttp.ClientSession(
@@ -1280,6 +1389,9 @@ class NamingBot(discord.Client):
                 return
             if re.match(r"^v!sh(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_shinyhunt_command(message)
+                return
+            if re.match(r"^v!cl(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_collection_command(message)
                 return
             if re.match(
                 r"^v!r\s+(?:add|list|search|remove|clear)(?:\s|$)",
@@ -1345,6 +1457,62 @@ class NamingBot(discord.Client):
         self.shinyhunters = updated_shinyhunters
         await message.reply(
             format_shinyhunt_confirmation(pokemon_name),
+            mention_author=False,
+        )
+
+    async def handle_collection_command(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Collections can only be used in a server.",
+                mention_author=False,
+            )
+            return
+
+        if re.fullmatch(r"v!cl\s+list\s*", message.content, re.IGNORECASE):
+            pokemon_names = collection_pokemon_for_user(
+                self.collections,
+                message.guild.id,
+                message.author.id,
+            )
+            await reply_with_reservation_embeds(
+                message,
+                format_collection_embeds(pokemon_names),
+            )
+            return
+        if re.match(r"^v!cl\s+list(?:\s|$)", message.content, re.IGNORECASE):
+            await message.reply("Usage: `v!cl list`", mention_author=False)
+            return
+
+        pokemon_names = parse_collection_add_command(message.content)
+        if pokemon_names is None:
+            await message.reply(
+                "Usage: `v!cl add <pokemon>, <pokemon>` or `v!cl list`",
+                mention_author=False,
+            )
+            return
+
+        updated_collections = add_collection_pokemon(
+            self.collections,
+            message.guild.id,
+            pokemon_names,
+            message.author.id,
+        )
+        try:
+            save_reservations(self.collection_path, updated_collections)
+        except ValueError:
+            logger.exception("Could not save Pokémon collection")
+            await message.reply(
+                "I couldn't save your collection. Check the bot logs.",
+                mention_author=False,
+            )
+            return
+
+        self.collections = updated_collections
+        display_names = ", ".join(
+            name[0].upper() + name[1:] for name in pokemon_names
+        )
+        await message.reply(
+            f"Added {display_names} to your collection.",
             mention_author=False,
         )
 
@@ -1634,6 +1802,15 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
+        collection_user_ids = (
+            collection_user_ids_for_pokemon(
+                self.collections,
+                message.guild.id,
+                name,
+            )
+            if message.guild
+            else []
+        )
         await message.reply(
             format_spawn_reply(
                 name,
@@ -1641,6 +1818,7 @@ class NamingBot(discord.Client):
                 self.config.poketwo_bot_id,
                 reserved_user_ids,
                 shinyhunter_user_ids,
+                collection_user_ids,
             ),
             mention_author=False,
         )

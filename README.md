@@ -174,4 +174,4 @@ listed Pokémon that `@owner` has reserved to the member on its line; **No**
 replies "Exchange cancelled." If `@owner` doesn't have some listed Pokémon, small
 text under the list names them and suggests "Do you mean @member?" for members
 who do have them. Only the command user (with the reserve manager role) can
-press the buttons, and unanswered prompts expire after 3 minutes.
+press the buttons (they appear even when `@owner` has none of the listed Pokémon), and unanswered prompts expire after 3 minutes.

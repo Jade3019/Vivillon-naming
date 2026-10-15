@@ -2639,7 +2639,7 @@ class NamingBot(discord.Client):
             await message.reply(usage, mention_author=False)
             return
 
-        _, moved, skipped = exchange_reservations(
+        _, _, skipped = exchange_reservations(
             self.reservations, message.guild.id, source_id, transfers
         )
         embed = format_exchange_embed(
@@ -2649,9 +2649,7 @@ class NamingBot(discord.Client):
             embed=embed,
             view=ExchangeReservesView(
                 self, message.guild.id, message.author.id, source_id, transfers
-            )
-            if moved
-            else None,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
             mention_author=False,
         )

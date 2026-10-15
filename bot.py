@@ -1795,7 +1795,7 @@ class NamingBot(discord.Client):
                 f"<@{self.config.poketwo_bot_id}> inc p",
                 mention_author=False,
             )
-            await asyncio.sleep(3)
+            await asyncio.sleep(0.5)
             await message.reply(
                 "Ping a staff member. Dont catch the pokemon.",
                 mention_author=False,

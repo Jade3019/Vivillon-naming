@@ -34,6 +34,7 @@ from bot import (
     is_fire_icon_pokemon,
     is_water_icon_pokemon,
     is_grass_icon_pokemon,
+    is_ice_icon_pokemon,
     water_companion_icon_filename_for_pokemon,
     format_spawn_mention_lines,
     format_spawn_reply,
@@ -43,6 +44,7 @@ from bot import (
     is_single_type_fire_pokemon,
     is_single_type_normal_pokemon,
     is_single_type_water_pokemon,
+    is_single_type_ice_pokemon,
     is_single_type_electric_pokemon,
     type_icon_filename_for_pokemon,
     load_pokemon_forms,
@@ -105,6 +107,12 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertTrue(is_grass_icon_pokemon("Treecko"))
         self.assertTrue(is_grass_icon_pokemon("Scovillain"))
         self.assertFalse(is_grass_icon_pokemon("Bulbasaur"))
+        self.assertTrue(is_single_type_ice_pokemon("Glaceon"))
+        self.assertTrue(is_ice_icon_pokemon("Glaceon"))
+        self.assertTrue(is_ice_icon_pokemon("Darmanitan-Galar-Zen"))
+        self.assertTrue(is_ice_icon_pokemon("Lapras"))
+        self.assertTrue(is_ice_icon_pokemon("Arctozolt"))
+        self.assertFalse(is_ice_icon_pokemon("Charizard"))
         self.assertEqual(
             format_custom_type_spawn_reply(
                 "Eevee", 87.5, 789, include_normal=True
@@ -184,6 +192,55 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "<:Electric:1560306053164572732> Rotom Mow: 87.50%\n"
             "`<@789> c rotom mow`",
         )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Glaceon", 87.5, 789, include_ice=True
+            ),
+            "## <:Ice:1560307867200782386> Glaceon: 87.50%\n"
+            "`<@789> c glaceon`",
+        )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Darmanitan-Galar-Zen",
+                87.5,
+                789,
+                include_fire=True,
+                include_ice=True,
+            ),
+            "## <:Ice:1560307867200782386> "
+            "<:fire:1560301436074729532> Darmanitan-Galar-Zen: 87.50%\n"
+            "`<@789> c darmanitan-galar-zen`",
+        )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Lapras", 87.5, 789, include_water=True, include_ice=True
+            ),
+            "## <:Ice:1560307867200782386> "
+            "<:water:1560303864094130357> Lapras: 87.50%\n"
+            "`<@789> c lapras`",
+        )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Arctozolt", 87.5, 789, include_electric=True, include_ice=True
+            ),
+            "## <:Ice:1560307867200782386> "
+            "<:Electric:1560306053164572732> Arctozolt: 87.50%\n"
+            "`<@789> c arctozolt`",
+        )
+        with patch("bot.NORMAL_AND_ICE_TYPE_ALIASES", frozenset({"test pokemon"})):
+            self.assertTrue(is_ice_icon_pokemon("Test Pokemon"))
+            self.assertEqual(
+                format_custom_type_spawn_reply(
+                    "Test Pokemon",
+                    87.5,
+                    789,
+                    include_normal=True,
+                    include_ice=True,
+                ),
+                "## <:Normal:1560305235279482930> "
+                "<:Ice:1560307867200782386> Test Pokemon: 87.50%\n"
+                "`<@789> c test pokemon`",
+            )
         self.assertIsNone(fire_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertIsNone(water_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertEqual(
@@ -200,7 +257,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Darmanitan-Galar-Zen"),
-            "ice_type.png",
+            None,
         )
         self.assertEqual(
             water_companion_icon_filename_for_pokemon("Bibarel"),
@@ -216,13 +273,13 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             water_companion_icon_filename_for_pokemon("Lapras"),
-            "ice_type.png",
+            None,
         )
         with patch("bot.NORMAL_AND_ICE_TYPE_ALIASES", frozenset({"test pokemon"})):
             self.assertTrue(is_normal_icon_pokemon("Test Pokemon"))
             self.assertEqual(
                 normal_companion_icon_filename_for_pokemon("Test Pokemon"),
-                "ice_type.png",
+                None,
             )
         self.assertEqual(
             electric_companion_icon_filename_for_pokemon("Voltorb-Hisui"),
@@ -230,7 +287,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             electric_companion_icon_filename_for_pokemon("Arctozolt"),
-            "ice_type.png",
+            None,
         )
 
     def test_marks_only_single_type_normal_pokemon(self) -> None:

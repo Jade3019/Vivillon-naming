@@ -53,7 +53,7 @@ species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
-clipboard. Pure Ice-type Pokémon show only the Ice icon. Pure Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Paired types that include any of those types show the corresponding custom emoji(s) inline, plus any remaining type icon as a regular image attachment. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
+clipboard. Pure Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Configured paired types that include any of those types show both corresponding custom emojis inline. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends
 the Pokétwo `inc p` command, waits 500 milliseconds, and asks for a staff
 member; it does not send a catch command for that spawn.

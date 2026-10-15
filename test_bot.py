@@ -11,7 +11,9 @@ from bot import (
     is_valid_pokemon_name,
     load_reservations,
     parse_reserve_add_command,
+    parse_reserve_remove_command,
     remove_reservation,
+    remove_reservations,
     reservation_key,
     reserved_pokemon_for_user,
     save_reservations,
@@ -49,7 +51,11 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(format_remove_confirmation("pikachu", None), "Pikachu removed")
         self.assertEqual(
             format_remove_confirmation("pikachu", "@Jade0319"),
-            "Pikachu removed from @Jade0319",
+            "Pikachu removed from @Jade0319 Reserves",
+        )
+        self.assertEqual(
+            format_remove_confirmation("pikachu, eevee", "@Jade0319"),
+            "Pikachu, Eevee removed from @Jade0319 Reserves",
         )
 
     def test_reservation_keys_are_case_insensitive(self) -> None:
@@ -74,6 +80,24 @@ class ReservationPersistenceTests(unittest.TestCase):
     def test_rejects_invalid_or_empty_names_in_multi_add(self) -> None:
         self.assertIsNone(parse_reserve_add_command("v!r add pikachu,,eevee <@319>"))
         self.assertIsNone(parse_reserve_add_command("v!r add pikachu! <@319>"))
+
+    def test_parses_multiple_pokemon_names_for_removal(self) -> None:
+        self.assertEqual(
+            parse_reserve_remove_command("v!r remove pikachu, eevee <@319>"),
+            (["pikachu", "eevee"], 319),
+        )
+        self.assertEqual(
+            parse_reserve_remove_command("v!r remove pikachu, eevee, <@319>"),
+            (["pikachu", "eevee"], 319),
+        )
+        self.assertEqual(
+            parse_reserve_remove_command("v!r remove pikachu, eevee"),
+            (["pikachu", "eevee"], None),
+        )
+
+    def test_rejects_invalid_or_empty_names_in_multi_remove(self) -> None:
+        self.assertIsNone(parse_reserve_remove_command("v!r remove pikachu,,eevee"))
+        self.assertIsNone(parse_reserve_remove_command("v!r remove pikachu!"))
 
     def test_search_lists_only_reservations_for_user_and_guild(self) -> None:
         reservations = {
@@ -114,6 +138,24 @@ class ReservationPersistenceTests(unittest.TestCase):
 
         self.assertFalse(removed)
         self.assertEqual(updated, reservations)
+
+    def test_removes_multiple_pokemon_and_reports_missing_names(self) -> None:
+        reservations = {
+            reservation_key(1, "Pikachu"): [123],
+            reservation_key(1, "Eevee"): [123, 456],
+            reservation_key(2, "Bulbasaur"): [123],
+        }
+
+        updated, removed, missing = remove_reservations(
+            reservations,
+            1,
+            ["pikachu", "eevee", "bulbasaur"],
+        )
+
+        self.assertEqual(removed, ["pikachu", "eevee"])
+        self.assertEqual(missing, ["bulbasaur"])
+        self.assertEqual(updated, {reservation_key(2, "Bulbasaur"): [123]})
+        self.assertIn(reservation_key(1, "Eevee"), reservations)
 
     def test_formats_reservation_embed_and_splits_long_lists(self) -> None:
         embeds = format_reservation_embeds("Jade", ["eevee", "pikachu"])

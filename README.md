@@ -58,15 +58,14 @@ This application does not bypass those restrictions.
 
 ## Pokémon reservations
 
-Members with the reserve-manager role (role ID `1532820386511720579`) can
-reserve a Pokémon for a server member with:
+Only members with the reserve-manager role (role ID `1532820386511720579`) can
+use the `v!r` commands. They can reserve Pokémon for a server member with:
 
 ```text
 v!r add pikachu, eevee @member
 ```
 
-Only members with the reserve-manager role can add reservations, and more than
-one member can reserve the same Pokémon. Use `v!r search @member` to see that
+More than one member can reserve the same Pokémon. Use `v!r search @member` to see that
 member's reservations in an embed. When a reserved Pokémon spawns, the bot
 lists and mentions its reserved members in a `Reserved:` line above the catch
 command. The `Reserved:` line is omitted when no one reserved that Pokémon.
@@ -77,6 +76,9 @@ restarts. The bot must be able to read and send messages in the command channel
 as well as the spawn channel.
 
 Members with the reserve-manager role can remove reservations with
-`v!r remove pikachu @member` to remove it for one member, or
-`v!r remove pikachu` to remove that Pokémon's reservation for everyone in the
-current server.
+`v!r remove pikachu, eevee @member` or `v!r remove pikachu, eevee, @member` to
+remove them only from that member's reserves, or
+`v!r remove pikachu, eevee` to remove those Pokémon's reservations for everyone
+in the current server. A single Pokémon name can still be used in either command.
+Successful member-specific removals reply with `Pikachu, Eevee removed from
+@member Reserves`.

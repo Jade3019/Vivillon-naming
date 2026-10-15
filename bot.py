@@ -33,7 +33,7 @@ RESERVE_SEARCH_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 RESERVE_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"^v!r\s+remove\s+(.+?)(?:\s+<@!?(\d+)>)?\s*$",
+    r"^v!r\s+remove\s+(.+?)(?:(?:\s*,\s*|\s+)<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
 RESERVATION_EMBED_DESCRIPTION_LIMIT: Final[int] = 3800
@@ -283,6 +283,34 @@ def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
     return unique_names, int(match.group(2))
 
 
+def parse_reserve_remove_command(
+    content: str,
+) -> tuple[list[str], int | None] | None:
+    match = RESERVE_REMOVE_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+
+    pokemon_names = [
+        unicodedata.normalize("NFC", name.strip())
+        for name in match.group(1).split(",")
+    ]
+    if any(
+        not name or len(name) > 60 or not is_valid_pokemon_name(name)
+        for name in pokemon_names
+    ):
+        return None
+
+    unique_names: list[str] = []
+    seen_names: set[str] = set()
+    for name in pokemon_names:
+        normalized_name = name.casefold()
+        if normalized_name not in seen_names:
+            unique_names.append(name)
+            seen_names.add(normalized_name)
+    target_id = int(match.group(2)) if match.group(2) else None
+    return unique_names, target_id
+
+
 def reserved_pokemon_for_user(
     reservations: dict[str, list[int]],
     guild_id: int,
@@ -324,11 +352,35 @@ def remove_reservation(
     return updated_reservations, True
 
 
+def remove_reservations(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    pokemon_names: list[str],
+    user_id: int | None = None,
+) -> tuple[dict[str, list[int]], list[str], list[str]]:
+    updated_reservations = {
+        key: list(user_ids) for key, user_ids in reservations.items()
+    }
+    removed_names: list[str] = []
+    missing_names: list[str] = []
+    for pokemon_name in pokemon_names:
+        updated_reservations, removed = remove_reservation(
+            updated_reservations,
+            guild_id,
+            pokemon_name,
+            user_id,
+        )
+        (removed_names if removed else missing_names).append(pokemon_name)
+    return updated_reservations, removed_names, missing_names
+
+
 def format_remove_confirmation(pokemon_name: str, member_mention: str | None) -> str:
-    display_name = pokemon_name[0].upper() + pokemon_name[1:]
+    display_names = ", ".join(
+        name[0].upper() + name[1:] for name in pokemon_name.split(", ")
+    )
     if member_mention is None:
-        return f"{display_name} removed"
-    return f"{display_name} removed from {member_mention}"
+        return f"{display_names} removed"
+    return f"{display_names} removed from {member_mention} Reserves"
 
 
 def format_reservation_embeds(
@@ -453,24 +505,24 @@ class NamingBot(discord.Client):
             await self.handle_spawn(message)
 
     async def handle_reserve_command(self, message: discord.Message) -> None:
-        if re.match(r"^v!r\s+search(?:\s|$)", message.content, re.IGNORECASE):
-            await self.handle_reserve_search(message)
-            return
-        if re.match(r"^v!r\s+remove(?:\s|$)", message.content, re.IGNORECASE):
-            await self.handle_reserve_remove(message)
-            return
-
         if message.guild is None or not isinstance(message.author, discord.Member):
             await message.reply(
-                "Reservations can only be added in a server.",
+                "Reserve commands can only be used in a server.",
                 mention_author=False,
             )
             return
         if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
             await message.reply(
-                "You need the designated reserve-manager role to add reservations.",
+                "You need the designated reserve-manager role to use reserve commands.",
                 mention_author=False,
             )
+            return
+
+        if re.match(r"^v!r\s+search(?:\s|$)", message.content, re.IGNORECASE):
+            await self.handle_reserve_search(message)
+            return
+        if re.match(r"^v!r\s+remove(?:\s|$)", message.content, re.IGNORECASE):
+            await self.handle_reserve_remove(message)
             return
 
         parsed_command = parse_reserve_add_command(message.content)
@@ -524,32 +576,20 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
+
+        parsed_command = parse_reserve_remove_command(message.content)
+        if parsed_command is None:
             await message.reply(
-                "You need the designated reserve-manager role to remove reservations.",
+                "Usage: `v!r remove <pokemon>[, <pokemon> ...] [@member]`",
                 mention_author=False,
             )
             return
 
-        match = RESERVE_REMOVE_PATTERN.fullmatch(message.content)
-        if match is None:
-            await message.reply(
-                "Usage: `v!r remove <pokemon> [@member]`",
-                mention_author=False,
-            )
-            return
-
-        pokemon_name = unicodedata.normalize("NFC", match.group(1).strip())
-        target_id = int(match.group(2)) if match.group(2) else None
+        pokemon_names, target_id = parsed_command
         expected_mentions = 1 if target_id is not None else 0
-        if (
-            len(message.mentions) != expected_mentions
-            or not pokemon_name
-            or len(pokemon_name) > 60
-            or not is_valid_pokemon_name(pokemon_name)
-        ):
+        if len(message.mentions) != expected_mentions:
             await message.reply(
-                "Usage: `v!r remove <pokemon> [@member]`",
+                "Usage: `v!r remove <pokemon>[, <pokemon> ...] [@member]`",
                 mention_author=False,
             )
             return
@@ -561,15 +601,16 @@ class NamingBot(discord.Client):
             )
             return
 
-        updated_reservations, removed = remove_reservation(
+        updated_reservations, removed_names, missing_names = remove_reservations(
             self.reservations,
             message.guild.id,
-            pokemon_name,
+            pokemon_names,
             target.id if target else None,
         )
-        if not removed:
+        if not removed_names:
+            names = ", ".join(pokemon_names)
             await message.reply(
-                f"No reservation was found for {pokemon_name}.",
+                f"No reservation was found for {names}.",
                 mention_author=False,
             )
             return
@@ -585,13 +626,13 @@ class NamingBot(discord.Client):
             return
 
         self.reservations = updated_reservations
-        await message.reply(
-            format_remove_confirmation(
-                pokemon_name,
-                target.mention if target else None,
-            ),
-            mention_author=False,
+        response = format_remove_confirmation(
+            ", ".join(removed_names),
+            target.mention if target else None,
         )
+        if missing_names:
+            response += f". No reservation was found for {', '.join(missing_names)}"
+        await message.reply(response, mention_author=False)
 
     async def handle_reserve_search(self, message: discord.Message) -> None:
         if message.guild is None:

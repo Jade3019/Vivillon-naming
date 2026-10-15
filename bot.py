@@ -3373,6 +3373,7 @@ class GrabAddReservesView(discord.ui.View):
                 await channel.send(
                     f"v!r add {name} <@{user_id}>", allowed_mentions=no_pings
                 )
+                await asyncio.sleep(0.5)
                 await channel.send(
                     f"{grab_display_name(name)} added to <@{user_id}>",
                     allowed_mentions=no_pings,

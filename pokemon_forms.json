@@ -3697,6 +3697,20 @@
     "darmanitan-galar-zen",
     "galar-zen darmanitan"
   ],
+  "ice_and_water_type_aliases": [
+    "arctovish",
+    "cloyster",
+    "dewgong",
+    "gmax lapras",
+    "iron bundle",
+    "iron-bundle",
+    "lapras",
+    "lapras gmax",
+    "lapras-gmax",
+    "sealeo",
+    "spheal",
+    "walrein"
+  ],
   "grass_and_fire_type_aliases": [
     "hearthflame-mask ogerpon",
     "mega scovillain",

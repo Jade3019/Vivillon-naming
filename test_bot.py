@@ -136,7 +136,11 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertEqual(type_icon_filename_for_pokemon("Treecko"), "grass_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Glaceon"), "ice_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Cetitan"), "ice_type.png")
-        self.assertIsNone(type_icon_filename_for_pokemon("Dewgong"))
+        for name in ("Dewgong", "Cloyster", "Lapras", "Arctovish"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "ice_water_type_icons.png",
+            )
         self.assertEqual(
             type_icon_filename_for_pokemon("Darmanitan-Galar-Zen"),
             "ice_fire_type_icons.png",

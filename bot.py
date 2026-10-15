@@ -134,6 +134,10 @@ ICE_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "ice_and_fire_type_aliases",
 )
+ICE_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "ice_and_water_type_aliases",
+)
 GRASS_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "grass_and_fire_type_aliases",
@@ -800,6 +804,8 @@ def is_single_type_ice_pokemon(name: str) -> bool:
 
 
 def type_icon_filename_for_pokemon(name: str) -> str | None:
+    if normalize_pokemon_alias(name) in ICE_AND_WATER_TYPE_ALIASES:
+        return "ice_water_type_icons.png"
     if normalize_pokemon_alias(name) in ICE_AND_FIRE_TYPE_ALIASES:
         return "ice_fire_type_icons.png"
     if normalize_pokemon_alias(name) in FIRE_AND_NORMAL_TYPE_ALIASES:

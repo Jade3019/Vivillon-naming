@@ -53,9 +53,9 @@ species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
-clipboard. Pure Fire-type Pokémon show only the Fire icon; pure Normal-type
+clipboard. Pure Electric-type Pokémon show only the Electric icon; pure Water-type Pokémon show only the Water icon; pure Fire-type Pokémon show only the Fire icon; pure Normal-type
 Pokémon show only the Normal icon. Pokémon with exactly Fire and Normal as
-their two types show both icons. Other dual-type Pokémon keep the regular text
+their two types show both icons, as do Pokémon with exactly Normal and Water exactly Water and Fire, exactly Fire and Electric, exactly Electric and Water, or exactly Electric and Normal. Other dual-type Pokémon keep the regular text
 reply. Reservation, shinyhunt, and collection mentions remain active for both
 reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends

@@ -148,6 +148,13 @@ def main() -> None:
     catalog = generate_form_catalog(args.data_directory)
     single_type_fire = generate_type_aliases(args.data_directory, {"10"})
     single_type_normal = generate_type_aliases(args.data_directory, {"1"})
+    single_type_water = generate_type_aliases(args.data_directory, {"11"})
+    single_type_electric = generate_type_aliases(args.data_directory, {"13"})
+    normal_and_water = generate_type_aliases(args.data_directory, {"1", "11"})
+    water_and_fire = generate_type_aliases(args.data_directory, {"10", "11"})
+    fire_and_electric = generate_type_aliases(args.data_directory, {"10", "13"})
+    electric_and_water = generate_type_aliases(args.data_directory, {"11", "13"})
+    electric_and_normal = generate_type_aliases(args.data_directory, {"1", "13"})
     fire_and_normal = generate_type_aliases(args.data_directory, {"1", "10"})
     data = {
         "_source": (
@@ -158,6 +165,13 @@ def main() -> None:
         "forms": catalog,
         "single_type_fire_aliases": single_type_fire,
         "single_type_normal_aliases": single_type_normal,
+        "single_type_water_aliases": single_type_water,
+        "single_type_electric_aliases": single_type_electric,
+        "normal_and_water_type_aliases": normal_and_water,
+        "water_and_fire_type_aliases": water_and_fire,
+        "fire_and_electric_type_aliases": fire_and_electric,
+        "electric_and_water_type_aliases": electric_and_water,
+        "electric_and_normal_type_aliases": electric_and_normal,
         "fire_and_normal_type_aliases": fire_and_normal,
     }
     try:

@@ -32,6 +32,8 @@ from bot import (
     is_missingno_name,
     is_single_type_fire_pokemon,
     is_single_type_normal_pokemon,
+    is_single_type_water_pokemon,
+    is_single_type_electric_pokemon,
     type_icon_filename_for_pokemon,
     load_pokemon_forms,
     load_reservations,
@@ -98,6 +100,36 @@ class FireSpawnFormattingTests(unittest.TestCase):
             type_icon_filename_for_pokemon("Pyroar"),
             "fire_normal_type_icons.png",
         )
+        self.assertEqual(type_icon_filename_for_pokemon("Squirtle"), "water_type.png")
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Bibarel"),
+            "normal_water_type_icons.png",
+        )
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Volcanion"),
+            "water_fire_type_icons.png",
+        )
+        self.assertEqual(
+            type_icon_filename_for_pokemon("Rotom Heat"),
+            "fire_electric_type_icons.png",
+        )
+        for name in ("Heliolisk", "Helioptile"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "electric_normal_type_icons.png",
+            )
+        for name in ("Lanturn", "Chinchou", "Rotom Wash"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "electric_water_type_icons.png",
+            )
+        self.assertEqual(type_icon_filename_for_pokemon("Pikachu"), "electric_type.png")
+        self.assertTrue(is_single_type_electric_pokemon("Jolteon"))
+        self.assertFalse(is_single_type_electric_pokemon("Raichu-alola"))
+        self.assertFalse(is_single_type_electric_pokemon("Magnemite"))
+        self.assertTrue(is_single_type_water_pokemon("Magikarp"))
+        self.assertFalse(is_single_type_water_pokemon("Gyarados"))
+        self.assertFalse(is_single_type_water_pokemon("Lapras"))
         self.assertIsNone(type_icon_filename_for_pokemon("Charizard"))
         with patch(
             "bot.FIRE_AND_NORMAL_TYPE_ALIASES",

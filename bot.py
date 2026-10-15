@@ -114,6 +114,34 @@ SINGLE_TYPE_NORMAL_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "single_type_normal_aliases",
 )
+SINGLE_TYPE_WATER_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "single_type_water_aliases",
+)
+SINGLE_TYPE_ELECTRIC_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "single_type_electric_aliases",
+)
+NORMAL_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "normal_and_water_type_aliases",
+)
+WATER_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "water_and_fire_type_aliases",
+)
+FIRE_AND_ELECTRIC_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "fire_and_electric_type_aliases",
+)
+ELECTRIC_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "electric_and_water_type_aliases",
+)
+ELECTRIC_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
+    Path(__file__).with_name("pokemon_forms.json"),
+    "electric_and_normal_type_aliases",
+)
 FIRE_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
     Path(__file__).with_name("pokemon_forms.json"),
     "fire_and_normal_type_aliases",
@@ -664,13 +692,35 @@ def is_single_type_normal_pokemon(name: str) -> bool:
     return is_single_type_pokemon(name, SINGLE_TYPE_NORMAL_ALIASES)
 
 
+def is_single_type_water_pokemon(name: str) -> bool:
+    return is_single_type_pokemon(name, SINGLE_TYPE_WATER_ALIASES)
+
+
+def is_single_type_electric_pokemon(name: str) -> bool:
+    return is_single_type_pokemon(name, SINGLE_TYPE_ELECTRIC_ALIASES)
+
+
 def type_icon_filename_for_pokemon(name: str) -> str | None:
     if normalize_pokemon_alias(name) in FIRE_AND_NORMAL_TYPE_ALIASES:
         return "fire_normal_type_icons.png"
+    if normalize_pokemon_alias(name) in NORMAL_AND_WATER_TYPE_ALIASES:
+        return "normal_water_type_icons.png"
+    if normalize_pokemon_alias(name) in WATER_AND_FIRE_TYPE_ALIASES:
+        return "water_fire_type_icons.png"
+    if normalize_pokemon_alias(name) in FIRE_AND_ELECTRIC_TYPE_ALIASES:
+        return "fire_electric_type_icons.png"
+    if normalize_pokemon_alias(name) in ELECTRIC_AND_WATER_TYPE_ALIASES:
+        return "electric_water_type_icons.png"
+    if normalize_pokemon_alias(name) in ELECTRIC_AND_NORMAL_TYPE_ALIASES:
+        return "electric_normal_type_icons.png"
     if is_single_type_fire_pokemon(name):
         return "fire_type.png"
     if is_single_type_normal_pokemon(name):
         return "normal_type.png"
+    if is_single_type_water_pokemon(name):
+        return "water_type.png"
+    if is_single_type_electric_pokemon(name):
+        return "electric_type.png"
     return None
 
 

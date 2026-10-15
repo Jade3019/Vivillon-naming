@@ -552,6 +552,48 @@ def reservation_key(guild_id: int, pokemon_name: str) -> str:
     return f"{guild_id}:{normalized_name}"
 
 
+def all_forms_reservation_key(guild_id: int, pokemon_name: str) -> str:
+    normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    return f"{guild_id}:*:{normalized_name}"
+
+
+def reservation_key_for_command(guild_id: int, pokemon_name: str) -> str:
+    all_forms_prefix = "all "
+    if pokemon_name.casefold().startswith(all_forms_prefix):
+        base_name = pokemon_name[len(all_forms_prefix) :].strip()
+        return all_forms_reservation_key(guild_id, base_name)
+    return reservation_key(guild_id, pokemon_name)
+
+
+def pokemon_matches_all_forms_reservation(
+    pokemon_name: str,
+    reserved_name: str,
+) -> bool:
+    pokemon_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    reserved_name = unicodedata.normalize("NFC", reserved_name).casefold()
+    if pokemon_name == reserved_name:
+        return True
+    return pokemon_name.startswith(
+        tuple(f"{reserved_name}{separator}" for separator in (" ", "-", "(", ":", "["))
+    )
+
+
+def reserved_user_ids_for_pokemon(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+) -> list[int]:
+    user_ids = set(reservations.get(reservation_key(guild_id, pokemon_name), []))
+    wildcard_prefix = f"{guild_id}:*:"
+    for key, reserved_user_ids in reservations.items():
+        if not key.startswith(wildcard_prefix):
+            continue
+        reserved_name = key.removeprefix(wildcard_prefix)
+        if pokemon_matches_all_forms_reservation(pokemon_name, reserved_name):
+            user_ids.update(reserved_user_ids)
+    return sorted(user_ids)
+
+
 def parse_shinyhunt_command(content: str) -> str | None:
     match = SHINYHUNT_COMMAND_PATTERN.fullmatch(content)
     if match is None:
@@ -673,11 +715,15 @@ def reserved_pokemon_for_user(
     user_id: int,
 ) -> list[str]:
     guild_prefix = f"{guild_id}:"
-    names = [
-        key.removeprefix(guild_prefix)
-        for key, user_ids in reservations.items()
-        if key.startswith(guild_prefix) and user_id in user_ids
-    ]
+    names = []
+    for key, user_ids in reservations.items():
+        if not key.startswith(guild_prefix) or user_id not in user_ids:
+            continue
+        name = key.removeprefix(guild_prefix)
+        if name.startswith("*:"):
+            names.append(format_reserved_pokemon_name(name))
+        else:
+            names.append(name)
     return sorted(names)
 
 
@@ -690,7 +736,7 @@ def remove_reservation(
     updated_reservations = {
         key: list(user_ids) for key, user_ids in reservations.items()
     }
-    key = reservation_key(guild_id, pokemon_name)
+    key = reservation_key_for_command(guild_id, pokemon_name)
     reserved_user_ids = updated_reservations.get(key)
     if reserved_user_ids is None:
         return updated_reservations, False
@@ -732,7 +778,12 @@ def remove_reservations(
 
 def format_remove_confirmation(pokemon_name: str, member_mention: str | None) -> str:
     display_names = ", ".join(
-        name[0].upper() + name[1:] for name in pokemon_name.split(", ")
+        (
+            f"All forms of {name[len('all '):]}"
+            if name.casefold().startswith("all ")
+            else name[0].upper() + name[1:]
+        )
+        for name in pokemon_name.split(", ")
     )
     if member_mention is None:
         return f"{display_names} removed"
@@ -780,7 +831,8 @@ def format_server_reservation_embeds(
     guild_prefix = f"{guild_id}:"
     entries = sorted(
         (
-            f"{key.removeprefix(guild_prefix)} <@{user_id}>"
+            f"{format_reserved_pokemon_name(key.removeprefix(guild_prefix))} "
+            f"<@{user_id}>"
             for key, user_ids in reservations.items()
             if key.startswith(guild_prefix)
             for user_id in set(user_ids)
@@ -815,13 +867,22 @@ def format_server_reservation_embeds(
     return embeds
 
 
+def format_reserved_pokemon_name(stored_name: str) -> str:
+    if stored_name.startswith("*:"):
+        return f"all forms of {stored_name.removeprefix('*:')}"
+    return stored_name
+
+
 def format_pokemon_reserver_embeds(
     reservations: dict[str, list[int]],
     guild_id: int,
     pokemon_name: str,
 ) -> list[discord.Embed]:
-    key = reservation_key(guild_id, pokemon_name)
-    user_ids = sorted(set(reservations.get(key, [])))
+    user_ids = reserved_user_ids_for_pokemon(
+        reservations,
+        guild_id,
+        pokemon_name,
+    )
     if not user_ids:
         return [
             discord.Embed(
@@ -1146,7 +1207,8 @@ class NamingBot(discord.Client):
         parsed_command = parse_reserve_add_command(message.content)
         if parsed_command is None or len(message.mentions) != 1:
             await message.reply(
-                "Usage: `v!r add <pokemon>, <pokemon> @member`",
+                "Usage: `v!r add <pokemon>, <pokemon> @member` "
+                "or `v!r add all <pokemon> @member`",
                 mention_author=False,
             )
             return
@@ -1164,7 +1226,7 @@ class NamingBot(discord.Client):
             key: list(user_ids) for key, user_ids in self.reservations.items()
         }
         for pokemon_name in pokemon_names:
-            key = reservation_key(message.guild.id, pokemon_name)
+            key = reservation_key_for_command(message.guild.id, pokemon_name)
             user_ids = updated_reservations.setdefault(key, [])
             if target.id not in user_ids:
                 user_ids.append(target.id)
@@ -1180,7 +1242,12 @@ class NamingBot(discord.Client):
 
         self.reservations = updated_reservations
         display_names = ", ".join(
-            name[0].upper() + name[1:] for name in pokemon_names
+            (
+                f"all forms of {name[len('all '):]}".capitalize()
+                if name.casefold().startswith("all ")
+                else name[0].upper() + name[1:]
+            )
+            for name in pokemon_names
         )
         await message.reply(
             f"Reserve {display_names} added to {target.mention}",
@@ -1348,7 +1415,11 @@ class NamingBot(discord.Client):
             )
             return
         reserved_user_ids = (
-            self.reservations.get(reservation_key(message.guild.id, name), [])
+            reserved_user_ids_for_pokemon(
+                self.reservations,
+                message.guild.id,
+                name,
+            )
             if message.guild
             else []
         )

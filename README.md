@@ -70,12 +70,15 @@ change reservations. They can reserve Pokémon for a server member with:
 
 ```text
 v!r add pikachu, eevee @member
+v!r add all arceus @member
 ```
 
-More than one member can reserve the same Pokémon. When a reserved Pokémon
-spawns, the bot lists and mentions its reserved members in a `Reserved:` line
-above the catch command. The `Reserved:` line is omitted when no one reserved
-that Pokémon. Other members are not mentioned. Reservations are stored in
+Use `all <pokemon>` to reserve every form of that Pokémon; the member is then
+mentioned when any matching form spawns. More than one member can reserve the
+same Pokémon. When a reserved Pokémon spawns, the bot lists and mentions its
+reserved members in a `Reserved:` line above the catch command. The
+`Reserved:` line is omitted when no one reserved that Pokémon. Other members
+are not mentioned. Reservations are stored in
 `reserves.json` by default; set `RESERVES_FILE` to a different path if needed.
 Keep that file on persistent host storage to retain reservations across
 restarts. The bot must be able to read and send messages in the command channel
@@ -85,7 +88,9 @@ Members with the reserve-manager role can remove reservations with
 `v!r remove pikachu, eevee @member` or `v!r remove pikachu, eevee, @member` to
 remove them only from that member's reserves, or
 `v!r remove pikachu, eevee` to remove those Pokémon's reservations for everyone
-in the current server. A single Pokémon name can still be used in either command.
+in the current server. Use `v!r remove all arceus @member` to remove that
+member's all-forms reservation. A single Pokémon name can still be used in
+either command.
 Successful member-specific removals reply with `Pikachu, Eevee removed from
 @member Reserves`.
 

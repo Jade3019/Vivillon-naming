@@ -6,6 +6,7 @@ import discord
 
 from bot import (
     add_shinyhunter,
+    all_forms_reservation_key,
     clear_guild_reservations,
     format_catch_command,
     format_guess,
@@ -21,11 +22,13 @@ from bot import (
     parse_reserve_add_command,
     parse_reserve_remove_command,
     parse_shinyhunt_command,
+    ReservationPagesView,
     remove_reservation,
     remove_reservations,
     reservation_key,
-    ReservationPagesView,
+    reservation_key_for_command,
     reserved_pokemon_for_user,
+    reserved_user_ids_for_pokemon,
     save_reservations,
     shinyhunt_pokemon_for_user,
 )
@@ -85,10 +88,42 @@ class ReservationPersistenceTests(unittest.TestCase):
             format_remove_confirmation("pikachu, eevee", "@Jade0319"),
             "Pikachu, Eevee removed from @Jade0319 Reserves",
         )
+        self.assertEqual(
+            format_remove_confirmation("all arceus", "@Jade0319"),
+            "All forms of arceus removed from @Jade0319 Reserves",
+        )
 
     def test_reservation_keys_are_case_insensitive(self) -> None:
         self.assertEqual(reservation_key(1, "Pikachu"), reservation_key(1, "PIKACHU"))
         self.assertNotEqual(reservation_key(1, "Pikachu"), reservation_key(2, "Pikachu"))
+
+    def test_all_forms_reservations_match_base_and_named_forms(self) -> None:
+        reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
+
+        for name in ("Arceus", "Arceus (Fire)", "Arceus-Fire", "Arceus Fire"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    reserved_user_ids_for_pokemon(reservations, 1, name),
+                    [123],
+                )
+        self.assertEqual(
+            reserved_user_ids_for_pokemon(reservations, 2, "Arceus-Fire"),
+            [],
+        )
+        self.assertEqual(
+            reserved_user_ids_for_pokemon(reservations, 1, "Arceusian"),
+            [],
+        )
+
+    def test_all_forms_command_uses_a_separate_reservation_key(self) -> None:
+        self.assertEqual(
+            reservation_key_for_command(1, "all Arceus"),
+            all_forms_reservation_key(1, "Arceus"),
+        )
+        self.assertEqual(
+            reservation_key_for_command(1, "Arceus"),
+            reservation_key(1, "Arceus"),
+        )
 
     def test_parses_one_valid_shinyhunt_name(self) -> None:
         self.assertEqual(parse_shinyhunt_command("v!sh Absol"), "Absol")
@@ -156,6 +191,10 @@ class ReservationPersistenceTests(unittest.TestCase):
             parse_reserve_add_command("v!r add pikachu, eevee <@319>"),
             (["pikachu", "eevee"], 319),
         )
+        self.assertEqual(
+            parse_reserve_add_command("v!r add all arceus <@319>"),
+            (["all arceus"], 319),
+        )
 
     def test_rejects_invalid_or_empty_names_in_multi_add(self) -> None:
         self.assertIsNone(parse_reserve_add_command("v!r add pikachu,,eevee <@319>"))
@@ -190,6 +229,14 @@ class ReservationPersistenceTests(unittest.TestCase):
             ["pikachu"],
         )
 
+    def test_member_reserve_list_labels_all_forms(self) -> None:
+        reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
+
+        self.assertEqual(
+            reserved_pokemon_for_user(reservations, 1, 123),
+            ["all forms of arceus"],
+        )
+
     def test_removes_pokemon_reservation_for_one_user(self) -> None:
         reservations = {reservation_key(1, "Pikachu"): [123, 456]}
 
@@ -210,6 +257,14 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertTrue(removed)
         self.assertNotIn(reservation_key(1, "Pikachu"), updated)
         self.assertEqual(updated[reservation_key(2, "Pikachu")], [789])
+
+    def test_removes_all_forms_reservation(self) -> None:
+        reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
+
+        updated, removed = remove_reservation(reservations, 1, "all arceus", 123)
+
+        self.assertTrue(removed)
+        self.assertEqual(updated, {})
 
     def test_clears_all_reservations_for_one_guild_only(self) -> None:
         reservations = {
@@ -282,6 +337,14 @@ class ReservationPersistenceTests(unittest.TestCase):
             "pikachu <@123>\npikachu <@456>\nscatterbug <@789>",
         )
 
+    def test_server_list_labels_all_forms_reservations(self) -> None:
+        embeds = format_server_reservation_embeds(
+            {all_forms_reservation_key(1, "Arceus"): [123]},
+            1,
+        )
+
+        self.assertEqual(embeds[0].description, "all forms of arceus <@123>")
+
     def test_formats_empty_server_reserve_list(self) -> None:
         embeds = format_server_reservation_embeds(
             {reservation_key(2, "Eevee"): [123]},
@@ -305,6 +368,20 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             embeds[0].description,
             "scatterbug <@123>\nscatterbug <@456>",
+        )
+
+    def test_search_includes_reservations_for_all_forms(self) -> None:
+        reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
+
+        embeds = format_pokemon_reserver_embeds(
+            reservations,
+            1,
+            "Arceus (Fire)",
+        )
+
+        self.assertEqual(
+            embeds[0].description,
+            "Arceus (Fire) <@123>",
         )
 
     def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:

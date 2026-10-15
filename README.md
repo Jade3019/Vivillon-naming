@@ -200,6 +200,6 @@ After a bot restart, `v!grab` on an old search message only sees the page shown 
 
 ## Pokéball event
 
-When the bot is naming a lot of spawns (10 or more within a minute, e.g. during mass incenses), it posts a Pokéball in a random channel where spawns were recently seen, once a minute. The event lasts until spawns stop (about 2 minutes after the last busy minute). The first person to click **Open** reveals a random Pokémon's official artwork and the bot replies `You found <Pokémon>! @clicker`.
+When the bot is naming a lot of spawns (10 or more within a minute, e.g. during mass incenses), it posts a Pokéball in a random channel where spawns were recently seen, every 2 minutes. The event lasts until spawns stop (about 3 minutes after the last busy minute). The first person to click **Open** reveals a random Pokémon's official artwork and the bot replies `You found <Pokémon>! @clicker`.
 
 Reserve managers can run `v.test` to post a Pokéball in the current channel. The event needs `pokeball.png` and `pokemon_ids.json` deployed with the bot.

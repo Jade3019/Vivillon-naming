@@ -3651,6 +3651,25 @@
     "tsareena",
     "turtwig"
   ],
+  "grass_and_fire_type_aliases": [
+    "hearthflame-mask ogerpon",
+    "mega scovillain",
+    "ogerpon hearthflame mask",
+    "ogerpon hearthflame-mask",
+    "ogerpon-hearthflame-mask",
+    "scovillain",
+    "scovillain mega",
+    "scovillain-mega"
+  ],
+  "grass_and_water_type_aliases": [
+    "lombre",
+    "lotad",
+    "ludicolo",
+    "ogerpon wellspring mask",
+    "ogerpon wellspring-mask",
+    "ogerpon-wellspring-mask",
+    "wellspring-mask ogerpon"
+  ],
   "normal_and_water_type_aliases": [
     "bibarel"
   ],

@@ -124,6 +124,18 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 "electric_water_type_icons.png",
             )
         self.assertEqual(type_icon_filename_for_pokemon("Pikachu"), "electric_type.png")
+        for name in ("Scovillain", "Mega Scovillain", "Ogerpon Hearthflame Mask"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "grass_fire_type_icons.png",
+            )
+        self.assertIsNone(type_icon_filename_for_pokemon("Decidueye"))
+        for name in ("Lotad", "Lombre", "Ludicolo", "Ogerpon Wellspring Mask"):
+            self.assertEqual(
+                type_icon_filename_for_pokemon(name),
+                "grass_water_type_icons.png",
+            )
+        self.assertIsNone(type_icon_filename_for_pokemon("Bulbasaur"))
         self.assertEqual(type_icon_filename_for_pokemon("Snivy"), "grass_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Treecko"), "grass_type.png")
         self.assertIsNone(type_icon_filename_for_pokemon("Venusaur"))

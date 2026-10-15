@@ -29,6 +29,8 @@ from bot import (
     fire_companion_icon_filename_for_pokemon,
     is_normal_icon_pokemon,
     normal_companion_icon_filename_for_pokemon,
+    is_electric_icon_pokemon,
+    electric_companion_icon_filename_for_pokemon,
     is_fire_icon_pokemon,
     is_water_icon_pokemon,
     water_companion_icon_filename_for_pokemon,
@@ -96,6 +98,9 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertTrue(is_normal_icon_pokemon("Eevee"))
         self.assertTrue(is_normal_icon_pokemon("Bibarel"))
         self.assertFalse(is_normal_icon_pokemon("Pidgeot"))
+        self.assertTrue(is_electric_icon_pokemon("Pikachu"))
+        self.assertTrue(is_electric_icon_pokemon("Heliolisk"))
+        self.assertFalse(is_electric_icon_pokemon("Magnemite"))
         self.assertEqual(
             format_custom_type_spawn_reply(
                 "Eevee", 87.5, 789, include_normal=True
@@ -127,6 +132,22 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "<:water:1560303864094130357> Bibarel: 87.50%\n"
             "`<@789> c bibarel`",
         )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Heliolisk", 87.5, 789, include_electric=True, include_normal=True
+            ),
+            "## <:Electric:1560306053164572732> "
+            "<:Normal:1560305235279482930> Heliolisk: 87.50%\n"
+            "`<@789> c heliolisk`",
+        )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Rotom Heat", 87.5, 789, include_fire=True, include_electric=True
+            ),
+            "## <:fire:1560301436074729532> "
+            "<:Electric:1560306053164572732> Rotom Heat: 87.50%\n"
+            "`<@789> c rotom heat`",
+        )
         self.assertIsNone(fire_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertIsNone(water_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertEqual(
@@ -135,7 +156,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Rotom Heat"),
-            "electric_type.png",
+            None,
         )
         self.assertEqual(
             fire_companion_icon_filename_for_pokemon("Scovillain"),
@@ -151,7 +172,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             water_companion_icon_filename_for_pokemon("Lanturn"),
-            "electric_type.png",
+            None,
         )
         self.assertEqual(
             water_companion_icon_filename_for_pokemon("Ogerpon Wellspring Mask"),
@@ -167,6 +188,14 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 normal_companion_icon_filename_for_pokemon("Test Pokemon"),
                 "ice_type.png",
             )
+        self.assertEqual(
+            electric_companion_icon_filename_for_pokemon("Voltorb-Hisui"),
+            "grass_type.png",
+        )
+        self.assertEqual(
+            electric_companion_icon_filename_for_pokemon("Arctozolt"),
+            "ice_type.png",
+        )
 
     def test_marks_only_single_type_normal_pokemon(self) -> None:
         self.assertTrue(is_single_type_normal_pokemon("Eevee"))
@@ -180,11 +209,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
         for name in ("Heliolisk", "Helioptile"):
             self.assertIsNone(type_icon_filename_for_pokemon(name))
         for name in ("Lanturn", "Chinchou", "Rotom Wash"):
-            self.assertEqual(
-                type_icon_filename_for_pokemon(name),
-                "electric_water_type_icons.png",
-            )
-        self.assertEqual(type_icon_filename_for_pokemon("Pikachu"), "electric_type.png")
+            self.assertIsNone(type_icon_filename_for_pokemon(name))
+        self.assertIsNone(type_icon_filename_for_pokemon("Pikachu"))
         self.assertIsNone(type_icon_filename_for_pokemon("Decidueye"))
         for name in ("Lotad", "Lombre", "Ludicolo", "Ogerpon Wellspring Mask"):
             self.assertEqual(
@@ -195,10 +221,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         for name in ("Smoliv", "Dolliv", "Arboliva", "Deerling", "Sawsbuck"):
             self.assertIsNone(type_icon_filename_for_pokemon(name))
         for name in ("Voltorb-Hisui", "Electrode-Hisui", "Rotom Mow"):
-            self.assertEqual(
-                type_icon_filename_for_pokemon(name),
-                "grass_electric_type_icons.png",
-            )
+            self.assertIsNone(type_icon_filename_for_pokemon(name))
         self.assertEqual(type_icon_filename_for_pokemon("Snivy"), "grass_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Treecko"), "grass_type.png")
         self.assertEqual(type_icon_filename_for_pokemon("Glaceon"), "ice_type.png")
@@ -212,10 +235,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         with patch("bot.NORMAL_AND_ICE_TYPE_ALIASES", frozenset({"test pokemon"})):
             self.assertIsNone(type_icon_filename_for_pokemon("Test Pokemon"))
         with patch("bot.ICE_AND_ELECTRIC_TYPE_ALIASES", frozenset({"test pokemon"})):
-            self.assertEqual(
-                type_icon_filename_for_pokemon("Test Pokemon"),
-                "ice_electric_type_icons.png",
-            )
+            self.assertIsNone(type_icon_filename_for_pokemon("Test Pokemon"))
         self.assertIsNone(type_icon_filename_for_pokemon("Venusaur"))
         self.assertTrue(is_single_type_electric_pokemon("Jolteon"))
         self.assertFalse(is_single_type_electric_pokemon("Raichu-alola"))

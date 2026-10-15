@@ -797,6 +797,18 @@ def is_normal_icon_pokemon(name: str) -> bool:
     )
 
 
+def is_electric_icon_pokemon(name: str) -> bool:
+    normalized_name = normalize_pokemon_alias(name)
+    return (
+        normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES
+        or normalized_name in ELECTRIC_AND_WATER_TYPE_ALIASES
+        or normalized_name in ELECTRIC_AND_NORMAL_TYPE_ALIASES
+        or normalized_name in GRASS_AND_ELECTRIC_TYPE_ALIASES
+        or normalized_name in ICE_AND_ELECTRIC_TYPE_ALIASES
+        or is_single_type_electric_pokemon(name)
+    )
+
+
 def fire_companion_icon_filename_for_pokemon(name: str) -> str | None:
     normalized_name = normalize_pokemon_alias(name)
     if normalized_name in FIRE_AND_NORMAL_TYPE_ALIASES:
@@ -804,7 +816,7 @@ def fire_companion_icon_filename_for_pokemon(name: str) -> str | None:
     if normalized_name in WATER_AND_FIRE_TYPE_ALIASES:
         return None
     if normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES:
-        return "electric_type.png"
+        return None
     if normalized_name in GRASS_AND_FIRE_TYPE_ALIASES:
         return "grass_type.png"
     if normalized_name in ICE_AND_FIRE_TYPE_ALIASES:
@@ -817,7 +829,7 @@ def water_companion_icon_filename_for_pokemon(name: str) -> str | None:
     if normalized_name in NORMAL_AND_WATER_TYPE_ALIASES:
         return None
     if normalized_name in ELECTRIC_AND_WATER_TYPE_ALIASES:
-        return "electric_type.png"
+        return None
     if normalized_name in GRASS_AND_WATER_TYPE_ALIASES:
         return "grass_type.png"
     if normalized_name in ICE_AND_WATER_TYPE_ALIASES:
@@ -832,11 +844,20 @@ def normal_companion_icon_filename_for_pokemon(name: str) -> str | None:
     if normalized_name in NORMAL_AND_WATER_TYPE_ALIASES:
         return "water_type.png"
     if normalized_name in ELECTRIC_AND_NORMAL_TYPE_ALIASES:
-        return "electric_type.png"
+        return None
     if normalized_name in GRASS_AND_NORMAL_TYPE_ALIASES:
         return "grass_type.png"
     if normalized_name in FIRE_AND_NORMAL_TYPE_ALIASES:
         return None
+    return None
+
+
+def electric_companion_icon_filename_for_pokemon(name: str) -> str | None:
+    normalized_name = normalize_pokemon_alias(name)
+    if normalized_name in ICE_AND_ELECTRIC_TYPE_ALIASES:
+        return "ice_type.png"
+    if normalized_name in GRASS_AND_ELECTRIC_TYPE_ALIASES:
+        return "grass_type.png"
     return None
 
 
@@ -850,6 +871,7 @@ def format_custom_type_spawn_reply(
     include_fire: bool = False,
     include_water: bool = False,
     include_normal: bool = False,
+    include_electric: bool = False,
 ) -> str:
     lines = format_spawn_mention_lines(
         reserved_user_ids,
@@ -860,6 +882,7 @@ def format_custom_type_spawn_reply(
         "fire": "<:fire:1560301436074729532>",
         "water": "<:water:1560303864094130357>",
         "normal": "<:Normal:1560305235279482930>",
+        "electric": "<:Electric:1560306053164572732>",
     }
     included_types = {
         type_name
@@ -867,6 +890,7 @@ def format_custom_type_spawn_reply(
             ("fire", include_fire),
             ("water", include_water),
             ("normal", include_normal),
+            ("electric", include_electric),
         )
         if included
     }
@@ -877,8 +901,18 @@ def format_custom_type_spawn_reply(
         type_order = ("normal", "water")
     elif normalized_name in WATER_AND_FIRE_TYPE_ALIASES:
         type_order = ("water", "fire")
+    elif normalized_name in FIRE_AND_ELECTRIC_TYPE_ALIASES:
+        type_order = ("fire", "electric")
+    elif normalized_name in ELECTRIC_AND_WATER_TYPE_ALIASES:
+        type_order = ("electric", "water")
+    elif normalized_name in ELECTRIC_AND_NORMAL_TYPE_ALIASES:
+        type_order = ("electric", "normal")
+    elif normalized_name in GRASS_AND_ELECTRIC_TYPE_ALIASES:
+        type_order = ("grass", "electric")
+    elif normalized_name in ICE_AND_ELECTRIC_TYPE_ALIASES:
+        type_order = ("ice", "electric")
     else:
-        type_order = ("fire", "water", "normal")
+        type_order = ("fire", "water", "normal", "electric")
     type_emojis = [
         emoji_by_type[type_name]
         for type_name in type_order
@@ -940,20 +974,12 @@ def is_single_type_ice_pokemon(name: str) -> bool:
 
 
 def type_icon_filename_for_pokemon(name: str) -> str | None:
-    if normalize_pokemon_alias(name) in ICE_AND_ELECTRIC_TYPE_ALIASES:
-        return "ice_electric_type_icons.png"
     if normalize_pokemon_alias(name) in ICE_AND_WATER_TYPE_ALIASES:
         return "ice_water_type_icons.png"
-    if normalize_pokemon_alias(name) in ELECTRIC_AND_WATER_TYPE_ALIASES:
-        return "electric_water_type_icons.png"
     if normalize_pokemon_alias(name) in GRASS_AND_WATER_TYPE_ALIASES:
         return "grass_water_type_icons.png"
-    if normalize_pokemon_alias(name) in GRASS_AND_ELECTRIC_TYPE_ALIASES:
-        return "grass_electric_type_icons.png"
     if is_single_type_water_pokemon(name):
         return "water_type.png"
-    if is_single_type_electric_pokemon(name):
-        return "electric_type.png"
     if is_single_type_grass_pokemon(name):
         return "grass_type.png"
     if is_single_type_ice_pokemon(name):
@@ -2374,7 +2400,8 @@ class NamingBot(discord.Client):
         is_fire_spawn = is_fire_icon_pokemon(name)
         is_water_spawn = is_water_icon_pokemon(name)
         is_normal_spawn = is_normal_icon_pokemon(name)
-        if is_fire_spawn or is_water_spawn or is_normal_spawn:
+        is_electric_spawn = is_electric_icon_pokemon(name)
+        if is_fire_spawn or is_water_spawn or is_normal_spawn or is_electric_spawn:
             reply = format_custom_type_spawn_reply(
                 name,
                 confidence,
@@ -2385,15 +2412,14 @@ class NamingBot(discord.Client):
                 include_fire=is_fire_spawn,
                 include_water=is_water_spawn,
                 include_normal=is_normal_spawn,
+                include_electric=is_electric_spawn,
             )
-            if is_fire_spawn:
-                companion_icon_filename = fire_companion_icon_filename_for_pokemon(name)
-            elif is_water_spawn:
-                companion_icon_filename = water_companion_icon_filename_for_pokemon(name)
-            else:
-                companion_icon_filename = normal_companion_icon_filename_for_pokemon(
-                    name
-                )
+            companion_icon_filename = (
+                fire_companion_icon_filename_for_pokemon(name)
+                or water_companion_icon_filename_for_pokemon(name)
+                or normal_companion_icon_filename_for_pokemon(name)
+                or electric_companion_icon_filename_for_pokemon(name)
+            )
             if companion_icon_filename:
                 await message.reply(
                     reply,

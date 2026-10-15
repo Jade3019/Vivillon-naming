@@ -87,10 +87,11 @@ Use `v!r clear` to clear every reservation in the current server. The bot asks
 for confirmation with Yes and No buttons; Yes clears the server's reservations,
 and No cancels the command.
 
-Any server member can register as hunting one Pokémon with `v!sh absol`. Run a
-separate command for each Pokémon. When it spawns, registered hunters are
+Any server member can select one Pokémon to shinyhunt with `v!sh absol`. A new
+selection replaces their previous shinyhunt in that server. The command replies
+with `You are currently shinyhunting absol`; running `v!sh` without a Pokémon
+name reports their current selection. When it spawns, registered hunters are
 mentioned in a `Shinyhunt:` line. If the Pokémon has a reservation, the existing
 `Reserved:` mentions take precedence over shiny-hunt mentions. Shiny-hunt
 registrations are stored in `shinyhunts.json` by default; set `SHINYHUNTS_FILE`
-to use a different path. Run `v!sh` without a Pokémon name to see which Pokémon
-you are currently shinyhunting.
+to use a different path.

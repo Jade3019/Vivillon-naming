@@ -10,6 +10,7 @@ from bot import (
     format_remove_confirmation,
     format_reservation_embeds,
     format_spawn_reply,
+    format_shinyhunt_status,
     is_valid_pokemon_name,
     load_reservations,
     parse_reserve_add_command,
@@ -89,26 +90,35 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertIsNone(parse_shinyhunt_command("v!sh absol, eevee"))
         self.assertIsNone(parse_shinyhunt_command("v!sh absol!"))
 
-    def test_adds_multiple_shinyhunters_without_duplicates_or_cross_guild_leaks(self) -> None:
+    def test_shinyhunt_registration_replaces_only_that_users_previous_choice(
+        self,
+    ) -> None:
         shinyhunters = add_shinyhunter({}, 1, "Absol", 123)
-        shinyhunters = add_shinyhunter(shinyhunters, 1, "absol", 456)
-        shinyhunters = add_shinyhunter(shinyhunters, 1, "ABSOL", 123)
+        shinyhunters = add_shinyhunter(shinyhunters, 1, "Absol", 456)
+        shinyhunters = add_shinyhunter(shinyhunters, 1, "Pikachu", 123)
         shinyhunters = add_shinyhunter(shinyhunters, 2, "Absol", 789)
 
-        self.assertEqual(shinyhunters[reservation_key(1, "Absol")], [123, 456])
+        self.assertEqual(shinyhunters[reservation_key(1, "Absol")], [456])
+        self.assertEqual(shinyhunters[reservation_key(1, "Pikachu")], [123])
         self.assertEqual(shinyhunters[reservation_key(2, "Absol")], [789])
 
-    def test_lists_shinyhunt_pokemon_for_one_user_and_guild(self) -> None:
+    def test_formats_shinyhunt_status_in_lowercase(self) -> None:
+        self.assertEqual(
+            format_shinyhunt_status("Absol"),
+            "You are currently shinyhunting absol",
+        )
+
+    def test_lists_the_single_shinyhunt_pokemon_for_one_user_and_guild(self) -> None:
         shinyhunters = {
             reservation_key(1, "Absol"): [123, 456],
-            reservation_key(1, "Eevee"): [123],
+            reservation_key(1, "Eevee"): [456],
             reservation_key(1, "Pikachu"): [789],
             reservation_key(2, "Bulbasaur"): [123],
         }
 
         self.assertEqual(
             shinyhunt_pokemon_for_user(shinyhunters, 1, 123),
-            ["absol", "eevee"],
+            ["absol"],
         )
         self.assertEqual(shinyhunt_pokemon_for_user(shinyhunters, 1, 999), [])
 

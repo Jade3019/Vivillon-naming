@@ -288,13 +288,23 @@ def add_shinyhunter(
     updated_shinyhunters = {
         key: list(user_ids) for key, user_ids in shinyhunters.items()
     }
-    user_ids = updated_shinyhunters.setdefault(
-        reservation_key(guild_id, pokemon_name),
-        [],
-    )
+    guild_prefix = f"{guild_id}:"
+    for key in list(updated_shinyhunters):
+        if not key.startswith(guild_prefix):
+            continue
+        user_ids = updated_shinyhunters[key]
+        if user_id in user_ids:
+            user_ids.remove(user_id)
+            if not user_ids:
+                del updated_shinyhunters[key]
+    user_ids = updated_shinyhunters.setdefault(reservation_key(guild_id, pokemon_name), [])
     if user_id not in user_ids:
         user_ids.append(user_id)
     return updated_shinyhunters
+
+
+def format_shinyhunt_status(pokemon_name: str) -> str:
+    return f"You are currently shinyhunting {pokemon_name.casefold()}"
 
 
 def shinyhunt_pokemon_for_user(
@@ -580,10 +590,7 @@ class NamingBot(discord.Client):
                 message.author.id,
             )
             if pokemon_names:
-                display_names = ", ".join(
-                    name[0].upper() + name[1:] for name in pokemon_names
-                )
-                response = f"You are currently Shinyhunting {display_names}"
+                response = format_shinyhunt_status(pokemon_names[0])
             else:
                 response = "You are not currently Shinyhunting any Pokémon"
             await message.reply(response, mention_author=False)
@@ -612,11 +619,10 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-
         self.shinyhunters = updated_shinyhunters
-        display_name = pokemon_name[0].upper() + pokemon_name[1:]
+        self.shinyhunters = updated_shinyhunters
         await message.reply(
-            f"{display_name} Added to your shinyhunt",
+            format_shinyhunt_status(pokemon_name),
             mention_author=False,
         )
 

@@ -1635,11 +1635,8 @@ def reserved_pokemon_for_user(
         if not key.startswith(guild_prefix) or user_id not in user_ids:
             continue
         name = key.removeprefix(guild_prefix)
-        if name.startswith("*:"):
-            names.append(format_reserved_pokemon_name(name))
-        else:
-            names.append(name)
-    return sorted(names)
+        names.extend(format_reserved_pokemon_names(name))
+    return sorted(set(names))
 
 
 def remove_reservation(
@@ -1787,7 +1784,20 @@ def format_exchange_embed(
     lines = [
         f"You want to exchange from <@{source_id}> to those users:",
         "",
-        *(f"<@{recipient_id}> - {', '.join(names)}" for recipient_id, names in transfers),
+        *(
+            f"<@{recipient_id}> - "
+            + ", ".join(
+                form_name
+                for name in names
+                for form_name in (
+                    all_forms_display_names(name[4:].strip())
+                    if name.casefold().startswith("all ")
+                    else []
+                )
+                or [name]
+            )
+            for recipient_id, names in transfers
+        ),
     ]
     if skipped:
         missing = list(dict.fromkeys(name for _, name in skipped))
@@ -1896,10 +1906,12 @@ def format_server_reservation_embeds(
     guild_prefix = f"{guild_id}:"
     entries = sorted(
         (
-            f"{format_reserved_pokemon_name(key.removeprefix(guild_prefix))} "
-            f"<@{user_id}>"
+            f"{pokemon_name} <@{user_id}>"
             for key, user_ids in reservations.items()
             if key.startswith(guild_prefix)
+            for pokemon_name in format_reserved_pokemon_names(
+                key.removeprefix(guild_prefix)
+            )
             for user_id in set(user_ids)
         ),
         key=str.casefold,
@@ -1932,10 +1944,32 @@ def format_server_reservation_embeds(
     return embeds
 
 
-def format_reserved_pokemon_name(stored_name: str) -> str:
+def all_forms_display_names(species_name: str) -> list[str]:
+    species_name = unicodedata.normalize("NFC", species_name).casefold()
+    forms = POKEMON_FORMS.get(species_name, [])
+    display_names = [form["display_name"] for form in forms]
+    names: list[str] = []
+    for form, display_name in zip(forms, display_names):
+        name = display_name
+        if display_names.count(display_name) > 1:
+            suffix = form["identifier"].removeprefix(f"{species_name}-")
+            name = f"{suffix.replace('-', ' ')} {species_name}"
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def format_reserved_pokemon_names(stored_name: str) -> list[str]:
     if stored_name.startswith("*:"):
-        return f"all forms of {stored_name.removeprefix('*:')}"
-    return stored_name
+        species_name = stored_name.removeprefix("*:")
+        return all_forms_display_names(species_name) or [
+            f"all forms of {species_name}"
+        ]
+    return [stored_name]
+
+
+def format_reserved_pokemon_name(stored_name: str) -> str:
+    return ", ".join(format_reserved_pokemon_names(stored_name))
 
 
 def format_pokemon_reserver_embeds(

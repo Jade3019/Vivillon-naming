@@ -177,3 +177,5 @@ who do have them. Only the command user (with the reserve manager role) can
 press the buttons (they appear even when `@owner` has none of the listed Pokémon), and unanswered prompts expire after 3 minutes.
 
 In an exchange, `all <pokemon>` moves every form the owner has reserved, including regional forms such as Galarian or Alolan ones, not only the all-forms reservation.
+
+Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an all-forms reservation as each form separately (for example, each Urshifu form) when form data is available. Species without form data still show as "all forms of <pokemon>".

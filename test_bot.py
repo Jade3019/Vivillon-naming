@@ -972,11 +972,20 @@ class ReservationPersistenceTests(unittest.TestCase):
         )
 
     def test_member_reserve_list_labels_all_forms(self) -> None:
-        reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
+        reservations = {
+            all_forms_reservation_key(1, "Marshadow"): [123],
+            all_forms_reservation_key(1, "Urshifu"): [123],
+        }
 
         self.assertEqual(
             reserved_pokemon_for_user(reservations, 1, 123),
-            ["all forms of arceus"],
+            [
+                "all forms of marshadow",
+                "rapid strike gmax urshifu",
+                "rapid-strike urshifu",
+                "single strike gmax urshifu",
+                "single-strike urshifu",
+            ],
         )
 
     def test_removes_pokemon_reservation_for_one_user(self) -> None:
@@ -1081,11 +1090,19 @@ class ReservationPersistenceTests(unittest.TestCase):
 
     def test_server_list_labels_all_forms_reservations(self) -> None:
         embeds = format_server_reservation_embeds(
-            {all_forms_reservation_key(1, "Arceus"): [123]},
+            {
+                all_forms_reservation_key(1, "Marshadow"): [123],
+                all_forms_reservation_key(1, "Zacian"): [456],
+            },
             1,
         )
 
-        self.assertEqual(embeds[0].description, "all forms of arceus <@123>")
+        self.assertEqual(
+            embeds[0].description,
+            "all forms of marshadow <@123>\n"
+            "crowned zacian <@456>\n"
+            "zacian <@456>",
+        )
 
     def test_formats_empty_server_reserve_list(self) -> None:
         embeds = format_server_reservation_embeds(

@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from bot import (
+    clear_guild_reservations,
     format_catch_command,
     format_guess,
     format_remove_confirmation,
@@ -130,6 +131,18 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertTrue(removed)
         self.assertNotIn(reservation_key(1, "Pikachu"), updated)
         self.assertEqual(updated[reservation_key(2, "Pikachu")], [789])
+
+    def test_clears_all_reservations_for_one_guild_only(self) -> None:
+        reservations = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [789],
+            reservation_key(2, "Bulbasaur"): [123],
+        }
+
+        updated = clear_guild_reservations(reservations, 1)
+
+        self.assertEqual(updated, {reservation_key(2, "Bulbasaur"): [123]})
+        self.assertEqual(len(reservations), 3)
 
     def test_does_not_report_removal_when_user_is_not_reserved(self) -> None:
         reservations = {reservation_key(1, "Pikachu"): [123]}

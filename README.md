@@ -82,3 +82,7 @@ remove them only from that member's reserves, or
 in the current server. A single Pokémon name can still be used in either command.
 Successful member-specific removals reply with `Pikachu, Eevee removed from
 @member Reserves`.
+
+Use `v!r clear` to clear every reservation in the current server. The bot asks
+for confirmation with Yes and No buttons; Yes clears the server's reservations,
+and No cancels the command.

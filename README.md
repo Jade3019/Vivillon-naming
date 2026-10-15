@@ -45,10 +45,12 @@ approval for privileged intents on larger bots.
    ```
 
 When Pokétwo posts a wild-spawn image, the bot replies with one predicted name
-and its estimated confidence percentage (for example, `Pikachu: 85%`). The
+and its estimated confidence percentage (for example, `Pikachu: 85.00%`). The
 confidence is a model estimate, not a calibrated probability. The vision model
-is asked to identify Pokémon across the National Pokédex; image recognition can
-still make mistakes, so check guesses before relying on them. It then posts the
+compares visible traits such as silhouette, proportions, face, colors, and
+markings to identify Pokémon across the National Pokédex and distinguish similar
+species and forms. Image recognition can still make mistakes, so check guesses
+before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying. Discord's
 copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pokétwo or Discord may ignore or restrict commands sent by another

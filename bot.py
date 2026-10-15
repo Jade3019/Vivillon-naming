@@ -2224,17 +2224,49 @@ def remember_reserve_list(message_id: int, embeds: list[discord.Embed]) -> None:
         RESERVE_LIST_CACHE.popitem(last=False)
 
 
+def load_known_pokemon_names() -> list[str]:
+    names: set[str] = {"Missingno"}
+    try:
+        data = json.loads(
+            Path(__file__).with_name("pokemon_names.json").read_text(encoding="utf-8")
+        )
+        names.update(name for name in data if isinstance(name, str))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Could not load pokemon_names.json; v!grab will be limited")
+    for forms in POKEMON_FORMS.values():
+        names.update(form["display_name"] for form in forms)
+    names.update(POKEMON_FORMS)
+    return sorted(
+        (name.replace("’", "'") for name in names), key=len, reverse=True
+    )
+
+
+GRAB_NAME_PREFIXES: Final[str] = (
+    r"(?:(?:all\s+forms\s+of|all|mega|alolan|galarian|hisuian|paldean|gmax|"
+    r"gigantamax|primal)\s+)*"
+)
+GRAB_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"(?<![\w'])"
+    + GRAB_NAME_PREFIXES
+    + "(?:"
+    + "|".join(re.escape(name) for name in load_known_pokemon_names())
+    + r")(?![\w'])",
+    re.IGNORECASE,
+)
+
+
 def parse_grab_entries(texts: list[str]) -> list[tuple[str, list[int]]]:
     entries: list[tuple[str, list[int]]] = []
     for text in texts:
-        for line in text.splitlines():
-            user_ids = [int(user_id) for user_id in MENTION_PATTERN.findall(line)]
-            name = MENTION_PATTERN.sub("", line)
-            name = unicodedata.normalize("NFC", name).strip(" \t-–—:,•*`")
-            if name.casefold().startswith("all forms of "):
-                name = "all " + name[len("all forms of ") :]
-            if name and len(name) <= 60 and is_valid_pokemon_name(name):
-                entries.append((name, list(dict.fromkeys(user_ids))))
+        for line in text.replace("’", "'").splitlines():
+            user_ids = list(
+                dict.fromkeys(int(user_id) for user_id in MENTION_PATTERN.findall(line))
+            )
+            for match in GRAB_NAME_PATTERN.finditer(MENTION_PATTERN.sub(" ", line)):
+                name = " ".join(unicodedata.normalize("NFC", match.group()).split())
+                if name.casefold().startswith("all forms of "):
+                    name = "all " + name[len("all forms of ") :]
+                entries.append((name, list(user_ids)))
     return entries
 
 

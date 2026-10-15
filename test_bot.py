@@ -594,6 +594,26 @@ class GrabListTests(unittest.TestCase):
             [("pikachu", [1]), ("eevee", []), ("all arceus", [2, 3])],
         )
 
+    def test_parses_labelled_org_reserve_list(self) -> None:
+        text = (
+            "📜 **Org Reserve List**\n\n"
+            "**Regional** — <@1> - Zorua\n"
+            "**Eevos** — <@2> - Absol\n"
+            "**Booster** — <@3> - Cutiefly\n"
+            "**Booster 2** — <@2> - Missingno"
+        )
+
+        self.assertEqual(
+            parse_grab_entries([text]),
+            [("Zorua", [1]), ("Absol", [2]), ("Cutiefly", [3]), ("Missingno", [2])],
+        )
+
+    def test_parses_plain_and_comma_lists(self) -> None:
+        self.assertEqual(
+            parse_grab_entries(["Mewtwo\n1. Mr. Mime, Galarian Articuno <@4>\nhello"]),
+            [("Mewtwo", []), ("Mr. Mime", [4]), ("Galarian Articuno", [4])],
+        )
+
     def test_order_all_forms_and_emoji_cycle(self) -> None:
         entries = [("sylveon", [1]), ("trapinch", []), ("urshifu", []), ("ditto", [])]
 

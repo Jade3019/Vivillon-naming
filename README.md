@@ -182,7 +182,7 @@ Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an
 
 ## Grabbing a list with `v!grab`
 
-Reply to a list, such as a `v!r search` result, with `v!grab`. The bot builds
+Reply to any message or embed that contains Pokémon names, with `v!grab`: a `v!r search` result, a plain list, or a labelled list such as `Regional — @user - Zorua`. The bot finds the Pokémon names on each line (ignoring labels, emojis and formatting) and pairs each with the `@user` on that line. Names come from `pokemon_names.json`. The bot builds
 a separate list of every Pokémon (not just the visible page; lists of ~200 are
 paged). Only the person who ran `v!grab` can use its buttons:
 

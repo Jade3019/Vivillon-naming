@@ -26,6 +26,7 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"\bwild\s+(?:pokemon|pok[eé]mon)\b", re.IGNORECASE
 )
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
+POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
 SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -2396,7 +2397,7 @@ class NamingBot(discord.Client):
             return
         if is_missingno_name(name):
             await message.reply(
-                f"<@{self.config.poketwo_bot_id}> inc p",
+                f"<@{POKETWO_COMMAND_BOT_ID}> inc p",
                 mention_author=False,
             )
             await asyncio.sleep(0.5)
@@ -2450,7 +2451,7 @@ class NamingBot(discord.Client):
             reply = format_custom_type_spawn_reply(
                 name,
                 confidence,
-                self.config.poketwo_bot_id,
+                POKETWO_COMMAND_BOT_ID,
                 reserved_user_ids,
                 shinyhunter_user_ids,
                 collection_user_ids,
@@ -2492,7 +2493,7 @@ class NamingBot(discord.Client):
                 )
                 or None,
                 embed=format_type_spawn_embed(
-                    name, confidence, self.config.poketwo_bot_id, icon_filename
+                    name, confidence, POKETWO_COMMAND_BOT_ID, icon_filename
                 ),
                 file=discord.File(
                     Path(__file__).with_name("assets") / icon_filename,
@@ -2505,7 +2506,7 @@ class NamingBot(discord.Client):
                 format_spawn_reply(
                     name,
                     confidence,
-                    self.config.poketwo_bot_id,
+                    POKETWO_COMMAND_BOT_ID,
                     reserved_user_ids,
                     shinyhunter_user_ids,
                     collection_user_ids,

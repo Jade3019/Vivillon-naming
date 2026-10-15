@@ -65,6 +65,7 @@ from bot import (
     shinyhunt_pokemon_for_user,
     shinyhunter_user_ids_for_pokemon,
     pokemon_matches_all_forms_reservation,
+    POKETWO_COMMAND_BOT_ID,
 )
 
 
@@ -359,7 +360,7 @@ class GuessFormatTests(unittest.TestCase):
 
     def test_formats_plain_poketwo_catch_command(self) -> None:
         self.assertEqual(
-            format_catch_command(716390085896962058, "Pikachu"),
+            format_catch_command(POKETWO_COMMAND_BOT_ID, "Pikachu"),
             "<@716390085896962058> c pikachu",
         )
 

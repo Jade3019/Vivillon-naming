@@ -35,6 +35,9 @@ approval for privileged intents on larger bots.
    export POKETWO_BOT_ID="the-poketwo-bot-user-id"
    ```
 
+   `POKETWO_BOT_ID` identifies the account whose spawn messages the bot
+   monitors. Generated catch commands target `<@716390085896962058>`.
+
    Optionally set `ALLOWED_CHANNEL_ID` to limit the bot to one channel and
    `OPENAI_MODEL` to select another vision-capable Chat Completions model.
 

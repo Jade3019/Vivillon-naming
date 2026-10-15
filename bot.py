@@ -329,6 +329,13 @@ async def recognize_pokemon(
                     "from its yellow head or the scene; do not mistake the flower for "
                     "part of its body or confuse it with Floette, which has a more "
                     "developed, upright body and holds its flower differently. "
+                    "Milcery is a tiny cream-colored Fairy Pokémon shaped like a blob "
+                    "of whipped cream, with a smooth pale body topped by rounded "
+                    "cream swirls, two small oval white eyes, and a tiny smile; a "
+                    "small cream droplet floats beside it. Identify it as Milcery, "
+                    "not Alcremie, which sits on a decorated cake-like base with a "
+                    "ring of berries or sweets, and do not mistake the plain cream "
+                    "blob for Swirlix, Slurpuff, Vanillite, or a Ditto-like blob. "
                     "Lairon is a stocky, low-slung, four-legged armored Pokémon with "
                     "overlapping pale silver-white metal plates marked by distinct black "
                     "round spots, a gray segmented body, and a blunt horned head with "
@@ -752,19 +759,22 @@ def type_icon_filename_for_pokemon(name: str) -> str | None:
     return None
 
 
-def format_type_spawn_embed(
+def format_type_spawn_text(
     name: str,
     confidence: float,
     poketwo_bot_id: int,
-    icon_filename: str,
-) -> discord.Embed:
-    command = format_catch_command(poketwo_bot_id, name)
-    embed = discord.Embed(description=f"`{command}`")
-    embed.set_author(
-        name=format_guess(name, confidence),
-        icon_url=f"attachment://{icon_filename}",
+    reserved_user_ids: list[int] | None = None,
+    shinyhunter_user_ids: list[int] | None = None,
+    collection_user_ids: list[int] | None = None,
+) -> str:
+    lines = format_spawn_mention_lines(
+        reserved_user_ids,
+        shinyhunter_user_ids,
+        collection_user_ids,
     )
-    return embed
+    lines.append(f"# {format_guess(name, confidence)}")
+    lines.append(f"`{format_catch_command(poketwo_bot_id, name)}`")
+    return "\n".join(lines)
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
@@ -2164,19 +2174,13 @@ class NamingBot(discord.Client):
         icon_filename = type_icon_filename_for_pokemon(name)
         if icon_filename:
             await message.reply(
-                content="\n".join(
-                    format_spawn_mention_lines(
-                        reserved_user_ids,
-                        shinyhunter_user_ids,
-                        collection_user_ids,
-                    )
-                )
-                or None,
-                embed=format_type_spawn_embed(
+                format_type_spawn_text(
                     name,
                     confidence,
                     self.config.poketwo_bot_id,
-                    icon_filename,
+                    reserved_user_ids,
+                    shinyhunter_user_ids,
+                    collection_user_ids,
                 ),
                 file=discord.File(
                     Path(__file__).with_name("assets") / icon_filename,

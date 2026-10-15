@@ -31,6 +31,10 @@ SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
 )
+SHINYHUNT_REMOVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!sh\s+remove\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
 RESERVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+add\s+(.+?)\s+<@!?(\d+)>\s*$",
     re.IGNORECASE,
@@ -1234,7 +1238,18 @@ def parse_shinyhunt_command(content: str) -> str | None:
     match = SHINYHUNT_COMMAND_PATTERN.fullmatch(content)
     if match is None:
         return None
-    pokemon_name = unicodedata.normalize("NFC", match.group(1).strip())
+    return parse_shinyhunt_name(match.group(1))
+
+
+def parse_shinyhunt_remove_command(content: str) -> str | None:
+    match = SHINYHUNT_REMOVE_COMMAND_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+    return parse_shinyhunt_name(match.group(1))
+
+
+def parse_shinyhunt_name(value: str) -> str | None:
+    pokemon_name = unicodedata.normalize("NFC", value.strip())
     if (
         not pokemon_name
         or "," in pokemon_name
@@ -1270,6 +1285,26 @@ def add_shinyhunter(
     if user_id not in user_ids:
         user_ids.append(user_id)
     return updated_shinyhunters
+
+
+def remove_shinyhunter(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+    user_id: int,
+) -> tuple[dict[str, list[int]], bool]:
+    updated_shinyhunters = {
+        key: list(user_ids) for key, user_ids in shinyhunters.items()
+    }
+    key = reservation_key_for_command(guild_id, pokemon_name)
+    user_ids = updated_shinyhunters.get(key)
+    if user_ids is None or user_id not in user_ids:
+        return updated_shinyhunters, False
+
+    user_ids.remove(user_id)
+    if not user_ids:
+        del updated_shinyhunters[key]
+    return updated_shinyhunters, True
 
 
 def format_shinyhunt_status(pokemon_name: str) -> str:
@@ -2094,10 +2129,54 @@ class NamingBot(discord.Client):
             await message.reply(response, mention_author=False)
             return
 
+        remove_match = re.match(
+            r"^v!sh\s+remove(?:\s|$)",
+            message.content,
+            re.IGNORECASE,
+        )
+        if remove_match is not None:
+            pokemon_name = parse_shinyhunt_remove_command(message.content)
+            if pokemon_name is None:
+                await message.reply(
+                    "Usage: `v!sh remove <pokemon>`",
+                    mention_author=False,
+                )
+                return
+
+            updated_shinyhunters, removed = remove_shinyhunter(
+                self.shinyhunters,
+                message.guild.id,
+                pokemon_name,
+                message.author.id,
+            )
+            if not removed:
+                await message.reply(
+                    f"You are not currently shinyhunting {pokemon_name}.",
+                    mention_author=False,
+                )
+                return
+            try:
+                save_reservations(self.shinyhunt_path, updated_shinyhunters)
+            except ValueError:
+                logger.exception("Could not save shiny-hunt removal")
+                await message.reply(
+                    "I couldn't remove that shiny hunt. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+
+            self.shinyhunters = updated_shinyhunters
+            await message.reply(
+                f"You are no longer shinyhunting {format_shinyhunt_name(pokemon_name)}.",
+                mention_author=False,
+            )
+            return
+
         pokemon_name = parse_shinyhunt_command(message.content)
         if pokemon_name is None:
             await message.reply(
-                "Usage: `v!sh <pokemon>` (one Pokémon per command)",
+                "Usage: `v!sh <pokemon>` or `v!sh remove <pokemon>` "
+                "(one Pokémon per command)",
                 mention_author=False,
             )
             return

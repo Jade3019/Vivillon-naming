@@ -54,6 +54,7 @@ from bot import (
     parse_reserve_remove_command,
     parse_collection_add_command,
     parse_shinyhunt_command,
+    parse_shinyhunt_remove_command,
     ReservationPagesView,
     remove_reservation,
     remove_reservations,
@@ -65,6 +66,7 @@ from bot import (
     save_reservations,
     shinyhunt_pokemon_for_user,
     shinyhunter_user_ids_for_pokemon,
+    remove_shinyhunter,
     pokemon_matches_all_forms_reservation,
     POKETWO_COMMAND_BOT_ID,
     Config,
@@ -669,6 +671,20 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertIsNone(parse_shinyhunt_command("v!sh absol, eevee"))
         self.assertIsNone(parse_shinyhunt_command("v!sh absol!"))
 
+    def test_parses_shinyhunt_removal_name(self) -> None:
+        self.assertEqual(
+            parse_shinyhunt_remove_command("v!sh remove Pikachu"),
+            "Pikachu",
+        )
+        self.assertEqual(
+            parse_shinyhunt_remove_command("v!sh remove all Arceus"),
+            "all Arceus",
+        )
+        self.assertIsNone(parse_shinyhunt_remove_command("v!sh remove"))
+        self.assertIsNone(
+            parse_shinyhunt_remove_command("v!sh remove pikachu, eevee")
+        )
+
     def test_shinyhunt_registration_replaces_only_that_users_previous_choice(
         self,
     ) -> None:
@@ -680,6 +696,55 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(shinyhunters[reservation_key(1, "Absol")], [456])
         self.assertEqual(shinyhunters[reservation_key(1, "Pikachu")], [123])
         self.assertEqual(shinyhunters[reservation_key(2, "Absol")], [789])
+
+    def test_shinyhunt_removal_only_removes_requesting_user(self) -> None:
+        shinyhunters = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [123],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated, removed = remove_shinyhunter(shinyhunters, 1, "pikachu", 123)
+
+        self.assertTrue(removed)
+        self.assertEqual(
+            updated,
+            {
+                reservation_key(1, "Pikachu"): [456],
+                reservation_key(1, "Eevee"): [123],
+                reservation_key(2, "Pikachu"): [123],
+            },
+        )
+        self.assertEqual(shinyhunters[reservation_key(1, "Pikachu")], [123, 456])
+
+    def test_shinyhunt_removal_reports_missing_selection(self) -> None:
+        updated, removed = remove_shinyhunter(
+            {reservation_key(1, "Pikachu"): [456]},
+            1,
+            "Pikachu",
+            123,
+        )
+
+        self.assertFalse(removed)
+        self.assertEqual(updated, {reservation_key(1, "Pikachu"): [456]})
+
+    def test_shinyhunt_removal_supports_all_forms(self) -> None:
+        shinyhunters = {
+            all_forms_reservation_key(1, "Arceus"): [123, 456],
+        }
+
+        updated, removed = remove_shinyhunter(
+            shinyhunters,
+            1,
+            "all arceus",
+            123,
+        )
+
+        self.assertTrue(removed)
+        self.assertEqual(
+            updated,
+            {all_forms_reservation_key(1, "Arceus"): [456]},
+        )
 
     def test_all_forms_shinyhunt_matches_every_form_of_a_pokemon(self) -> None:
         shinyhunters = add_shinyhunter({}, 1, "all arceus", 123)

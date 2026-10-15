@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import re
 import unicodedata
@@ -103,7 +104,7 @@ async def recognize_pokemon(
     client: AsyncOpenAI,
     http: aiohttp.ClientSession,
     model: str,
-) -> tuple[str, int]:
+) -> tuple[str, float]:
     async with http.get(url) as response:
         response.raise_for_status()
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
@@ -178,9 +179,10 @@ async def recognize_pokemon(
                     "fire-themed humanoid Pokémon by its oversized dark head. "
                     "Choose the single most likely Pokémon name. Never "
                     "return multiple candidates, alternate names, aliases, or a list. "
-                    "Estimate your confidence in that one guess as a whole-number "
-                    "percentage from 0 to 100. Return JSON only, in the form "
-                    '{"name":"one Pokétwo-accepted English name","confidence":85}. '
+                    "Estimate your confidence in that one guess as a percentage "
+                    "from 0 to 100 with up to two decimal places. Return JSON only, "
+                    "in the form "
+                    '{"name":"one Pokétwo-accepted English name","confidence":85.34}. '
                     "Include a form or "
                     "regional name when needed to identify the shown Pokémon. If the "
                     "image is not recognizable as a Pokémon, set name to an empty "
@@ -213,14 +215,15 @@ async def recognize_pokemon(
     confidence = prediction.get("confidence")
     if (
         isinstance(confidence, bool)
-        or not isinstance(confidence, int)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(confidence)
         or not 0 <= confidence <= 100
     ):
         raise ValueError("Vision model response included an invalid confidence percentage")
     name = unicodedata.normalize("NFC", name.strip())
     if len(name) > 60 or (name and not is_valid_pokemon_name(name)):
         raise ValueError("Vision model returned an invalid Pokémon name")
-    return name, confidence
+    return name, float(confidence)
 
 
 def is_valid_pokemon_name(name: str) -> bool:
@@ -232,8 +235,8 @@ def is_valid_pokemon_name(name: str) -> bool:
     )
 
 
-def format_guess(name: str, confidence: int) -> str:
-    return f"{name}: {confidence}%"
+def format_guess(name: str, confidence: float) -> str:
+    return f"{name}: {confidence:.2f}%"
 
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
@@ -242,7 +245,7 @@ def format_catch_command(poketwo_bot_id: int, name: str) -> str:
 
 def format_spawn_reply(
     name: str,
-    confidence: int,
+    confidence: float,
     poketwo_bot_id: int,
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,

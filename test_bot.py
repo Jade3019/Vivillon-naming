@@ -28,7 +28,8 @@ from bot import (
 
 class GuessFormatTests(unittest.TestCase):
     def test_formats_one_guess_without_a_label(self) -> None:
-        self.assertEqual(format_guess("Pikachu", 85), "Pikachu: 85%")
+        self.assertEqual(format_guess("Pikachu", 85), "Pikachu: 85.00%")
+        self.assertEqual(format_guess("Absol", 56.86), "Absol: 56.86%")
 
     def test_formats_plain_poketwo_catch_command(self) -> None:
         self.assertEqual(
@@ -39,14 +40,14 @@ class GuessFormatTests(unittest.TestCase):
     def test_formats_guess_and_command_on_separate_lines(self) -> None:
         self.assertEqual(
             format_spawn_reply("Pikachu", 85, 716390085896962058),
-            "Pikachu: 85%\n"
+            "Pikachu: 85.00%\n"
             "`<@716390085896962058> c pikachu`",
         )
 
     def test_formats_only_the_reserved_members_as_mentions(self) -> None:
         self.assertEqual(
             format_spawn_reply("Pikachu", 95, 716390085896962058, [123, 456]),
-            "Pikachu: 95%\n"
+            "Pikachu: 95.00%\n"
             "Reserved: <@123>, <@456>\n"
             "`<@716390085896962058> c pikachu`",
         )
@@ -54,7 +55,7 @@ class GuessFormatTests(unittest.TestCase):
     def test_formats_shinyhunters_when_no_reservations_exist(self) -> None:
         self.assertEqual(
             format_spawn_reply("Absol", 95, 789, [], [123, 456]),
-            "Absol: 95%\n"
+            "Absol: 95.00%\n"
             "Shinyhunt: <@123>, <@456>\n"
             "`<@789> c absol`",
         )
@@ -62,7 +63,7 @@ class GuessFormatTests(unittest.TestCase):
     def test_reservations_override_shinyhunters_in_spawn_reply(self) -> None:
         self.assertEqual(
             format_spawn_reply("Absol", 95, 789, [999], [123, 456]),
-            "Absol: 95%\n"
+            "Absol: 95.00%\n"
             "Reserved: <@999>\n"
             "`<@789> c absol`",
         )

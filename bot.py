@@ -2520,7 +2520,7 @@ class NamingBot(discord.Client):
             return
         view = GrabListView(self, message.guild.id, message.author.id, entries)
         response = await message.reply(
-            embed=view.current_embed(),
+            embeds=view.current_embeds(),
             view=view,
             allowed_mentions=discord.AllowedMentions.none(),
             mention_author=False,
@@ -3408,35 +3408,27 @@ class GrabListView(discord.ui.View):
         self.ordered = False
         self.all_forms = False
         self.emojis: list[str] = []
-        self.page = 0
         self.message: discord.Message | None = None
         self.sync_buttons()
 
-    def pages(self) -> list[str]:
-        return paginate_grab_lines(
-            build_grab_lines(
-                self.entries,
-                ordered=self.ordered,
-                all_forms=self.all_forms,
-                emojis=self.emojis,
-            )
+    def current_embeds(self) -> list[discord.Embed]:
+        lines = build_grab_lines(
+            self.entries,
+            ordered=self.ordered,
+            all_forms=self.all_forms,
+            emojis=self.emojis,
         )
-
-    def current_embed(self) -> discord.Embed:
-        pages = self.pages()
-        self.page = min(self.page, len(pages) - 1)
-        embed = discord.Embed(
-            description=pages[self.page],
-            color=discord.Color.blurple(),
-        )
-        footer = f"{len(self.entries)} Pokémon"
-        if len(pages) > 1:
-            footer += f" • Page {self.page + 1} of {len(pages)}"
-        embed.set_footer(text=footer)
-        return embed
+        # One message can hold 6000 embed characters in total, so the list is
+        # spread over as many embeds as needed instead of being paged.
+        pages = paginate_grab_lines(lines, 2900)
+        embeds = [
+            discord.Embed(description=page, color=discord.Color.blurple())
+            for page in pages[:2]
+        ]
+        embeds[-1].set_footer(text=f"{len(self.entries)} Pokémon")
+        return embeds
 
     def sync_buttons(self) -> None:
-        page_count = len(self.pages())
         self.order_button.style = (
             discord.ButtonStyle.success if self.ordered else discord.ButtonStyle.secondary
         )
@@ -3449,13 +3441,11 @@ class GrabListView(discord.ui.View):
         self.emoji_button.style = (
             discord.ButtonStyle.success if self.emojis else discord.ButtonStyle.secondary
         )
-        self.previous_button.disabled = self.page <= 0
-        self.next_button.disabled = self.page >= page_count - 1
 
     async def refresh(self, interaction: discord.Interaction) -> None:
-        embed = self.current_embed()
+        embeds = self.current_embeds()
         self.sync_buttons()
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.edit_message(embeds=embeds, view=self)
 
     async def on_timeout(self) -> None:
         if self.message is None:
@@ -3483,7 +3473,6 @@ class GrabListView(discord.ui.View):
     ) -> None:
         del button
         self.ordered = not self.ordered
-        self.page = 0
         await self.refresh(interaction)
 
     @discord.ui.button(label="All forms off", style=discord.ButtonStyle.secondary, row=0)
@@ -3538,7 +3527,7 @@ class GrabListView(discord.ui.View):
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
-    @discord.ui.button(label="Copy", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Copy", style=discord.ButtonStyle.secondary, row=1)
     async def copy_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
@@ -3553,22 +3542,6 @@ class GrabListView(discord.ui.View):
         await interaction.response.send_message(chunks[0], ephemeral=True)
         for chunk in chunks[1:]:
             await interaction.followup.send(chunk, ephemeral=True)
-
-    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
-    async def previous_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
-        del button
-        self.page = max(0, self.page - 1)
-        await self.refresh(interaction)
-
-    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.secondary, row=1)
-    async def next_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
-        del button
-        self.page += 1
-        await self.refresh(interaction)
 
 
 class ClearReservesView(discord.ui.View):

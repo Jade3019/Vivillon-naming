@@ -912,6 +912,66 @@ def format_pokemon_reserver_embeds(
     return embeds
 
 
+def format_all_forms_reservation_embeds(
+    reservations: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+) -> list[discord.Embed]:
+    base_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    guild_prefix = f"{guild_id}:"
+    wildcard_key = all_forms_reservation_key(guild_id, base_name)
+    wildcard_user_ids = set(reservations.get(wildcard_key, []))
+    matching_forms = sorted(
+        (
+            (key.removeprefix(guild_prefix), user_ids)
+            for key, user_ids in reservations.items()
+            if key.startswith(guild_prefix)
+            and not key.startswith(f"{guild_id}:*:")
+            and pokemon_matches_all_forms_reservation(
+                key.removeprefix(guild_prefix),
+                base_name,
+            )
+        ),
+        key=lambda entry: entry[0].casefold(),
+    )
+
+    entries = [
+        f"{form_name} <@{user_id}>"
+        for form_name, form_user_ids in matching_forms
+        for user_id in sorted(set(form_user_ids) | wildcard_user_ids)
+    ]
+    if not matching_forms and wildcard_user_ids:
+        entries = [
+            f"{format_reserved_pokemon_name(f'*:{base_name}')} <@{user_id}>"
+            for user_id in sorted(wildcard_user_ids)
+        ]
+    if not entries:
+        return [
+            discord.Embed(
+                title=f"Reserve search: all forms of {pokemon_name}",
+                description=f"No forms of {pokemon_name} are reserved.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    pages = [
+        entries[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(entries), RESERVATION_EMBED_PAGE_SIZE)
+    ]
+    embeds: list[discord.Embed] = []
+    total_pages = len(pages)
+    for page_number, page_entries in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title=f"Reserve search: all forms of {pokemon_name}",
+            description="\n".join(page_entries),
+            color=discord.Color.blurple(),
+        )
+        if total_pages > 1:
+            embed.set_footer(text=f"Page {page_number} of {total_pages}")
+        embeds.append(embed)
+    return embeds
+
+
 class ReservationPagesView(discord.ui.View):
     def __init__(self, embeds: list[discord.Embed], guild_id: int) -> None:
         super().__init__(timeout=300)
@@ -1370,11 +1430,18 @@ class NamingBot(discord.Client):
             )
             return
 
-        embeds = format_pokemon_reserver_embeds(
-            self.reservations,
-            message.guild.id,
-            pokemon_name,
-        )
+        if pokemon_name.casefold().startswith("all "):
+            embeds = format_all_forms_reservation_embeds(
+                self.reservations,
+                message.guild.id,
+                pokemon_name[4:].strip(),
+            )
+        else:
+            embeds = format_pokemon_reserver_embeds(
+                self.reservations,
+                message.guild.id,
+                pokemon_name,
+            )
         await reply_with_reservation_embeds(message, embeds)
 
     async def handle_spawn(self, message: discord.Message) -> None:

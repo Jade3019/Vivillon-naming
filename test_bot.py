@@ -10,6 +10,7 @@ from bot import (
     clear_guild_reservations,
     format_catch_command,
     format_guess,
+    format_all_forms_reservation_embeds,
     format_pokemon_reserver_embeds,
     format_remove_confirmation,
     format_reservation_embeds,
@@ -382,6 +383,62 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             embeds[0].description,
             "Arceus (Fire) <@123>",
+        )
+
+    def test_all_forms_search_lists_each_reserved_form_and_reservers(self) -> None:
+        reservations = {
+            reservation_key(1, "Arceus"): [456],
+            reservation_key(1, "Arceus (Fire)"): [789],
+            reservation_key(1, "Arceus-Water"): [987],
+            all_forms_reservation_key(1, "Arceus"): [123],
+            reservation_key(1, "Pikachu"): [321],
+            reservation_key(2, "Arceus (Grass)"): [654],
+        }
+
+        embeds = format_all_forms_reservation_embeds(
+            reservations,
+            1,
+            "Arceus",
+        )
+
+        self.assertEqual(
+            embeds[0].description,
+            "arceus <@123>\narceus <@456>\n"
+            "arceus (fire) <@123>\narceus (fire) <@789>\n"
+            "arceus-water <@123>\narceus-water <@987>",
+        )
+
+    def test_all_forms_search_shows_wildcard_reservation_when_no_forms_listed(self) -> None:
+        embeds = format_all_forms_reservation_embeds(
+            {all_forms_reservation_key(1, "Arceus"): [123]},
+            1,
+            "Arceus",
+        )
+
+        self.assertEqual(
+            embeds[0].description,
+            "all forms of arceus <@123>",
+        )
+
+    def test_all_forms_search_paginates_form_entries_at_twenty(self) -> None:
+        reservations = {
+            reservation_key(1, f"Arceus form{i}"): [i]
+            for i in range(25)
+        }
+
+        embeds = format_all_forms_reservation_embeds(
+            reservations,
+            1,
+            "Arceus",
+        )
+
+        self.assertEqual(
+            [len(embed.description.splitlines()) for embed in embeds],
+            [20, 5],
+        )
+        self.assertEqual(
+            [embed.footer.text for embed in embeds],
+            ["Page 1 of 2", "Page 2 of 2"],
         )
 
     def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:

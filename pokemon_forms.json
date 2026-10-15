@@ -1,0 +1,3371 @@
+{
+  "_source": "PokeAPI CSV: pokemon_forms.csv, pokemon.csv, pokemon_species.csv, pokemon_types.csv",
+  "_regional_forms_excluded": true,
+  "forms": {
+    "venusaur": [
+      {
+        "identifier": "venusaur",
+        "display_name": "venusaur"
+      },
+      {
+        "identifier": "venusaur-gmax",
+        "display_name": "gmax venusaur"
+      },
+      {
+        "identifier": "venusaur-mega",
+        "display_name": "mega venusaur"
+      }
+    ],
+    "charizard": [
+      {
+        "identifier": "charizard",
+        "display_name": "charizard"
+      },
+      {
+        "identifier": "charizard-gmax",
+        "display_name": "gmax charizard"
+      },
+      {
+        "identifier": "charizard-mega-x",
+        "display_name": "mega-x charizard"
+      },
+      {
+        "identifier": "charizard-mega-y",
+        "display_name": "mega-y charizard"
+      }
+    ],
+    "blastoise": [
+      {
+        "identifier": "blastoise",
+        "display_name": "blastoise"
+      },
+      {
+        "identifier": "blastoise-gmax",
+        "display_name": "gmax blastoise"
+      },
+      {
+        "identifier": "blastoise-mega",
+        "display_name": "mega blastoise"
+      }
+    ],
+    "butterfree": [
+      {
+        "identifier": "butterfree",
+        "display_name": "butterfree"
+      },
+      {
+        "identifier": "butterfree-gmax",
+        "display_name": "gmax butterfree"
+      }
+    ],
+    "beedrill": [
+      {
+        "identifier": "beedrill",
+        "display_name": "beedrill"
+      },
+      {
+        "identifier": "beedrill-mega",
+        "display_name": "mega beedrill"
+      }
+    ],
+    "pidgeot": [
+      {
+        "identifier": "pidgeot",
+        "display_name": "pidgeot"
+      },
+      {
+        "identifier": "pidgeot-mega",
+        "display_name": "mega pidgeot"
+      }
+    ],
+    "pikachu": [
+      {
+        "identifier": "pikachu",
+        "display_name": "pikachu"
+      },
+      {
+        "identifier": "pikachu-gmax",
+        "display_name": "gmax pikachu"
+      },
+      {
+        "identifier": "pikachu-cosplay",
+        "display_name": "cosplay pikachu"
+      },
+      {
+        "identifier": "pikachu-rock-star",
+        "display_name": "rock-star pikachu"
+      },
+      {
+        "identifier": "pikachu-belle",
+        "display_name": "belle pikachu"
+      },
+      {
+        "identifier": "pikachu-pop-star",
+        "display_name": "pop-star pikachu"
+      },
+      {
+        "identifier": "pikachu-phd",
+        "display_name": "phd pikachu"
+      },
+      {
+        "identifier": "pikachu-libre",
+        "display_name": "libre pikachu"
+      },
+      {
+        "identifier": "pikachu-original-cap",
+        "display_name": "original-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-hoenn-cap",
+        "display_name": "hoenn-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-sinnoh-cap",
+        "display_name": "sinnoh-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-unova-cap",
+        "display_name": "unova-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-kalos-cap",
+        "display_name": "kalos-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-alola-cap",
+        "display_name": "alola-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-partner-cap",
+        "display_name": "partner-cap pikachu"
+      },
+      {
+        "identifier": "pikachu-starter",
+        "display_name": "starter pikachu"
+      },
+      {
+        "identifier": "pikachu-world-cap",
+        "display_name": "world-cap pikachu"
+      }
+    ],
+    "raichu": [
+      {
+        "identifier": "raichu",
+        "display_name": "raichu"
+      },
+      {
+        "identifier": "raichu-mega-x",
+        "display_name": "mega-x raichu"
+      },
+      {
+        "identifier": "raichu-mega-y",
+        "display_name": "mega-y raichu"
+      }
+    ],
+    "clefable": [
+      {
+        "identifier": "clefable",
+        "display_name": "clefable"
+      },
+      {
+        "identifier": "clefable-mega",
+        "display_name": "mega clefable"
+      }
+    ],
+    "meowth": [
+      {
+        "identifier": "meowth",
+        "display_name": "meowth"
+      },
+      {
+        "identifier": "meowth-gmax",
+        "display_name": "gmax meowth"
+      }
+    ],
+    "alakazam": [
+      {
+        "identifier": "alakazam",
+        "display_name": "alakazam"
+      },
+      {
+        "identifier": "alakazam-mega",
+        "display_name": "mega alakazam"
+      }
+    ],
+    "machamp": [
+      {
+        "identifier": "machamp",
+        "display_name": "machamp"
+      },
+      {
+        "identifier": "machamp-gmax",
+        "display_name": "gmax machamp"
+      }
+    ],
+    "victreebel": [
+      {
+        "identifier": "victreebel",
+        "display_name": "victreebel"
+      },
+      {
+        "identifier": "victreebel-mega",
+        "display_name": "mega victreebel"
+      }
+    ],
+    "slowbro": [
+      {
+        "identifier": "slowbro",
+        "display_name": "slowbro"
+      },
+      {
+        "identifier": "slowbro-mega",
+        "display_name": "mega slowbro"
+      }
+    ],
+    "gengar": [
+      {
+        "identifier": "gengar",
+        "display_name": "gengar"
+      },
+      {
+        "identifier": "gengar-gmax",
+        "display_name": "gmax gengar"
+      },
+      {
+        "identifier": "gengar-mega",
+        "display_name": "mega gengar"
+      }
+    ],
+    "kingler": [
+      {
+        "identifier": "kingler",
+        "display_name": "kingler"
+      },
+      {
+        "identifier": "kingler-gmax",
+        "display_name": "gmax kingler"
+      }
+    ],
+    "marowak": [
+      {
+        "identifier": "marowak",
+        "display_name": "marowak"
+      },
+      {
+        "identifier": "marowak-totem",
+        "display_name": "totem marowak"
+      }
+    ],
+    "kangaskhan": [
+      {
+        "identifier": "kangaskhan",
+        "display_name": "kangaskhan"
+      },
+      {
+        "identifier": "kangaskhan-mega",
+        "display_name": "mega kangaskhan"
+      }
+    ],
+    "starmie": [
+      {
+        "identifier": "starmie",
+        "display_name": "starmie"
+      },
+      {
+        "identifier": "starmie-mega",
+        "display_name": "mega starmie"
+      }
+    ],
+    "pinsir": [
+      {
+        "identifier": "pinsir",
+        "display_name": "pinsir"
+      },
+      {
+        "identifier": "pinsir-mega",
+        "display_name": "mega pinsir"
+      }
+    ],
+    "gyarados": [
+      {
+        "identifier": "gyarados",
+        "display_name": "gyarados"
+      },
+      {
+        "identifier": "gyarados-mega",
+        "display_name": "mega gyarados"
+      }
+    ],
+    "lapras": [
+      {
+        "identifier": "lapras",
+        "display_name": "lapras"
+      },
+      {
+        "identifier": "lapras-gmax",
+        "display_name": "gmax lapras"
+      }
+    ],
+    "eevee": [
+      {
+        "identifier": "eevee",
+        "display_name": "eevee"
+      },
+      {
+        "identifier": "eevee-gmax",
+        "display_name": "gmax eevee"
+      },
+      {
+        "identifier": "eevee-starter",
+        "display_name": "starter eevee"
+      }
+    ],
+    "aerodactyl": [
+      {
+        "identifier": "aerodactyl",
+        "display_name": "aerodactyl"
+      },
+      {
+        "identifier": "aerodactyl-mega",
+        "display_name": "mega aerodactyl"
+      }
+    ],
+    "snorlax": [
+      {
+        "identifier": "snorlax",
+        "display_name": "snorlax"
+      },
+      {
+        "identifier": "snorlax-gmax",
+        "display_name": "gmax snorlax"
+      }
+    ],
+    "dragonite": [
+      {
+        "identifier": "dragonite",
+        "display_name": "dragonite"
+      },
+      {
+        "identifier": "dragonite-mega",
+        "display_name": "mega dragonite"
+      }
+    ],
+    "mewtwo": [
+      {
+        "identifier": "mewtwo",
+        "display_name": "mewtwo"
+      },
+      {
+        "identifier": "mewtwo-mega-x",
+        "display_name": "mega-x mewtwo"
+      },
+      {
+        "identifier": "mewtwo-mega-y",
+        "display_name": "mega-y mewtwo"
+      }
+    ],
+    "meganium": [
+      {
+        "identifier": "meganium",
+        "display_name": "meganium"
+      },
+      {
+        "identifier": "meganium-mega",
+        "display_name": "mega meganium"
+      }
+    ],
+    "feraligatr": [
+      {
+        "identifier": "feraligatr",
+        "display_name": "feraligatr"
+      },
+      {
+        "identifier": "feraligatr-mega",
+        "display_name": "mega feraligatr"
+      }
+    ],
+    "pichu": [
+      {
+        "identifier": "pichu",
+        "display_name": "pichu"
+      },
+      {
+        "identifier": "pichu-spiky-eared",
+        "display_name": "spiky-eared pichu"
+      }
+    ],
+    "ampharos": [
+      {
+        "identifier": "ampharos",
+        "display_name": "ampharos"
+      },
+      {
+        "identifier": "ampharos-mega",
+        "display_name": "mega ampharos"
+      }
+    ],
+    "unown": [
+      {
+        "identifier": "unown-a",
+        "display_name": "a unown"
+      },
+      {
+        "identifier": "unown-b",
+        "display_name": "b unown"
+      },
+      {
+        "identifier": "unown-c",
+        "display_name": "c unown"
+      },
+      {
+        "identifier": "unown-d",
+        "display_name": "d unown"
+      },
+      {
+        "identifier": "unown-e",
+        "display_name": "e unown"
+      },
+      {
+        "identifier": "unown-f",
+        "display_name": "f unown"
+      },
+      {
+        "identifier": "unown-g",
+        "display_name": "g unown"
+      },
+      {
+        "identifier": "unown-h",
+        "display_name": "h unown"
+      },
+      {
+        "identifier": "unown-i",
+        "display_name": "i unown"
+      },
+      {
+        "identifier": "unown-j",
+        "display_name": "j unown"
+      },
+      {
+        "identifier": "unown-k",
+        "display_name": "k unown"
+      },
+      {
+        "identifier": "unown-l",
+        "display_name": "l unown"
+      },
+      {
+        "identifier": "unown-m",
+        "display_name": "m unown"
+      },
+      {
+        "identifier": "unown-n",
+        "display_name": "n unown"
+      },
+      {
+        "identifier": "unown-o",
+        "display_name": "o unown"
+      },
+      {
+        "identifier": "unown-p",
+        "display_name": "p unown"
+      },
+      {
+        "identifier": "unown-q",
+        "display_name": "q unown"
+      },
+      {
+        "identifier": "unown-r",
+        "display_name": "r unown"
+      },
+      {
+        "identifier": "unown-s",
+        "display_name": "s unown"
+      },
+      {
+        "identifier": "unown-t",
+        "display_name": "t unown"
+      },
+      {
+        "identifier": "unown-u",
+        "display_name": "u unown"
+      },
+      {
+        "identifier": "unown-v",
+        "display_name": "v unown"
+      },
+      {
+        "identifier": "unown-w",
+        "display_name": "w unown"
+      },
+      {
+        "identifier": "unown-x",
+        "display_name": "x unown"
+      },
+      {
+        "identifier": "unown-y",
+        "display_name": "y unown"
+      },
+      {
+        "identifier": "unown-z",
+        "display_name": "z unown"
+      },
+      {
+        "identifier": "unown-exclamation",
+        "display_name": "exclamation unown"
+      },
+      {
+        "identifier": "unown-question",
+        "display_name": "question unown"
+      }
+    ],
+    "steelix": [
+      {
+        "identifier": "steelix",
+        "display_name": "steelix"
+      },
+      {
+        "identifier": "steelix-mega",
+        "display_name": "mega steelix"
+      }
+    ],
+    "scizor": [
+      {
+        "identifier": "scizor",
+        "display_name": "scizor"
+      },
+      {
+        "identifier": "scizor-mega",
+        "display_name": "mega scizor"
+      }
+    ],
+    "heracross": [
+      {
+        "identifier": "heracross",
+        "display_name": "heracross"
+      },
+      {
+        "identifier": "heracross-mega",
+        "display_name": "mega heracross"
+      }
+    ],
+    "skarmory": [
+      {
+        "identifier": "skarmory",
+        "display_name": "skarmory"
+      },
+      {
+        "identifier": "skarmory-mega",
+        "display_name": "mega skarmory"
+      }
+    ],
+    "houndoom": [
+      {
+        "identifier": "houndoom",
+        "display_name": "houndoom"
+      },
+      {
+        "identifier": "houndoom-mega",
+        "display_name": "mega houndoom"
+      }
+    ],
+    "tyranitar": [
+      {
+        "identifier": "tyranitar",
+        "display_name": "tyranitar"
+      },
+      {
+        "identifier": "tyranitar-mega",
+        "display_name": "mega tyranitar"
+      }
+    ],
+    "sceptile": [
+      {
+        "identifier": "sceptile",
+        "display_name": "sceptile"
+      },
+      {
+        "identifier": "sceptile-mega",
+        "display_name": "mega sceptile"
+      }
+    ],
+    "blaziken": [
+      {
+        "identifier": "blaziken",
+        "display_name": "blaziken"
+      },
+      {
+        "identifier": "blaziken-mega",
+        "display_name": "mega blaziken"
+      }
+    ],
+    "swampert": [
+      {
+        "identifier": "swampert",
+        "display_name": "swampert"
+      },
+      {
+        "identifier": "swampert-mega",
+        "display_name": "mega swampert"
+      }
+    ],
+    "gardevoir": [
+      {
+        "identifier": "gardevoir",
+        "display_name": "gardevoir"
+      },
+      {
+        "identifier": "gardevoir-mega",
+        "display_name": "mega gardevoir"
+      }
+    ],
+    "sableye": [
+      {
+        "identifier": "sableye",
+        "display_name": "sableye"
+      },
+      {
+        "identifier": "sableye-mega",
+        "display_name": "mega sableye"
+      }
+    ],
+    "mawile": [
+      {
+        "identifier": "mawile",
+        "display_name": "mawile"
+      },
+      {
+        "identifier": "mawile-mega",
+        "display_name": "mega mawile"
+      }
+    ],
+    "aggron": [
+      {
+        "identifier": "aggron",
+        "display_name": "aggron"
+      },
+      {
+        "identifier": "aggron-mega",
+        "display_name": "mega aggron"
+      }
+    ],
+    "medicham": [
+      {
+        "identifier": "medicham",
+        "display_name": "medicham"
+      },
+      {
+        "identifier": "medicham-mega",
+        "display_name": "mega medicham"
+      }
+    ],
+    "manectric": [
+      {
+        "identifier": "manectric",
+        "display_name": "manectric"
+      },
+      {
+        "identifier": "manectric-mega",
+        "display_name": "mega manectric"
+      }
+    ],
+    "sharpedo": [
+      {
+        "identifier": "sharpedo",
+        "display_name": "sharpedo"
+      },
+      {
+        "identifier": "sharpedo-mega",
+        "display_name": "mega sharpedo"
+      }
+    ],
+    "camerupt": [
+      {
+        "identifier": "camerupt",
+        "display_name": "camerupt"
+      },
+      {
+        "identifier": "camerupt-mega",
+        "display_name": "mega camerupt"
+      }
+    ],
+    "altaria": [
+      {
+        "identifier": "altaria",
+        "display_name": "altaria"
+      },
+      {
+        "identifier": "altaria-mega",
+        "display_name": "mega altaria"
+      }
+    ],
+    "castform": [
+      {
+        "identifier": "castform",
+        "display_name": "castform"
+      },
+      {
+        "identifier": "castform-sunny",
+        "display_name": "sunny castform"
+      },
+      {
+        "identifier": "castform-rainy",
+        "display_name": "rainy castform"
+      },
+      {
+        "identifier": "castform-snowy",
+        "display_name": "snowy castform"
+      }
+    ],
+    "banette": [
+      {
+        "identifier": "banette",
+        "display_name": "banette"
+      },
+      {
+        "identifier": "banette-mega",
+        "display_name": "mega banette"
+      }
+    ],
+    "chimecho": [
+      {
+        "identifier": "chimecho",
+        "display_name": "chimecho"
+      },
+      {
+        "identifier": "chimecho-mega",
+        "display_name": "mega chimecho"
+      }
+    ],
+    "absol": [
+      {
+        "identifier": "absol",
+        "display_name": "absol"
+      },
+      {
+        "identifier": "absol-mega",
+        "display_name": "mega absol"
+      },
+      {
+        "identifier": "absol-mega-z",
+        "display_name": "mega-z absol"
+      }
+    ],
+    "glalie": [
+      {
+        "identifier": "glalie",
+        "display_name": "glalie"
+      },
+      {
+        "identifier": "glalie-mega",
+        "display_name": "mega glalie"
+      }
+    ],
+    "salamence": [
+      {
+        "identifier": "salamence",
+        "display_name": "salamence"
+      },
+      {
+        "identifier": "salamence-mega",
+        "display_name": "mega salamence"
+      }
+    ],
+    "metagross": [
+      {
+        "identifier": "metagross",
+        "display_name": "metagross"
+      },
+      {
+        "identifier": "metagross-mega",
+        "display_name": "mega metagross"
+      }
+    ],
+    "latias": [
+      {
+        "identifier": "latias",
+        "display_name": "latias"
+      },
+      {
+        "identifier": "latias-mega",
+        "display_name": "mega latias"
+      }
+    ],
+    "latios": [
+      {
+        "identifier": "latios",
+        "display_name": "latios"
+      },
+      {
+        "identifier": "latios-mega",
+        "display_name": "mega latios"
+      }
+    ],
+    "kyogre": [
+      {
+        "identifier": "kyogre",
+        "display_name": "kyogre"
+      },
+      {
+        "identifier": "kyogre-primal",
+        "display_name": "primal kyogre"
+      }
+    ],
+    "groudon": [
+      {
+        "identifier": "groudon",
+        "display_name": "groudon"
+      },
+      {
+        "identifier": "groudon-primal",
+        "display_name": "primal groudon"
+      }
+    ],
+    "rayquaza": [
+      {
+        "identifier": "rayquaza",
+        "display_name": "rayquaza"
+      },
+      {
+        "identifier": "rayquaza-mega",
+        "display_name": "mega rayquaza"
+      }
+    ],
+    "deoxys": [
+      {
+        "identifier": "deoxys-normal",
+        "display_name": "normal deoxys"
+      },
+      {
+        "identifier": "deoxys-attack",
+        "display_name": "attack deoxys"
+      },
+      {
+        "identifier": "deoxys-defense",
+        "display_name": "defense deoxys"
+      },
+      {
+        "identifier": "deoxys-speed",
+        "display_name": "speed deoxys"
+      }
+    ],
+    "staraptor": [
+      {
+        "identifier": "staraptor",
+        "display_name": "staraptor"
+      },
+      {
+        "identifier": "staraptor-mega",
+        "display_name": "mega staraptor"
+      }
+    ],
+    "burmy": [
+      {
+        "identifier": "burmy-plant",
+        "display_name": "plant burmy"
+      },
+      {
+        "identifier": "burmy-sandy",
+        "display_name": "sandy burmy"
+      },
+      {
+        "identifier": "burmy-trash",
+        "display_name": "trash burmy"
+      }
+    ],
+    "wormadam": [
+      {
+        "identifier": "wormadam-plant",
+        "display_name": "plant wormadam"
+      },
+      {
+        "identifier": "wormadam-sandy",
+        "display_name": "sandy wormadam"
+      },
+      {
+        "identifier": "wormadam-trash",
+        "display_name": "trash wormadam"
+      }
+    ],
+    "mothim": [
+      {
+        "identifier": "mothim-plant",
+        "display_name": "plant mothim"
+      },
+      {
+        "identifier": "mothim-sandy",
+        "display_name": "sandy mothim"
+      },
+      {
+        "identifier": "mothim-trash",
+        "display_name": "trash mothim"
+      }
+    ],
+    "cherrim": [
+      {
+        "identifier": "cherrim-overcast",
+        "display_name": "overcast cherrim"
+      },
+      {
+        "identifier": "cherrim-sunshine",
+        "display_name": "sunshine cherrim"
+      }
+    ],
+    "shellos": [
+      {
+        "identifier": "shellos-west",
+        "display_name": "west shellos"
+      },
+      {
+        "identifier": "shellos-east",
+        "display_name": "east shellos"
+      }
+    ],
+    "gastrodon": [
+      {
+        "identifier": "gastrodon-west",
+        "display_name": "west gastrodon"
+      },
+      {
+        "identifier": "gastrodon-east",
+        "display_name": "east gastrodon"
+      }
+    ],
+    "lopunny": [
+      {
+        "identifier": "lopunny",
+        "display_name": "lopunny"
+      },
+      {
+        "identifier": "lopunny-mega",
+        "display_name": "mega lopunny"
+      }
+    ],
+    "garchomp": [
+      {
+        "identifier": "garchomp",
+        "display_name": "garchomp"
+      },
+      {
+        "identifier": "garchomp-mega",
+        "display_name": "mega garchomp"
+      },
+      {
+        "identifier": "garchomp-mega-z",
+        "display_name": "mega-z garchomp"
+      }
+    ],
+    "lucario": [
+      {
+        "identifier": "lucario",
+        "display_name": "lucario"
+      },
+      {
+        "identifier": "lucario-mega",
+        "display_name": "mega lucario"
+      },
+      {
+        "identifier": "lucario-mega-z",
+        "display_name": "mega-z lucario"
+      }
+    ],
+    "abomasnow": [
+      {
+        "identifier": "abomasnow",
+        "display_name": "abomasnow"
+      },
+      {
+        "identifier": "abomasnow-mega",
+        "display_name": "mega abomasnow"
+      }
+    ],
+    "gallade": [
+      {
+        "identifier": "gallade",
+        "display_name": "gallade"
+      },
+      {
+        "identifier": "gallade-mega",
+        "display_name": "mega gallade"
+      }
+    ],
+    "froslass": [
+      {
+        "identifier": "froslass",
+        "display_name": "froslass"
+      },
+      {
+        "identifier": "froslass-mega",
+        "display_name": "mega froslass"
+      }
+    ],
+    "rotom": [
+      {
+        "identifier": "rotom",
+        "display_name": "rotom"
+      },
+      {
+        "identifier": "rotom-heat",
+        "display_name": "heat rotom"
+      },
+      {
+        "identifier": "rotom-wash",
+        "display_name": "wash rotom"
+      },
+      {
+        "identifier": "rotom-frost",
+        "display_name": "frost rotom"
+      },
+      {
+        "identifier": "rotom-fan",
+        "display_name": "fan rotom"
+      },
+      {
+        "identifier": "rotom-mow",
+        "display_name": "mow rotom"
+      }
+    ],
+    "dialga": [
+      {
+        "identifier": "dialga",
+        "display_name": "dialga"
+      },
+      {
+        "identifier": "dialga-origin",
+        "display_name": "origin dialga"
+      }
+    ],
+    "palkia": [
+      {
+        "identifier": "palkia",
+        "display_name": "palkia"
+      },
+      {
+        "identifier": "palkia-origin",
+        "display_name": "origin palkia"
+      }
+    ],
+    "heatran": [
+      {
+        "identifier": "heatran",
+        "display_name": "heatran"
+      },
+      {
+        "identifier": "heatran-mega",
+        "display_name": "mega heatran"
+      }
+    ],
+    "giratina": [
+      {
+        "identifier": "giratina-altered",
+        "display_name": "altered giratina"
+      },
+      {
+        "identifier": "giratina-origin",
+        "display_name": "origin giratina"
+      }
+    ],
+    "darkrai": [
+      {
+        "identifier": "darkrai",
+        "display_name": "darkrai"
+      },
+      {
+        "identifier": "darkrai-mega",
+        "display_name": "mega darkrai"
+      }
+    ],
+    "shaymin": [
+      {
+        "identifier": "shaymin-land",
+        "display_name": "land shaymin"
+      },
+      {
+        "identifier": "shaymin-sky",
+        "display_name": "sky shaymin"
+      }
+    ],
+    "arceus": [
+      {
+        "identifier": "arceus-normal",
+        "display_name": "normal arceus"
+      },
+      {
+        "identifier": "arceus-fighting",
+        "display_name": "fighting arceus"
+      },
+      {
+        "identifier": "arceus-flying",
+        "display_name": "flying arceus"
+      },
+      {
+        "identifier": "arceus-poison",
+        "display_name": "poison arceus"
+      },
+      {
+        "identifier": "arceus-ground",
+        "display_name": "ground arceus"
+      },
+      {
+        "identifier": "arceus-rock",
+        "display_name": "rock arceus"
+      },
+      {
+        "identifier": "arceus-bug",
+        "display_name": "bug arceus"
+      },
+      {
+        "identifier": "arceus-ghost",
+        "display_name": "ghost arceus"
+      },
+      {
+        "identifier": "arceus-steel",
+        "display_name": "steel arceus"
+      },
+      {
+        "identifier": "arceus-fire",
+        "display_name": "fire arceus"
+      },
+      {
+        "identifier": "arceus-water",
+        "display_name": "water arceus"
+      },
+      {
+        "identifier": "arceus-grass",
+        "display_name": "grass arceus"
+      },
+      {
+        "identifier": "arceus-electric",
+        "display_name": "electric arceus"
+      },
+      {
+        "identifier": "arceus-psychic",
+        "display_name": "psychic arceus"
+      },
+      {
+        "identifier": "arceus-ice",
+        "display_name": "ice arceus"
+      },
+      {
+        "identifier": "arceus-dragon",
+        "display_name": "dragon arceus"
+      },
+      {
+        "identifier": "arceus-dark",
+        "display_name": "dark arceus"
+      },
+      {
+        "identifier": "arceus-fairy",
+        "display_name": "fairy arceus"
+      }
+    ],
+    "emboar": [
+      {
+        "identifier": "emboar",
+        "display_name": "emboar"
+      },
+      {
+        "identifier": "emboar-mega",
+        "display_name": "mega emboar"
+      }
+    ],
+    "excadrill": [
+      {
+        "identifier": "excadrill",
+        "display_name": "excadrill"
+      },
+      {
+        "identifier": "excadrill-mega",
+        "display_name": "mega excadrill"
+      }
+    ],
+    "audino": [
+      {
+        "identifier": "audino",
+        "display_name": "audino"
+      },
+      {
+        "identifier": "audino-mega",
+        "display_name": "mega audino"
+      }
+    ],
+    "scolipede": [
+      {
+        "identifier": "scolipede",
+        "display_name": "scolipede"
+      },
+      {
+        "identifier": "scolipede-mega",
+        "display_name": "mega scolipede"
+      }
+    ],
+    "basculin": [
+      {
+        "identifier": "basculin-red-striped",
+        "display_name": "red-striped basculin"
+      },
+      {
+        "identifier": "basculin-blue-striped",
+        "display_name": "blue-striped basculin"
+      },
+      {
+        "identifier": "basculin-white-striped",
+        "display_name": "white-striped basculin"
+      }
+    ],
+    "darmanitan": [
+      {
+        "identifier": "darmanitan-standard",
+        "display_name": "standard darmanitan"
+      },
+      {
+        "identifier": "darmanitan-zen",
+        "display_name": "zen darmanitan"
+      }
+    ],
+    "scrafty": [
+      {
+        "identifier": "scrafty",
+        "display_name": "scrafty"
+      },
+      {
+        "identifier": "scrafty-mega",
+        "display_name": "mega scrafty"
+      }
+    ],
+    "garbodor": [
+      {
+        "identifier": "garbodor",
+        "display_name": "garbodor"
+      },
+      {
+        "identifier": "garbodor-gmax",
+        "display_name": "gmax garbodor"
+      }
+    ],
+    "deerling": [
+      {
+        "identifier": "deerling-spring",
+        "display_name": "spring deerling"
+      },
+      {
+        "identifier": "deerling-summer",
+        "display_name": "summer deerling"
+      },
+      {
+        "identifier": "deerling-autumn",
+        "display_name": "autumn deerling"
+      },
+      {
+        "identifier": "deerling-winter",
+        "display_name": "winter deerling"
+      }
+    ],
+    "sawsbuck": [
+      {
+        "identifier": "sawsbuck-spring",
+        "display_name": "spring sawsbuck"
+      },
+      {
+        "identifier": "sawsbuck-summer",
+        "display_name": "summer sawsbuck"
+      },
+      {
+        "identifier": "sawsbuck-autumn",
+        "display_name": "autumn sawsbuck"
+      },
+      {
+        "identifier": "sawsbuck-winter",
+        "display_name": "winter sawsbuck"
+      }
+    ],
+    "frillish": [
+      {
+        "identifier": "frillish-male",
+        "display_name": "male frillish"
+      },
+      {
+        "identifier": "frillish-female",
+        "display_name": "female frillish"
+      }
+    ],
+    "jellicent": [
+      {
+        "identifier": "jellicent-male",
+        "display_name": "male jellicent"
+      },
+      {
+        "identifier": "jellicent-female",
+        "display_name": "female jellicent"
+      }
+    ],
+    "eelektross": [
+      {
+        "identifier": "eelektross",
+        "display_name": "eelektross"
+      },
+      {
+        "identifier": "eelektross-mega",
+        "display_name": "mega eelektross"
+      }
+    ],
+    "chandelure": [
+      {
+        "identifier": "chandelure",
+        "display_name": "chandelure"
+      },
+      {
+        "identifier": "chandelure-mega",
+        "display_name": "mega chandelure"
+      }
+    ],
+    "golurk": [
+      {
+        "identifier": "golurk",
+        "display_name": "golurk"
+      },
+      {
+        "identifier": "golurk-mega",
+        "display_name": "mega golurk"
+      }
+    ],
+    "tornadus": [
+      {
+        "identifier": "tornadus-incarnate",
+        "display_name": "incarnate tornadus"
+      },
+      {
+        "identifier": "tornadus-therian",
+        "display_name": "therian tornadus"
+      }
+    ],
+    "thundurus": [
+      {
+        "identifier": "thundurus-incarnate",
+        "display_name": "incarnate thundurus"
+      },
+      {
+        "identifier": "thundurus-therian",
+        "display_name": "therian thundurus"
+      }
+    ],
+    "landorus": [
+      {
+        "identifier": "landorus-incarnate",
+        "display_name": "incarnate landorus"
+      },
+      {
+        "identifier": "landorus-therian",
+        "display_name": "therian landorus"
+      }
+    ],
+    "kyurem": [
+      {
+        "identifier": "kyurem",
+        "display_name": "kyurem"
+      },
+      {
+        "identifier": "kyurem-white",
+        "display_name": "white kyurem"
+      },
+      {
+        "identifier": "kyurem-black",
+        "display_name": "black kyurem"
+      }
+    ],
+    "keldeo": [
+      {
+        "identifier": "keldeo-ordinary",
+        "display_name": "ordinary keldeo"
+      },
+      {
+        "identifier": "keldeo-resolute",
+        "display_name": "resolute keldeo"
+      }
+    ],
+    "meloetta": [
+      {
+        "identifier": "meloetta-aria",
+        "display_name": "aria meloetta"
+      },
+      {
+        "identifier": "meloetta-pirouette",
+        "display_name": "pirouette meloetta"
+      }
+    ],
+    "genesect": [
+      {
+        "identifier": "genesect",
+        "display_name": "genesect"
+      },
+      {
+        "identifier": "genesect-douse",
+        "display_name": "douse genesect"
+      },
+      {
+        "identifier": "genesect-shock",
+        "display_name": "shock genesect"
+      },
+      {
+        "identifier": "genesect-burn",
+        "display_name": "burn genesect"
+      },
+      {
+        "identifier": "genesect-chill",
+        "display_name": "chill genesect"
+      }
+    ],
+    "chesnaught": [
+      {
+        "identifier": "chesnaught",
+        "display_name": "chesnaught"
+      },
+      {
+        "identifier": "chesnaught-mega",
+        "display_name": "mega chesnaught"
+      }
+    ],
+    "delphox": [
+      {
+        "identifier": "delphox",
+        "display_name": "delphox"
+      },
+      {
+        "identifier": "delphox-mega",
+        "display_name": "mega delphox"
+      }
+    ],
+    "greninja": [
+      {
+        "identifier": "greninja",
+        "display_name": "greninja"
+      },
+      {
+        "identifier": "greninja-battle-bond",
+        "display_name": "battle-bond greninja"
+      },
+      {
+        "identifier": "greninja-ash",
+        "display_name": "ash greninja"
+      },
+      {
+        "identifier": "greninja-mega",
+        "display_name": "mega greninja"
+      }
+    ],
+    "scatterbug": [
+      {
+        "identifier": "scatterbug-icy-snow",
+        "display_name": "icy-snow scatterbug"
+      },
+      {
+        "identifier": "scatterbug-polar",
+        "display_name": "polar scatterbug"
+      },
+      {
+        "identifier": "scatterbug-tundra",
+        "display_name": "tundra scatterbug"
+      },
+      {
+        "identifier": "scatterbug-continental",
+        "display_name": "continental scatterbug"
+      },
+      {
+        "identifier": "scatterbug-garden",
+        "display_name": "garden scatterbug"
+      },
+      {
+        "identifier": "scatterbug-elegant",
+        "display_name": "elegant scatterbug"
+      },
+      {
+        "identifier": "scatterbug-meadow",
+        "display_name": "meadow scatterbug"
+      },
+      {
+        "identifier": "scatterbug-modern",
+        "display_name": "modern scatterbug"
+      },
+      {
+        "identifier": "scatterbug-marine",
+        "display_name": "marine scatterbug"
+      },
+      {
+        "identifier": "scatterbug-archipelago",
+        "display_name": "archipelago scatterbug"
+      },
+      {
+        "identifier": "scatterbug-high-plains",
+        "display_name": "high-plains scatterbug"
+      },
+      {
+        "identifier": "scatterbug-sandstorm",
+        "display_name": "sandstorm scatterbug"
+      },
+      {
+        "identifier": "scatterbug-river",
+        "display_name": "river scatterbug"
+      },
+      {
+        "identifier": "scatterbug-monsoon",
+        "display_name": "monsoon scatterbug"
+      },
+      {
+        "identifier": "scatterbug-savanna",
+        "display_name": "savanna scatterbug"
+      },
+      {
+        "identifier": "scatterbug-sun",
+        "display_name": "sun scatterbug"
+      },
+      {
+        "identifier": "scatterbug-ocean",
+        "display_name": "ocean scatterbug"
+      },
+      {
+        "identifier": "scatterbug-jungle",
+        "display_name": "jungle scatterbug"
+      },
+      {
+        "identifier": "scatterbug-fancy",
+        "display_name": "fancy scatterbug"
+      },
+      {
+        "identifier": "scatterbug-poke-ball",
+        "display_name": "poke-ball scatterbug"
+      }
+    ],
+    "spewpa": [
+      {
+        "identifier": "spewpa-icy-snow",
+        "display_name": "icy-snow spewpa"
+      },
+      {
+        "identifier": "spewpa-polar",
+        "display_name": "polar spewpa"
+      },
+      {
+        "identifier": "spewpa-tundra",
+        "display_name": "tundra spewpa"
+      },
+      {
+        "identifier": "spewpa-continental",
+        "display_name": "continental spewpa"
+      },
+      {
+        "identifier": "spewpa-garden",
+        "display_name": "garden spewpa"
+      },
+      {
+        "identifier": "spewpa-elegant",
+        "display_name": "elegant spewpa"
+      },
+      {
+        "identifier": "spewpa-meadow",
+        "display_name": "meadow spewpa"
+      },
+      {
+        "identifier": "spewpa-modern",
+        "display_name": "modern spewpa"
+      },
+      {
+        "identifier": "spewpa-marine",
+        "display_name": "marine spewpa"
+      },
+      {
+        "identifier": "spewpa-archipelago",
+        "display_name": "archipelago spewpa"
+      },
+      {
+        "identifier": "spewpa-high-plains",
+        "display_name": "high-plains spewpa"
+      },
+      {
+        "identifier": "spewpa-sandstorm",
+        "display_name": "sandstorm spewpa"
+      },
+      {
+        "identifier": "spewpa-river",
+        "display_name": "river spewpa"
+      },
+      {
+        "identifier": "spewpa-monsoon",
+        "display_name": "monsoon spewpa"
+      },
+      {
+        "identifier": "spewpa-savanna",
+        "display_name": "savanna spewpa"
+      },
+      {
+        "identifier": "spewpa-sun",
+        "display_name": "sun spewpa"
+      },
+      {
+        "identifier": "spewpa-ocean",
+        "display_name": "ocean spewpa"
+      },
+      {
+        "identifier": "spewpa-jungle",
+        "display_name": "jungle spewpa"
+      },
+      {
+        "identifier": "spewpa-fancy",
+        "display_name": "fancy spewpa"
+      },
+      {
+        "identifier": "spewpa-poke-ball",
+        "display_name": "poke-ball spewpa"
+      }
+    ],
+    "vivillon": [
+      {
+        "identifier": "vivillon-meadow",
+        "display_name": "meadow vivillon"
+      },
+      {
+        "identifier": "vivillon-icy-snow",
+        "display_name": "icy-snow vivillon"
+      },
+      {
+        "identifier": "vivillon-polar",
+        "display_name": "polar vivillon"
+      },
+      {
+        "identifier": "vivillon-tundra",
+        "display_name": "tundra vivillon"
+      },
+      {
+        "identifier": "vivillon-continental",
+        "display_name": "continental vivillon"
+      },
+      {
+        "identifier": "vivillon-garden",
+        "display_name": "garden vivillon"
+      },
+      {
+        "identifier": "vivillon-elegant",
+        "display_name": "elegant vivillon"
+      },
+      {
+        "identifier": "vivillon-modern",
+        "display_name": "modern vivillon"
+      },
+      {
+        "identifier": "vivillon-marine",
+        "display_name": "marine vivillon"
+      },
+      {
+        "identifier": "vivillon-archipelago",
+        "display_name": "archipelago vivillon"
+      },
+      {
+        "identifier": "vivillon-high-plains",
+        "display_name": "high-plains vivillon"
+      },
+      {
+        "identifier": "vivillon-sandstorm",
+        "display_name": "sandstorm vivillon"
+      },
+      {
+        "identifier": "vivillon-river",
+        "display_name": "river vivillon"
+      },
+      {
+        "identifier": "vivillon-monsoon",
+        "display_name": "monsoon vivillon"
+      },
+      {
+        "identifier": "vivillon-savanna",
+        "display_name": "savanna vivillon"
+      },
+      {
+        "identifier": "vivillon-sun",
+        "display_name": "sun vivillon"
+      },
+      {
+        "identifier": "vivillon-ocean",
+        "display_name": "ocean vivillon"
+      },
+      {
+        "identifier": "vivillon-jungle",
+        "display_name": "jungle vivillon"
+      },
+      {
+        "identifier": "vivillon-fancy",
+        "display_name": "fancy vivillon"
+      },
+      {
+        "identifier": "vivillon-poke-ball",
+        "display_name": "poke-ball vivillon"
+      }
+    ],
+    "pyroar": [
+      {
+        "identifier": "pyroar-male",
+        "display_name": "male pyroar"
+      },
+      {
+        "identifier": "pyroar-mega",
+        "display_name": "mega pyroar"
+      },
+      {
+        "identifier": "pyroar-female",
+        "display_name": "female pyroar"
+      }
+    ],
+    "flabebe": [
+      {
+        "identifier": "flabebe-red",
+        "display_name": "red flabebe"
+      },
+      {
+        "identifier": "flabebe-yellow",
+        "display_name": "yellow flabebe"
+      },
+      {
+        "identifier": "flabebe-orange",
+        "display_name": "orange flabebe"
+      },
+      {
+        "identifier": "flabebe-blue",
+        "display_name": "blue flabebe"
+      },
+      {
+        "identifier": "flabebe-white",
+        "display_name": "white flabebe"
+      }
+    ],
+    "floette": [
+      {
+        "identifier": "floette-red",
+        "display_name": "red floette"
+      },
+      {
+        "identifier": "floette-eternal",
+        "display_name": "eternal floette"
+      },
+      {
+        "identifier": "floette-mega",
+        "display_name": "mega floette"
+      },
+      {
+        "identifier": "floette-yellow",
+        "display_name": "yellow floette"
+      },
+      {
+        "identifier": "floette-orange",
+        "display_name": "orange floette"
+      },
+      {
+        "identifier": "floette-blue",
+        "display_name": "blue floette"
+      },
+      {
+        "identifier": "floette-white",
+        "display_name": "white floette"
+      }
+    ],
+    "florges": [
+      {
+        "identifier": "florges-red",
+        "display_name": "red florges"
+      },
+      {
+        "identifier": "florges-yellow",
+        "display_name": "yellow florges"
+      },
+      {
+        "identifier": "florges-orange",
+        "display_name": "orange florges"
+      },
+      {
+        "identifier": "florges-blue",
+        "display_name": "blue florges"
+      },
+      {
+        "identifier": "florges-white",
+        "display_name": "white florges"
+      }
+    ],
+    "furfrou": [
+      {
+        "identifier": "furfrou-natural",
+        "display_name": "natural furfrou"
+      },
+      {
+        "identifier": "furfrou-heart",
+        "display_name": "heart furfrou"
+      },
+      {
+        "identifier": "furfrou-star",
+        "display_name": "star furfrou"
+      },
+      {
+        "identifier": "furfrou-diamond",
+        "display_name": "diamond furfrou"
+      },
+      {
+        "identifier": "furfrou-debutante",
+        "display_name": "debutante furfrou"
+      },
+      {
+        "identifier": "furfrou-matron",
+        "display_name": "matron furfrou"
+      },
+      {
+        "identifier": "furfrou-dandy",
+        "display_name": "dandy furfrou"
+      },
+      {
+        "identifier": "furfrou-la-reine",
+        "display_name": "la-reine furfrou"
+      },
+      {
+        "identifier": "furfrou-kabuki",
+        "display_name": "kabuki furfrou"
+      },
+      {
+        "identifier": "furfrou-pharaoh",
+        "display_name": "pharaoh furfrou"
+      }
+    ],
+    "meowstic": [
+      {
+        "identifier": "meowstic-male",
+        "display_name": "male meowstic"
+      },
+      {
+        "identifier": "meowstic-female",
+        "display_name": "female meowstic"
+      },
+      {
+        "identifier": "meowstic-male-mega",
+        "display_name": "mega-male meowstic"
+      },
+      {
+        "identifier": "meowstic-female-mega",
+        "display_name": "mega-female meowstic"
+      }
+    ],
+    "aegislash": [
+      {
+        "identifier": "aegislash-shield",
+        "display_name": "shield aegislash"
+      },
+      {
+        "identifier": "aegislash-blade",
+        "display_name": "blade aegislash"
+      }
+    ],
+    "malamar": [
+      {
+        "identifier": "malamar",
+        "display_name": "malamar"
+      },
+      {
+        "identifier": "malamar-mega",
+        "display_name": "mega malamar"
+      }
+    ],
+    "barbaracle": [
+      {
+        "identifier": "barbaracle",
+        "display_name": "barbaracle"
+      },
+      {
+        "identifier": "barbaracle-mega",
+        "display_name": "mega barbaracle"
+      }
+    ],
+    "dragalge": [
+      {
+        "identifier": "dragalge",
+        "display_name": "dragalge"
+      },
+      {
+        "identifier": "dragalge-mega",
+        "display_name": "mega dragalge"
+      }
+    ],
+    "hawlucha": [
+      {
+        "identifier": "hawlucha",
+        "display_name": "hawlucha"
+      },
+      {
+        "identifier": "hawlucha-mega",
+        "display_name": "mega hawlucha"
+      }
+    ],
+    "pumpkaboo": [
+      {
+        "identifier": "pumpkaboo-average",
+        "display_name": "average pumpkaboo"
+      },
+      {
+        "identifier": "pumpkaboo-small",
+        "display_name": "small pumpkaboo"
+      },
+      {
+        "identifier": "pumpkaboo-large",
+        "display_name": "large pumpkaboo"
+      },
+      {
+        "identifier": "pumpkaboo-super",
+        "display_name": "super pumpkaboo"
+      }
+    ],
+    "gourgeist": [
+      {
+        "identifier": "gourgeist-average",
+        "display_name": "average gourgeist"
+      },
+      {
+        "identifier": "gourgeist-small",
+        "display_name": "small gourgeist"
+      },
+      {
+        "identifier": "gourgeist-large",
+        "display_name": "large gourgeist"
+      },
+      {
+        "identifier": "gourgeist-super",
+        "display_name": "super gourgeist"
+      }
+    ],
+    "xerneas": [
+      {
+        "identifier": "xerneas-neutral",
+        "display_name": "neutral xerneas"
+      },
+      {
+        "identifier": "xerneas-active",
+        "display_name": "active xerneas"
+      }
+    ],
+    "zygarde": [
+      {
+        "identifier": "zygarde-50",
+        "display_name": "50 zygarde"
+      },
+      {
+        "identifier": "zygarde-10",
+        "display_name": "10 zygarde"
+      },
+      {
+        "identifier": "zygarde-10-power-construct",
+        "display_name": "10-power-construct zygarde"
+      },
+      {
+        "identifier": "zygarde-50-power-construct",
+        "display_name": "50-power-construct zygarde"
+      },
+      {
+        "identifier": "zygarde-complete",
+        "display_name": "complete zygarde"
+      },
+      {
+        "identifier": "zygarde-mega",
+        "display_name": "mega zygarde"
+      }
+    ],
+    "diancie": [
+      {
+        "identifier": "diancie",
+        "display_name": "diancie"
+      },
+      {
+        "identifier": "diancie-mega",
+        "display_name": "mega diancie"
+      }
+    ],
+    "hoopa": [
+      {
+        "identifier": "hoopa",
+        "display_name": "confined hoopa"
+      },
+      {
+        "identifier": "hoopa-unbound",
+        "display_name": "unbound hoopa"
+      }
+    ],
+    "gumshoos": [
+      {
+        "identifier": "gumshoos",
+        "display_name": "gumshoos"
+      },
+      {
+        "identifier": "gumshoos-totem",
+        "display_name": "totem gumshoos"
+      }
+    ],
+    "vikavolt": [
+      {
+        "identifier": "vikavolt",
+        "display_name": "vikavolt"
+      },
+      {
+        "identifier": "vikavolt-totem",
+        "display_name": "totem vikavolt"
+      }
+    ],
+    "crabominable": [
+      {
+        "identifier": "crabominable",
+        "display_name": "crabominable"
+      },
+      {
+        "identifier": "crabominable-mega",
+        "display_name": "mega crabominable"
+      }
+    ],
+    "oricorio": [
+      {
+        "identifier": "oricorio-baile",
+        "display_name": "baile oricorio"
+      },
+      {
+        "identifier": "oricorio-pom-pom",
+        "display_name": "pom-pom oricorio"
+      },
+      {
+        "identifier": "oricorio-pau",
+        "display_name": "pau oricorio"
+      },
+      {
+        "identifier": "oricorio-sensu",
+        "display_name": "sensu oricorio"
+      }
+    ],
+    "ribombee": [
+      {
+        "identifier": "ribombee",
+        "display_name": "ribombee"
+      },
+      {
+        "identifier": "ribombee-totem",
+        "display_name": "totem ribombee"
+      }
+    ],
+    "rockruff": [
+      {
+        "identifier": "rockruff",
+        "display_name": "rockruff"
+      },
+      {
+        "identifier": "rockruff-own-tempo",
+        "display_name": "own-tempo rockruff"
+      }
+    ],
+    "lycanroc": [
+      {
+        "identifier": "lycanroc-midday",
+        "display_name": "midday lycanroc"
+      },
+      {
+        "identifier": "lycanroc-midnight",
+        "display_name": "midnight lycanroc"
+      },
+      {
+        "identifier": "lycanroc-dusk",
+        "display_name": "dusk lycanroc"
+      }
+    ],
+    "wishiwashi": [
+      {
+        "identifier": "wishiwashi-solo",
+        "display_name": "solo wishiwashi"
+      },
+      {
+        "identifier": "wishiwashi-school",
+        "display_name": "school wishiwashi"
+      }
+    ],
+    "araquanid": [
+      {
+        "identifier": "araquanid",
+        "display_name": "araquanid"
+      },
+      {
+        "identifier": "araquanid-totem",
+        "display_name": "totem araquanid"
+      }
+    ],
+    "lurantis": [
+      {
+        "identifier": "lurantis",
+        "display_name": "lurantis"
+      },
+      {
+        "identifier": "lurantis-totem",
+        "display_name": "totem lurantis"
+      }
+    ],
+    "salazzle": [
+      {
+        "identifier": "salazzle",
+        "display_name": "salazzle"
+      },
+      {
+        "identifier": "salazzle-totem",
+        "display_name": "totem salazzle"
+      }
+    ],
+    "golisopod": [
+      {
+        "identifier": "golisopod",
+        "display_name": "golisopod"
+      },
+      {
+        "identifier": "golisopod-mega",
+        "display_name": "mega golisopod"
+      }
+    ],
+    "silvally": [
+      {
+        "identifier": "silvally-normal",
+        "display_name": "normal silvally"
+      },
+      {
+        "identifier": "silvally-fighting",
+        "display_name": "fighting silvally"
+      },
+      {
+        "identifier": "silvally-flying",
+        "display_name": "flying silvally"
+      },
+      {
+        "identifier": "silvally-poison",
+        "display_name": "poison silvally"
+      },
+      {
+        "identifier": "silvally-ground",
+        "display_name": "ground silvally"
+      },
+      {
+        "identifier": "silvally-rock",
+        "display_name": "rock silvally"
+      },
+      {
+        "identifier": "silvally-bug",
+        "display_name": "bug silvally"
+      },
+      {
+        "identifier": "silvally-ghost",
+        "display_name": "ghost silvally"
+      },
+      {
+        "identifier": "silvally-steel",
+        "display_name": "steel silvally"
+      },
+      {
+        "identifier": "silvally-fire",
+        "display_name": "fire silvally"
+      },
+      {
+        "identifier": "silvally-water",
+        "display_name": "water silvally"
+      },
+      {
+        "identifier": "silvally-grass",
+        "display_name": "grass silvally"
+      },
+      {
+        "identifier": "silvally-electric",
+        "display_name": "electric silvally"
+      },
+      {
+        "identifier": "silvally-psychic",
+        "display_name": "psychic silvally"
+      },
+      {
+        "identifier": "silvally-ice",
+        "display_name": "ice silvally"
+      },
+      {
+        "identifier": "silvally-dragon",
+        "display_name": "dragon silvally"
+      },
+      {
+        "identifier": "silvally-dark",
+        "display_name": "dark silvally"
+      },
+      {
+        "identifier": "silvally-fairy",
+        "display_name": "fairy silvally"
+      }
+    ],
+    "minior": [
+      {
+        "identifier": "minior-red-meteor",
+        "display_name": "red-meteor minior"
+      },
+      {
+        "identifier": "minior-orange-meteor",
+        "display_name": "orange-meteor minior"
+      },
+      {
+        "identifier": "minior-yellow-meteor",
+        "display_name": "yellow-meteor minior"
+      },
+      {
+        "identifier": "minior-green-meteor",
+        "display_name": "green-meteor minior"
+      },
+      {
+        "identifier": "minior-blue-meteor",
+        "display_name": "blue-meteor minior"
+      },
+      {
+        "identifier": "minior-indigo-meteor",
+        "display_name": "indigo-meteor minior"
+      },
+      {
+        "identifier": "minior-violet-meteor",
+        "display_name": "violet-meteor minior"
+      },
+      {
+        "identifier": "minior-red",
+        "display_name": "red minior"
+      },
+      {
+        "identifier": "minior-orange",
+        "display_name": "orange minior"
+      },
+      {
+        "identifier": "minior-yellow",
+        "display_name": "yellow minior"
+      },
+      {
+        "identifier": "minior-green",
+        "display_name": "green minior"
+      },
+      {
+        "identifier": "minior-blue",
+        "display_name": "blue minior"
+      },
+      {
+        "identifier": "minior-indigo",
+        "display_name": "indigo minior"
+      },
+      {
+        "identifier": "minior-violet",
+        "display_name": "violet minior"
+      }
+    ],
+    "togedemaru": [
+      {
+        "identifier": "togedemaru",
+        "display_name": "togedemaru"
+      },
+      {
+        "identifier": "togedemaru-totem",
+        "display_name": "totem togedemaru"
+      }
+    ],
+    "mimikyu": [
+      {
+        "identifier": "mimikyu-disguised",
+        "display_name": "disguised mimikyu"
+      },
+      {
+        "identifier": "mimikyu-busted",
+        "display_name": "busted mimikyu"
+      },
+      {
+        "identifier": "mimikyu-totem-disguised",
+        "display_name": "totem-disguised mimikyu"
+      },
+      {
+        "identifier": "mimikyu-totem-busted",
+        "display_name": "totem-busted mimikyu"
+      }
+    ],
+    "drampa": [
+      {
+        "identifier": "drampa",
+        "display_name": "drampa"
+      },
+      {
+        "identifier": "drampa-mega",
+        "display_name": "mega drampa"
+      }
+    ],
+    "kommo-o": [
+      {
+        "identifier": "kommo-o",
+        "display_name": "kommo o"
+      },
+      {
+        "identifier": "kommo-o-totem",
+        "display_name": "totem kommo o"
+      }
+    ],
+    "necrozma": [
+      {
+        "identifier": "necrozma",
+        "display_name": "necrozma"
+      },
+      {
+        "identifier": "necrozma-dusk",
+        "display_name": "dusk necrozma"
+      },
+      {
+        "identifier": "necrozma-dawn",
+        "display_name": "dawn necrozma"
+      },
+      {
+        "identifier": "necrozma-ultra",
+        "display_name": "ultra necrozma"
+      }
+    ],
+    "magearna": [
+      {
+        "identifier": "magearna",
+        "display_name": "magearna"
+      },
+      {
+        "identifier": "magearna-original",
+        "display_name": "original magearna"
+      },
+      {
+        "identifier": "magearna-mega",
+        "display_name": "mega magearna"
+      },
+      {
+        "identifier": "magearna-original-mega",
+        "display_name": "mega magearna"
+      }
+    ],
+    "zeraora": [
+      {
+        "identifier": "zeraora",
+        "display_name": "zeraora"
+      },
+      {
+        "identifier": "zeraora-mega",
+        "display_name": "mega zeraora"
+      }
+    ],
+    "melmetal": [
+      {
+        "identifier": "melmetal",
+        "display_name": "melmetal"
+      },
+      {
+        "identifier": "melmetal-gmax",
+        "display_name": "gmax melmetal"
+      }
+    ],
+    "rillaboom": [
+      {
+        "identifier": "rillaboom",
+        "display_name": "rillaboom"
+      },
+      {
+        "identifier": "rillaboom-gmax",
+        "display_name": "gmax rillaboom"
+      }
+    ],
+    "cinderace": [
+      {
+        "identifier": "cinderace",
+        "display_name": "cinderace"
+      },
+      {
+        "identifier": "cinderace-gmax",
+        "display_name": "gmax cinderace"
+      }
+    ],
+    "inteleon": [
+      {
+        "identifier": "inteleon",
+        "display_name": "inteleon"
+      },
+      {
+        "identifier": "inteleon-gmax",
+        "display_name": "gmax inteleon"
+      }
+    ],
+    "corviknight": [
+      {
+        "identifier": "corviknight",
+        "display_name": "corviknight"
+      },
+      {
+        "identifier": "corviknight-gmax",
+        "display_name": "gmax corviknight"
+      }
+    ],
+    "orbeetle": [
+      {
+        "identifier": "orbeetle",
+        "display_name": "orbeetle"
+      },
+      {
+        "identifier": "orbeetle-gmax",
+        "display_name": "gmax orbeetle"
+      }
+    ],
+    "drednaw": [
+      {
+        "identifier": "drednaw",
+        "display_name": "drednaw"
+      },
+      {
+        "identifier": "drednaw-gmax",
+        "display_name": "gmax drednaw"
+      }
+    ],
+    "coalossal": [
+      {
+        "identifier": "coalossal",
+        "display_name": "coalossal"
+      },
+      {
+        "identifier": "coalossal-gmax",
+        "display_name": "gmax coalossal"
+      }
+    ],
+    "flapple": [
+      {
+        "identifier": "flapple",
+        "display_name": "flapple"
+      },
+      {
+        "identifier": "flapple-gmax",
+        "display_name": "gmax flapple"
+      }
+    ],
+    "appletun": [
+      {
+        "identifier": "appletun",
+        "display_name": "appletun"
+      },
+      {
+        "identifier": "appletun-gmax",
+        "display_name": "gmax appletun"
+      }
+    ],
+    "sandaconda": [
+      {
+        "identifier": "sandaconda",
+        "display_name": "sandaconda"
+      },
+      {
+        "identifier": "sandaconda-gmax",
+        "display_name": "gmax sandaconda"
+      }
+    ],
+    "cramorant": [
+      {
+        "identifier": "cramorant",
+        "display_name": "cramorant"
+      },
+      {
+        "identifier": "cramorant-gulping",
+        "display_name": "gulping cramorant"
+      },
+      {
+        "identifier": "cramorant-gorging",
+        "display_name": "gorging cramorant"
+      }
+    ],
+    "toxtricity": [
+      {
+        "identifier": "toxtricity-amped",
+        "display_name": "amped toxtricity"
+      },
+      {
+        "identifier": "toxtricity-amped-gmax",
+        "display_name": "gmax toxtricity"
+      },
+      {
+        "identifier": "toxtricity-low-key-gmax",
+        "display_name": "gmax toxtricity"
+      },
+      {
+        "identifier": "toxtricity-low-key",
+        "display_name": "low-key toxtricity"
+      }
+    ],
+    "centiskorch": [
+      {
+        "identifier": "centiskorch",
+        "display_name": "centiskorch"
+      },
+      {
+        "identifier": "centiskorch-gmax",
+        "display_name": "gmax centiskorch"
+      }
+    ],
+    "sinistea": [
+      {
+        "identifier": "sinistea-phony",
+        "display_name": "phony sinistea"
+      },
+      {
+        "identifier": "sinistea-antique",
+        "display_name": "antique sinistea"
+      }
+    ],
+    "polteageist": [
+      {
+        "identifier": "polteageist-phony",
+        "display_name": "phony polteageist"
+      },
+      {
+        "identifier": "polteageist-antique",
+        "display_name": "antique polteageist"
+      }
+    ],
+    "hatterene": [
+      {
+        "identifier": "hatterene",
+        "display_name": "hatterene"
+      },
+      {
+        "identifier": "hatterene-gmax",
+        "display_name": "gmax hatterene"
+      }
+    ],
+    "grimmsnarl": [
+      {
+        "identifier": "grimmsnarl",
+        "display_name": "grimmsnarl"
+      },
+      {
+        "identifier": "grimmsnarl-gmax",
+        "display_name": "gmax grimmsnarl"
+      }
+    ],
+    "alcremie": [
+      {
+        "identifier": "alcremie-gmax",
+        "display_name": "gmax alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-strawberry-sweet",
+        "display_name": "vanilla-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-strawberry-sweet",
+        "display_name": "ruby-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-strawberry-sweet",
+        "display_name": "matcha-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-strawberry-sweet",
+        "display_name": "mint-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-strawberry-sweet",
+        "display_name": "lemon-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-strawberry-sweet",
+        "display_name": "salted-cream-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-strawberry-sweet",
+        "display_name": "ruby-swirl-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-strawberry-sweet",
+        "display_name": "caramel-swirl-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-strawberry-sweet",
+        "display_name": "rainbow-swirl-strawberry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-berry-sweet",
+        "display_name": "vanilla-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-berry-sweet",
+        "display_name": "ruby-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-berry-sweet",
+        "display_name": "matcha-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-berry-sweet",
+        "display_name": "mint-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-berry-sweet",
+        "display_name": "lemon-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-berry-sweet",
+        "display_name": "salted-cream-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-berry-sweet",
+        "display_name": "ruby-swirl-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-berry-sweet",
+        "display_name": "caramel-swirl-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-berry-sweet",
+        "display_name": "rainbow-swirl-berry-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-love-sweet",
+        "display_name": "vanilla-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-love-sweet",
+        "display_name": "ruby-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-love-sweet",
+        "display_name": "matcha-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-love-sweet",
+        "display_name": "mint-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-love-sweet",
+        "display_name": "lemon-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-love-sweet",
+        "display_name": "salted-cream-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-love-sweet",
+        "display_name": "ruby-swirl-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-love-sweet",
+        "display_name": "caramel-swirl-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-love-sweet",
+        "display_name": "rainbow-swirl-love-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-star-sweet",
+        "display_name": "vanilla-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-star-sweet",
+        "display_name": "ruby-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-star-sweet",
+        "display_name": "matcha-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-star-sweet",
+        "display_name": "mint-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-star-sweet",
+        "display_name": "lemon-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-star-sweet",
+        "display_name": "salted-cream-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-star-sweet",
+        "display_name": "ruby-swirl-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-star-sweet",
+        "display_name": "caramel-swirl-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-star-sweet",
+        "display_name": "rainbow-swirl-star-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-clover-sweet",
+        "display_name": "vanilla-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-clover-sweet",
+        "display_name": "ruby-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-clover-sweet",
+        "display_name": "matcha-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-clover-sweet",
+        "display_name": "mint-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-clover-sweet",
+        "display_name": "lemon-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-clover-sweet",
+        "display_name": "salted-cream-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-clover-sweet",
+        "display_name": "ruby-swirl-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-clover-sweet",
+        "display_name": "caramel-swirl-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-clover-sweet",
+        "display_name": "rainbow-swirl-clover-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-flower-sweet",
+        "display_name": "vanilla-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-flower-sweet",
+        "display_name": "ruby-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-flower-sweet",
+        "display_name": "matcha-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-flower-sweet",
+        "display_name": "mint-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-flower-sweet",
+        "display_name": "lemon-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-flower-sweet",
+        "display_name": "salted-cream-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-flower-sweet",
+        "display_name": "ruby-swirl-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-flower-sweet",
+        "display_name": "caramel-swirl-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-flower-sweet",
+        "display_name": "rainbow-swirl-flower-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-vanilla-cream-ribbon-sweet",
+        "display_name": "vanilla-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-cream-ribbon-sweet",
+        "display_name": "ruby-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-matcha-cream-ribbon-sweet",
+        "display_name": "matcha-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-mint-cream-ribbon-sweet",
+        "display_name": "mint-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-lemon-cream-ribbon-sweet",
+        "display_name": "lemon-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-salted-cream-ribbon-sweet",
+        "display_name": "salted-cream-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-ruby-swirl-ribbon-sweet",
+        "display_name": "ruby-swirl-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-caramel-swirl-ribbon-sweet",
+        "display_name": "caramel-swirl-ribbon-sweet alcremie"
+      },
+      {
+        "identifier": "alcremie-rainbow-swirl-ribbon-sweet",
+        "display_name": "rainbow-swirl-ribbon-sweet alcremie"
+      }
+    ],
+    "falinks": [
+      {
+        "identifier": "falinks",
+        "display_name": "falinks"
+      },
+      {
+        "identifier": "falinks-mega",
+        "display_name": "mega falinks"
+      }
+    ],
+    "eiscue": [
+      {
+        "identifier": "eiscue-ice",
+        "display_name": "ice eiscue"
+      },
+      {
+        "identifier": "eiscue-noice",
+        "display_name": "noice eiscue"
+      }
+    ],
+    "indeedee": [
+      {
+        "identifier": "indeedee-male",
+        "display_name": "male indeedee"
+      },
+      {
+        "identifier": "indeedee-female",
+        "display_name": "female indeedee"
+      }
+    ],
+    "morpeko": [
+      {
+        "identifier": "morpeko-full-belly",
+        "display_name": "full-belly morpeko"
+      },
+      {
+        "identifier": "morpeko-hangry",
+        "display_name": "hangry morpeko"
+      }
+    ],
+    "copperajah": [
+      {
+        "identifier": "copperajah",
+        "display_name": "copperajah"
+      },
+      {
+        "identifier": "copperajah-gmax",
+        "display_name": "gmax copperajah"
+      }
+    ],
+    "duraludon": [
+      {
+        "identifier": "duraludon",
+        "display_name": "duraludon"
+      },
+      {
+        "identifier": "duraludon-gmax",
+        "display_name": "gmax duraludon"
+      }
+    ],
+    "zacian": [
+      {
+        "identifier": "zacian",
+        "display_name": "zacian"
+      },
+      {
+        "identifier": "zacian-crowned",
+        "display_name": "crowned zacian"
+      }
+    ],
+    "zamazenta": [
+      {
+        "identifier": "zamazenta",
+        "display_name": "zamazenta"
+      },
+      {
+        "identifier": "zamazenta-crowned",
+        "display_name": "crowned zamazenta"
+      }
+    ],
+    "eternatus": [
+      {
+        "identifier": "eternatus",
+        "display_name": "eternatus"
+      },
+      {
+        "identifier": "eternatus-eternamax",
+        "display_name": "eternamax eternatus"
+      }
+    ],
+    "urshifu": [
+      {
+        "identifier": "urshifu-rapid-strike-gmax",
+        "display_name": "gmax urshifu"
+      },
+      {
+        "identifier": "urshifu-single-strike",
+        "display_name": "single-strike urshifu"
+      },
+      {
+        "identifier": "urshifu-single-strike-gmax",
+        "display_name": "gmax urshifu"
+      },
+      {
+        "identifier": "urshifu-rapid-strike",
+        "display_name": "rapid-strike urshifu"
+      }
+    ],
+    "zarude": [
+      {
+        "identifier": "zarude",
+        "display_name": "zarude"
+      },
+      {
+        "identifier": "zarude-dada",
+        "display_name": "dada zarude"
+      }
+    ],
+    "calyrex": [
+      {
+        "identifier": "calyrex",
+        "display_name": "calyrex"
+      },
+      {
+        "identifier": "calyrex-ice",
+        "display_name": "ice calyrex"
+      },
+      {
+        "identifier": "calyrex-shadow",
+        "display_name": "shadow calyrex"
+      }
+    ],
+    "ursaluna": [
+      {
+        "identifier": "ursaluna",
+        "display_name": "ursaluna"
+      },
+      {
+        "identifier": "ursaluna-bloodmoon",
+        "display_name": "bloodmoon ursaluna"
+      }
+    ],
+    "basculegion": [
+      {
+        "identifier": "basculegion-male",
+        "display_name": "male basculegion"
+      },
+      {
+        "identifier": "basculegion-female",
+        "display_name": "female basculegion"
+      }
+    ],
+    "enamorus": [
+      {
+        "identifier": "enamorus-incarnate",
+        "display_name": "incarnate enamorus"
+      },
+      {
+        "identifier": "enamorus-therian",
+        "display_name": "therian enamorus"
+      }
+    ],
+    "oinkologne": [
+      {
+        "identifier": "oinkologne-male",
+        "display_name": "male oinkologne"
+      },
+      {
+        "identifier": "oinkologne-female",
+        "display_name": "female oinkologne"
+      }
+    ],
+    "maushold": [
+      {
+        "identifier": "maushold-family-of-three",
+        "display_name": "family-of-three maushold"
+      },
+      {
+        "identifier": "maushold-family-of-four",
+        "display_name": "family-of-four maushold"
+      }
+    ],
+    "squawkabilly": [
+      {
+        "identifier": "squawkabilly-green-plumage",
+        "display_name": "green-plumage squawkabilly"
+      },
+      {
+        "identifier": "squawkabilly-blue-plumage",
+        "display_name": "blue-plumage squawkabilly"
+      },
+      {
+        "identifier": "squawkabilly-yellow-plumage",
+        "display_name": "yellow-plumage squawkabilly"
+      },
+      {
+        "identifier": "squawkabilly-white-plumage",
+        "display_name": "white-plumage squawkabilly"
+      }
+    ],
+    "scovillain": [
+      {
+        "identifier": "scovillain",
+        "display_name": "scovillain"
+      },
+      {
+        "identifier": "scovillain-mega",
+        "display_name": "mega scovillain"
+      }
+    ],
+    "palafin": [
+      {
+        "identifier": "palafin-zero",
+        "display_name": "zero palafin"
+      },
+      {
+        "identifier": "palafin-hero",
+        "display_name": "hero palafin"
+      }
+    ],
+    "glimmora": [
+      {
+        "identifier": "glimmora",
+        "display_name": "glimmora"
+      },
+      {
+        "identifier": "glimmora-mega",
+        "display_name": "mega glimmora"
+      }
+    ],
+    "tatsugiri": [
+      {
+        "identifier": "tatsugiri-curly",
+        "display_name": "curly tatsugiri"
+      },
+      {
+        "identifier": "tatsugiri-droopy",
+        "display_name": "droopy tatsugiri"
+      },
+      {
+        "identifier": "tatsugiri-stretchy",
+        "display_name": "stretchy tatsugiri"
+      },
+      {
+        "identifier": "tatsugiri-curly-mega",
+        "display_name": "mega tatsugiri"
+      },
+      {
+        "identifier": "tatsugiri-droopy-mega",
+        "display_name": "mega tatsugiri"
+      },
+      {
+        "identifier": "tatsugiri-stretchy-mega",
+        "display_name": "mega tatsugiri"
+      }
+    ],
+    "dudunsparce": [
+      {
+        "identifier": "dudunsparce-two-segment",
+        "display_name": "two-segment dudunsparce"
+      },
+      {
+        "identifier": "dudunsparce-three-segment",
+        "display_name": "three-segment dudunsparce"
+      }
+    ],
+    "baxcalibur": [
+      {
+        "identifier": "baxcalibur",
+        "display_name": "baxcalibur"
+      },
+      {
+        "identifier": "baxcalibur-mega",
+        "display_name": "mega baxcalibur"
+      }
+    ],
+    "gimmighoul": [
+      {
+        "identifier": "gimmighoul-chest",
+        "display_name": "chest gimmighoul"
+      },
+      {
+        "identifier": "gimmighoul-roaming",
+        "display_name": "roaming gimmighoul"
+      }
+    ],
+    "koraidon": [
+      {
+        "identifier": "koraidon-apex-build",
+        "display_name": "apex-build koraidon"
+      },
+      {
+        "identifier": "koraidon-limited-build",
+        "display_name": "limited-build koraidon"
+      },
+      {
+        "identifier": "koraidon-sprinting-build",
+        "display_name": "sprinting-build koraidon"
+      },
+      {
+        "identifier": "koraidon-swimming-build",
+        "display_name": "swimming-build koraidon"
+      },
+      {
+        "identifier": "koraidon-gliding-build",
+        "display_name": "gliding-build koraidon"
+      }
+    ],
+    "miraidon": [
+      {
+        "identifier": "miraidon-ultimate-mode",
+        "display_name": "ultimate-mode miraidon"
+      },
+      {
+        "identifier": "miraidon-low-power-mode",
+        "display_name": "low-power-mode miraidon"
+      },
+      {
+        "identifier": "miraidon-drive-mode",
+        "display_name": "drive-mode miraidon"
+      },
+      {
+        "identifier": "miraidon-aquatic-mode",
+        "display_name": "aquatic-mode miraidon"
+      },
+      {
+        "identifier": "miraidon-glide-mode",
+        "display_name": "glide-mode miraidon"
+      }
+    ],
+    "poltchageist": [
+      {
+        "identifier": "poltchageist-counterfeit",
+        "display_name": "counterfeit poltchageist"
+      },
+      {
+        "identifier": "poltchageist-artisan",
+        "display_name": "artisan poltchageist"
+      }
+    ],
+    "sinistcha": [
+      {
+        "identifier": "sinistcha-unremarkable",
+        "display_name": "unremarkable sinistcha"
+      },
+      {
+        "identifier": "sinistcha-masterpiece",
+        "display_name": "masterpiece sinistcha"
+      }
+    ],
+    "ogerpon": [
+      {
+        "identifier": "ogerpon",
+        "display_name": "ogerpon"
+      },
+      {
+        "identifier": "ogerpon-wellspring-mask",
+        "display_name": "wellspring-mask ogerpon"
+      },
+      {
+        "identifier": "ogerpon-hearthflame-mask",
+        "display_name": "hearthflame-mask ogerpon"
+      },
+      {
+        "identifier": "ogerpon-cornerstone-mask",
+        "display_name": "cornerstone-mask ogerpon"
+      }
+    ],
+    "terapagos": [
+      {
+        "identifier": "terapagos",
+        "display_name": "terapagos"
+      },
+      {
+        "identifier": "terapagos-terastal",
+        "display_name": "terastal terapagos"
+      },
+      {
+        "identifier": "terapagos-stellar",
+        "display_name": "stellar terapagos"
+      }
+    ]
+  },
+  "single_type_fire_aliases": [
+    "arcanine",
+    "braixen",
+    "castform sunny",
+    "castform-sunny",
+    "charcadet",
+    "charmander",
+    "charmeleon",
+    "chimchar",
+    "cinderace",
+    "cinderace gmax",
+    "cinderace-gmax",
+    "crocalor",
+    "cyndaquil",
+    "darmanitan",
+    "darmanitan standard",
+    "darmanitan-standard",
+    "darumaka",
+    "entei",
+    "fennekin",
+    "flareon",
+    "fuecoco",
+    "gmax cinderace",
+    "growlithe",
+    "heatmor",
+    "litten",
+    "magby",
+    "magmar",
+    "magmortar",
+    "ninetales",
+    "pansear",
+    "ponyta",
+    "quilava",
+    "raboot",
+    "rapidash",
+    "scorbunny",
+    "simisear",
+    "slugma",
+    "standard darmanitan",
+    "sunny castform",
+    "tepig",
+    "torchic",
+    "torkoal",
+    "torracat",
+    "typhlosion",
+    "vulpix"
+  ],
+  "single_type_normal_aliases": [
+    "aipom",
+    "ambipom",
+    "arceus",
+    "arceus fairy",
+    "audino",
+    "bidoof",
+    "blissey",
+    "bouffalant",
+    "buneary",
+    "bunnelby",
+    "castform",
+    "chansey",
+    "cinccino",
+    "delcatty",
+    "ditto",
+    "dubwool",
+    "dudunsparce",
+    "dudunsparce three segment",
+    "dudunsparce three-segment",
+    "dudunsparce two segment",
+    "dudunsparce two-segment",
+    "dudunsparce-three-segment",
+    "dudunsparce-two-segment",
+    "dunsparce",
+    "eevee",
+    "eevee gmax",
+    "eevee starter",
+    "eevee-gmax",
+    "eevee-starter",
+    "exploud",
+    "fairy arceus",
+    "fairy silvally",
+    "family-of-four maushold",
+    "family-of-three maushold",
+    "female oinkologne",
+    "furfrou",
+    "furfrou pharaoh",
+    "furret",
+    "glameow",
+    "gmax eevee",
+    "gmax meowth",
+    "gmax snorlax",
+    "greedent",
+    "gumshoos",
+    "gumshoos totem",
+    "gumshoos-totem",
+    "happiny",
+    "herdier",
+    "kangaskhan",
+    "kangaskhan mega",
+    "kangaskhan-mega",
+    "kecleon",
+    "komala",
+    "lechonk",
+    "lickilicky",
+    "lickitung",
+    "lillipup",
+    "linoone",
+    "lopunny",
+    "loudred",
+    "male oinkologne",
+    "maushold",
+    "maushold family of four",
+    "maushold family of three",
+    "maushold family-of-four",
+    "maushold family-of-three",
+    "maushold-family-of-four",
+    "maushold-family-of-three",
+    "mega kangaskhan",
+    "meowth",
+    "meowth gmax",
+    "meowth-gmax",
+    "miltank",
+    "minccino",
+    "munchlax",
+    "oinkologne",
+    "oinkologne female",
+    "oinkologne male",
+    "oinkologne-female",
+    "oinkologne-male",
+    "patrat",
+    "persian",
+    "pharaoh furfrou",
+    "porygon",
+    "porygon z",
+    "porygon-z",
+    "porygon2",
+    "purugly",
+    "raticate",
+    "rattata",
+    "regigigas",
+    "sentret",
+    "silvally",
+    "silvally fairy",
+    "skitty",
+    "skwovet",
+    "slaking",
+    "slakoth",
+    "smeargle",
+    "snorlax",
+    "snorlax gmax",
+    "snorlax-gmax",
+    "spinda",
+    "stantler",
+    "starter eevee",
+    "stellar terapagos",
+    "stoutland",
+    "tandemaus",
+    "tauros",
+    "teddiursa",
+    "terapagos",
+    "terapagos stellar",
+    "terapagos terastal",
+    "terapagos-stellar",
+    "terapagos-terastal",
+    "terastal terapagos",
+    "three-segment dudunsparce",
+    "totem gumshoos",
+    "two-segment dudunsparce",
+    "type null",
+    "type-null",
+    "ursaring",
+    "vigoroth",
+    "watchog",
+    "whismur",
+    "wooloo",
+    "yungoos",
+    "zangoose",
+    "zigzagoon"
+  ],
+  "fire_and_normal_type_aliases": [
+    "female pyroar",
+    "litleo",
+    "mega pyroar",
+    "pyroar",
+    "pyroar female",
+    "pyroar male",
+    "pyroar mega",
+    "pyroar-male",
+    "pyroar-mega"
+  ]
+}

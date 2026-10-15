@@ -2299,12 +2299,14 @@ def build_grab_lines(
     return lines
 
 
-def paginate_grab_lines(lines: list[str]) -> list[str]:
+def paginate_grab_lines(
+    lines: list[str], limit: int = GRAB_PAGE_CHARS
+) -> list[str]:
     pages: list[str] = []
     current: list[str] = []
     length = 0
     for line in lines:
-        if current and length + len(line) + 1 > GRAB_PAGE_CHARS:
+        if current and length + len(line) + 1 > limit:
             pages.append("\n".join(current))
             current, length = [], 0
         current.append(line)
@@ -3535,6 +3537,27 @@ class GrabListView(discord.ui.View):
             ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+    @discord.ui.button(label="Copy", style=discord.ButtonStyle.secondary, row=0)
+    async def copy_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        lines = build_grab_lines(
+            self.entries,
+            ordered=self.ordered,
+            all_forms=self.all_forms,
+            emojis=self.emojis,
+        )
+        blocks = [
+            f"```\n{chunk}\n```" for chunk in paginate_grab_lines(lines, 1800)
+        ]
+        await interaction.response.send_message(
+            blocks[0] + "\nUse the copy button on the code block.",
+            ephemeral=True,
+        )
+        for block in blocks[1:]:
+            await interaction.followup.send(block, ephemeral=True)
 
     @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
     async def previous_button(

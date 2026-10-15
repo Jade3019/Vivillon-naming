@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from bot import (
+    add_shinyhunter,
     clear_guild_reservations,
     format_catch_command,
     format_guess,
@@ -13,11 +14,13 @@ from bot import (
     load_reservations,
     parse_reserve_add_command,
     parse_reserve_remove_command,
+    parse_shinyhunt_command,
     remove_reservation,
     remove_reservations,
     reservation_key,
     reserved_pokemon_for_user,
     save_reservations,
+    shinyhunt_pokemon_for_user,
 )
 
 
@@ -46,6 +49,22 @@ class GuessFormatTests(unittest.TestCase):
             "`<@716390085896962058> c pikachu`",
         )
 
+    def test_formats_shinyhunters_when_no_reservations_exist(self) -> None:
+        self.assertEqual(
+            format_spawn_reply("Absol", 95, 789, [], [123, 456]),
+            "Absol: 95%\n"
+            "Shinyhunt: <@123>, <@456>\n"
+            "`<@789> c absol`",
+        )
+
+    def test_reservations_override_shinyhunters_in_spawn_reply(self) -> None:
+        self.assertEqual(
+            format_spawn_reply("Absol", 95, 789, [999], [123, 456]),
+            "Absol: 95%\n"
+            "Reserved: <@999>\n"
+            "`<@789> c absol`",
+        )
+
 
 class ReservationPersistenceTests(unittest.TestCase):
     def test_formats_removal_confirmations(self) -> None:
@@ -62,6 +81,45 @@ class ReservationPersistenceTests(unittest.TestCase):
     def test_reservation_keys_are_case_insensitive(self) -> None:
         self.assertEqual(reservation_key(1, "Pikachu"), reservation_key(1, "PIKACHU"))
         self.assertNotEqual(reservation_key(1, "Pikachu"), reservation_key(2, "Pikachu"))
+
+    def test_parses_one_valid_shinyhunt_name(self) -> None:
+        self.assertEqual(parse_shinyhunt_command("v!sh Absol"), "Absol")
+
+    def test_rejects_multiple_or_invalid_shinyhunt_names(self) -> None:
+        self.assertIsNone(parse_shinyhunt_command("v!sh absol, eevee"))
+        self.assertIsNone(parse_shinyhunt_command("v!sh absol!"))
+
+    def test_adds_multiple_shinyhunters_without_duplicates_or_cross_guild_leaks(self) -> None:
+        shinyhunters = add_shinyhunter({}, 1, "Absol", 123)
+        shinyhunters = add_shinyhunter(shinyhunters, 1, "absol", 456)
+        shinyhunters = add_shinyhunter(shinyhunters, 1, "ABSOL", 123)
+        shinyhunters = add_shinyhunter(shinyhunters, 2, "Absol", 789)
+
+        self.assertEqual(shinyhunters[reservation_key(1, "Absol")], [123, 456])
+        self.assertEqual(shinyhunters[reservation_key(2, "Absol")], [789])
+
+    def test_lists_shinyhunt_pokemon_for_one_user_and_guild(self) -> None:
+        shinyhunters = {
+            reservation_key(1, "Absol"): [123, 456],
+            reservation_key(1, "Eevee"): [123],
+            reservation_key(1, "Pikachu"): [789],
+            reservation_key(2, "Bulbasaur"): [123],
+        }
+
+        self.assertEqual(
+            shinyhunt_pokemon_for_user(shinyhunters, 1, 123),
+            ["absol", "eevee"],
+        )
+        self.assertEqual(shinyhunt_pokemon_for_user(shinyhunters, 1, 999), [])
+
+    def test_persists_shinyhunt_registrations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "shinyhunts.json"
+            shinyhunters = add_shinyhunter({}, 1, "Absol", 123)
+
+            save_reservations(path, shinyhunters)
+
+            self.assertEqual(load_reservations(path), shinyhunters)
 
     def test_saves_multiple_members_and_loads_them_back(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

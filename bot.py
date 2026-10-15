@@ -24,6 +24,10 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"\bwild\s+(?:pokemon|pok[eé]mon)\b", re.IGNORECASE
 )
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
+SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!sh\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
 RESERVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+add\s+(.+?)\s+<@!?(\d+)>\s*$",
     re.IGNORECASE,
@@ -241,12 +245,16 @@ def format_spawn_reply(
     confidence: int,
     poketwo_bot_id: int,
     reserved_user_ids: list[int] | None = None,
+    shinyhunter_user_ids: list[int] | None = None,
 ) -> str:
     command = format_catch_command(poketwo_bot_id, name)
     lines = [format_guess(name, confidence)]
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
         lines.append(f"Reserved: {mentions}")
+    elif shinyhunter_user_ids:
+        mentions = ", ".join(f"<@{user_id}>" for user_id in shinyhunter_user_ids)
+        lines.append(f"Shinyhunt: {mentions}")
     lines.append(f"`{command}`")
     return "\n".join(lines)
 
@@ -254,6 +262,52 @@ def format_spawn_reply(
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
     normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
     return f"{guild_id}:{normalized_name}"
+
+
+def parse_shinyhunt_command(content: str) -> str | None:
+    match = SHINYHUNT_COMMAND_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+    pokemon_name = unicodedata.normalize("NFC", match.group(1).strip())
+    if (
+        not pokemon_name
+        or "," in pokemon_name
+        or len(pokemon_name) > 60
+        or not is_valid_pokemon_name(pokemon_name)
+    ):
+        return None
+    return pokemon_name
+
+
+def add_shinyhunter(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+    pokemon_name: str,
+    user_id: int,
+) -> dict[str, list[int]]:
+    updated_shinyhunters = {
+        key: list(user_ids) for key, user_ids in shinyhunters.items()
+    }
+    user_ids = updated_shinyhunters.setdefault(
+        reservation_key(guild_id, pokemon_name),
+        [],
+    )
+    if user_id not in user_ids:
+        user_ids.append(user_id)
+    return updated_shinyhunters
+
+
+def shinyhunt_pokemon_for_user(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+    user_id: int,
+) -> list[str]:
+    guild_prefix = f"{guild_id}:"
+    return sorted(
+        key.removeprefix(guild_prefix)
+        for key, user_ids in shinyhunters.items()
+        if key.startswith(guild_prefix) and user_id in user_ids
+    )
 
 
 def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
@@ -466,6 +520,10 @@ class NamingBot(discord.Client):
         self.image_http: aiohttp.ClientSession | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
+        self.shinyhunt_path = Path(
+            os.environ.get("SHINYHUNTS_FILE", "shinyhunts.json")
+        )
+        self.shinyhunters = load_reservations(self.shinyhunt_path)
 
     async def setup_hook(self) -> None:
         self.image_http = aiohttp.ClientSession(
@@ -493,6 +551,9 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.match(r"^v!sh(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_shinyhunt_command(message)
+                return
             if re.match(
                 r"^v!r\s+(?:add|search|remove|clear)(?:\s|$)",
                 message.content,
@@ -503,6 +564,61 @@ class NamingBot(discord.Client):
 
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
+
+    async def handle_shinyhunt_command(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Shiny hunts can only be added in a server.",
+                mention_author=False,
+            )
+            return
+
+        if re.fullmatch(r"v!sh\s*", message.content, re.IGNORECASE):
+            pokemon_names = shinyhunt_pokemon_for_user(
+                self.shinyhunters,
+                message.guild.id,
+                message.author.id,
+            )
+            if pokemon_names:
+                display_names = ", ".join(
+                    name[0].upper() + name[1:] for name in pokemon_names
+                )
+                response = f"You are currently Shinyhunting {display_names}"
+            else:
+                response = "You are not currently Shinyhunting any Pokémon"
+            await message.reply(response, mention_author=False)
+            return
+
+        pokemon_name = parse_shinyhunt_command(message.content)
+        if pokemon_name is None:
+            await message.reply(
+                "Usage: `v!sh <pokemon>` (one Pokémon per command)",
+                mention_author=False,
+            )
+            return
+
+        updated_shinyhunters = add_shinyhunter(
+            self.shinyhunters,
+            message.guild.id,
+            pokemon_name,
+            message.author.id,
+        )
+        try:
+            save_reservations(self.shinyhunt_path, updated_shinyhunters)
+        except ValueError:
+            logger.exception("Could not save shiny-hunt registrations")
+            await message.reply(
+                "I couldn't save that shiny hunt. Check the bot logs.",
+                mention_author=False,
+            )
+            return
+
+        self.shinyhunters = updated_shinyhunters
+        display_name = pokemon_name[0].upper() + pokemon_name[1:]
+        await message.reply(
+            f"{display_name} Added to your shinyhunt",
+            mention_author=False,
+        )
 
     async def handle_reserve_command(self, message: discord.Message) -> None:
         if message.guild is None or not isinstance(message.author, discord.Member):
@@ -734,12 +850,18 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
+        shinyhunter_user_ids = (
+            self.shinyhunters.get(reservation_key(message.guild.id, name), [])
+            if message.guild
+            else []
+        )
         await message.reply(
             format_spawn_reply(
                 name,
                 confidence,
                 self.config.poketwo_bot_id,
                 reserved_user_ids,
+                shinyhunter_user_ids,
             ),
             mention_author=False,
         )

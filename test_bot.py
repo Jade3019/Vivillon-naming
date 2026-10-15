@@ -16,7 +16,9 @@ class GuessFormatTests(unittest.TestCase):
     def test_formats_guess_and_command_on_separate_lines(self) -> None:
         self.assertEqual(
             format_spawn_reply("Pikachu", 85, 716390085896962058),
-            "Pikachu: 85%\n`<@716390085896962058> c pikachu`",
+            "Pikachu: 85%\n"
+            "`<@716390085896962058> c pikachu`\n"
+            "```<@716390085896962058> c pikachu```",
         )
 
 

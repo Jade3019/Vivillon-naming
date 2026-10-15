@@ -218,9 +218,11 @@ def format_catch_command(poketwo_bot_id: int, name: str) -> str:
 
 
 def format_spawn_reply(name: str, confidence: int, poketwo_bot_id: int) -> str:
+    command = format_catch_command(poketwo_bot_id, name)
     return (
         f"{format_guess(name, confidence)}\n"
-        f"`{format_catch_command(poketwo_bot_id, name)}`"
+        f"`{command}`\n"
+        f"```{command}```"
     )
 
 

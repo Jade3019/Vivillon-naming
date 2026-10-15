@@ -6,6 +6,7 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 import aiohttp
@@ -21,6 +22,11 @@ logger = logging.getLogger("vivillon_naming")
 
 SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"\bwild\s+(?:pokemon|pok[eé]mon)\b", re.IGNORECASE
+)
+RESERVE_ROLE_ID: Final[int] = 1532820386511720579
+RESERVE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!r\s+add\s+(.+?)\s+<@!?(\d+)>\s*$",
+    re.IGNORECASE,
 )
 
 @dataclass(frozen=True)
@@ -221,13 +227,57 @@ def format_catch_command(poketwo_bot_id: int, name: str) -> str:
     return f"<@{poketwo_bot_id}> c {name.lower()}"
 
 
-def format_spawn_reply(name: str, confidence: int, poketwo_bot_id: int) -> str:
+def format_spawn_reply(
+    name: str,
+    confidence: int,
+    poketwo_bot_id: int,
+    reserved_user_ids: list[int] | None = None,
+) -> str:
     command = format_catch_command(poketwo_bot_id, name)
-    return (
-        f"{format_guess(name, confidence)}\n"
-        f"`{command}`\n"
-        f"```{command}```"
-    )
+    lines = [format_guess(name, confidence)]
+    if reserved_user_ids:
+        mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
+        lines.append(f"Reserved: {mentions}")
+    lines.extend((f"`{command}`", f"```{command}```"))
+    return "\n".join(lines)
+
+
+def reservation_key(guild_id: int, pokemon_name: str) -> str:
+    normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    return f"{guild_id}:{normalized_name}"
+
+
+def load_reservations(path: Path) -> dict[str, list[int]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read reserve data from {path}") from error
+    if not isinstance(data, dict) or any(
+        not isinstance(key, str)
+        or not isinstance(user_ids, list)
+        or any(
+            isinstance(user_id, bool) or not isinstance(user_id, int)
+            for user_id in user_ids
+        )
+        for key, user_ids in data.items()
+    ):
+        raise ValueError(f"Reserve data in {path} has an invalid format")
+    return data
+
+
+def save_reservations(path: Path, reservations: dict[str, list[int]]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(reservations, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save reserve data to {path}") from error
 
 
 class NamingBot(discord.Client):
@@ -238,6 +288,8 @@ class NamingBot(discord.Client):
         self.config = config
         self.openai = AsyncOpenAI(api_key=config.openai_api_key)
         self.image_http: aiohttp.ClientSession | None = None
+        self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
+        self.reservations = load_reservations(self.reserve_path)
 
     async def setup_hook(self) -> None:
         self.image_http = aiohttp.ClientSession(
@@ -255,7 +307,7 @@ class NamingBot(discord.Client):
         logger.info("Logged in as %s", self.user)
 
     async def on_message(self, message: discord.Message) -> None:
-        if message.author.id != self.config.poketwo_bot_id:
+        if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
         if (
             self.config.allowed_channel_id is not None
@@ -264,8 +316,70 @@ class NamingBot(discord.Client):
             return
 
         text = message_text(message)
+        if message.author.id != self.config.poketwo_bot_id:
+            if re.match(r"^v!r\s+add(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_reserve_command(message)
+            return
+
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
+
+    async def handle_reserve_command(self, message: discord.Message) -> None:
+        if message.guild is None or not isinstance(message.author, discord.Member):
+            await message.reply(
+                "Reservations can only be added in a server.",
+                mention_author=False,
+            )
+            return
+        if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
+            await message.reply(
+                "You need the designated reserve-manager role to add reservations.",
+                mention_author=False,
+            )
+            return
+
+        match = RESERVE_COMMAND_PATTERN.fullmatch(message.content)
+        if match is None or len(message.mentions) != 1:
+            await message.reply(
+                "Usage: `v!r add <pokemon> @member`",
+                mention_author=False,
+            )
+            return
+
+        pokemon_name = unicodedata.normalize("NFC", match.group(1).strip())
+        if not is_valid_pokemon_name(pokemon_name) or len(pokemon_name) > 60:
+            await message.reply("That Pokémon name is invalid.", mention_author=False)
+            return
+
+        target = message.mentions[0]
+        if target.id != int(match.group(2)):
+            await message.reply(
+                "Please mention exactly one server member.",
+                mention_author=False,
+            )
+            return
+
+        display_name = pokemon_name[0].upper() + pokemon_name[1:]
+        key = reservation_key(message.guild.id, pokemon_name)
+        user_ids = list(self.reservations.get(key, []))
+        if target.id not in user_ids:
+            user_ids.append(target.id)
+        updated_reservations = {**self.reservations, key: user_ids}
+        try:
+            save_reservations(self.reserve_path, updated_reservations)
+        except ValueError:
+            logger.exception("Could not save Pokémon reservations")
+            await message.reply(
+                "I couldn't save that reservation. Check the bot logs.",
+                mention_author=False,
+            )
+            return
+
+        self.reservations = updated_reservations
+        await message.reply(
+            f"Reserve {display_name} added to {target.mention}",
+            mention_author=False,
+        )
 
     async def handle_spawn(self, message: discord.Message) -> None:
         url = image_url(message)
@@ -304,8 +418,18 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        reserved_user_ids = (
+            self.reservations.get(reservation_key(message.guild.id, name), [])
+            if message.guild
+            else []
+        )
         await message.reply(
-            format_spawn_reply(name, confidence, self.config.poketwo_bot_id),
+            format_spawn_reply(
+                name,
+                confidence,
+                self.config.poketwo_bot_id,
+                reserved_user_ids,
+            ),
             mention_author=False,
         )
 

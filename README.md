@@ -1,8 +1,7 @@
 # Vivillon-naming
 
 A Discord application bot that recognizes Pokétwo spawn images with OpenAI
-vision, replies with the predicted Pokémon name, and summarizes level, gender,
-and IV information found in Pokétwo messages.
+vision and replies with the predicted Pokémon name and confidence percentage.
 
 ## Requirements
 
@@ -49,13 +48,27 @@ When Pokétwo posts a wild-spawn image, the bot replies with one predicted name
 and its estimated confidence percentage (for example, `Pikachu: 85%`). The
 confidence is a model estimate, not a calibrated probability. The vision model
 is asked to identify Pokémon across the National Pokédex; image recognition can
-still make mistakes, so check guesses before relying on them.
+still make mistakes, so check guesses before relying on them. It then posts the
+matching Pokétwo catch command in a code block for easier copying. Discord's
+copy controls depend on the client; the bot cannot directly write to a user's
+clipboard. Pokétwo or Discord may ignore or restrict commands sent by another
+bot account.
 
-After a catch, the bot summarizes level, gender, and IV data that appear in
-Pokétwo's message. If a catch message omits IV or gender, run Pokétwo's usual
-Pokémon-info command yourself; the bot will summarize the fields it can read
-from the resulting Pokétwo message. It does not issue game commands on your
-behalf.
-
-Pokétwo or Discord may ignore or restrict messages from other bot accounts.
 This application does not bypass those restrictions.
+
+## Pokémon reservations
+
+Members with the reserve-manager role (role ID `1532820386511720579`) can
+reserve a Pokémon for a server member with:
+
+```text
+v!r add pikachu @member
+```
+
+More than one member can reserve the same Pokémon. When that Pokémon spawns,
+the bot lists and mentions its reserved members in a `Reserved:` line above the
+catch command. Other members are not mentioned. Reservations are stored in
+`reserves.json` by default; set `RESERVES_FILE` to a different path if needed.
+Keep that file on persistent host storage to retain reservations across
+restarts. The bot must be able to read and send messages in the command channel
+as well as the spawn channel.

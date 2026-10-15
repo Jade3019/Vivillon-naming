@@ -5,6 +5,7 @@ from pathlib import Path
 from bot import (
     format_catch_command,
     format_guess,
+    format_remove_confirmation,
     format_reservation_embeds,
     format_spawn_reply,
     is_valid_pokemon_name,
@@ -44,6 +45,13 @@ class GuessFormatTests(unittest.TestCase):
 
 
 class ReservationPersistenceTests(unittest.TestCase):
+    def test_formats_removal_confirmations(self) -> None:
+        self.assertEqual(format_remove_confirmation("pikachu", None), "Pikachu removed")
+        self.assertEqual(
+            format_remove_confirmation("pikachu", "@Jade0319"),
+            "Pikachu removed from @Jade0319",
+        )
+
     def test_reservation_keys_are_case_insensitive(self) -> None:
         self.assertEqual(reservation_key(1, "Pikachu"), reservation_key(1, "PIKACHU"))
         self.assertNotEqual(reservation_key(1, "Pikachu"), reservation_key(2, "Pikachu"))

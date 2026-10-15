@@ -324,6 +324,13 @@ def remove_reservation(
     return updated_reservations, True
 
 
+def format_remove_confirmation(pokemon_name: str, member_mention: str | None) -> str:
+    display_name = pokemon_name[0].upper() + pokemon_name[1:]
+    if member_mention is None:
+        return f"{display_name} removed"
+    return f"{display_name} removed from {member_mention}"
+
+
 def format_reservation_embeds(
     display_name: str,
     pokemon_names: list[str],
@@ -578,12 +585,13 @@ class NamingBot(discord.Client):
             return
 
         self.reservations = updated_reservations
-        display_name = pokemon_name[0].upper() + pokemon_name[1:]
-        if target is None:
-            confirmation = f"Removed {display_name} reservations for everyone."
-        else:
-            confirmation = f"Removed {display_name} reservation for {target.mention}."
-        await message.reply(confirmation, mention_author=False)
+        await message.reply(
+            format_remove_confirmation(
+                pokemon_name,
+                target.mention if target else None,
+            ),
+            mention_author=False,
+        )
 
     async def handle_reserve_search(self, message: discord.Message) -> None:
         if message.guild is None:

@@ -1270,8 +1270,13 @@ def pokemon_matches_all_forms_reservation(
             for alias in aliases
         }:
             return True
-    return pokemon_name.startswith(
+    if pokemon_name.startswith(
         tuple(f"{reserved_name}{separator}" for separator in (" ", "-", "(", ":", "["))
+    ):
+        return True
+    # Forms named with a prefix, such as "Mega Marshadow" or "Zenith Marshadow".
+    return " " not in reserved_name and reserved_name in re.split(
+        r"[\s()\-:\[\]]+", pokemon_name
     )
 
 

@@ -494,6 +494,17 @@ class GuessFormatTests(unittest.TestCase):
         )
 
 
+class AllFormsMatchingTests(unittest.TestCase):
+    def test_all_marshadow_matches_other_forms_of_marshadow(self) -> None:
+        for name in ("Marshadow", "Zenith Marshadow", "Marshadow (Zenith)", "Mega Marshadow"):
+            with self.subTest(name=name):
+                self.assertTrue(pokemon_matches_all_forms_reservation(name, "marshadow"))
+
+    def test_all_forms_does_not_match_other_species(self) -> None:
+        self.assertFalse(pokemon_matches_all_forms_reservation("Mewtwo", "mew"))
+        self.assertFalse(pokemon_matches_all_forms_reservation("Mega Mewtwo X", "mew"))
+
+
 class ReservationExchangeTests(unittest.TestCase):
     def test_parses_member_lines_with_multiple_pokemon(self) -> None:
         text = "<@1> - pikachu, Eevee\n<@2> - all arceus\nnoise\n<@3> – sylveon"

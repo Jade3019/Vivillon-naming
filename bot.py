@@ -2292,7 +2292,7 @@ class PokeballView(discord.ui.View):
         embed = discord.Embed(title=name)
         embed.set_image(url=url)
         await interaction.response.edit_message(embed=embed, attachments=[], view=None)
-        await interaction.followup.send(f"You found {name}! {interaction.user.mention}")
+        await interaction.followup.send(f"You found {name}!")
 
 
 def load_known_pokemon_names() -> list[str]:

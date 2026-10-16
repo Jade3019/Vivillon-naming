@@ -9,6 +9,7 @@ Pokémon only that one is recomputed.
 
 import hashlib
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -56,16 +57,23 @@ def pokemon_features(name: str, paths: list[Path], cache: Path):
 def assemble_bank(names: list[str], per_pokemon: dict):
     """Combine per-Pokémon features into (descriptors uint8, labels)."""
     # Features that look the same in other Pokémon are background, so drop them.
-    everything = np.vstack(list(per_pokemon.values())).astype(np.float32)
+    compact = {
+        name: descriptors[
+            np.linspace(0, len(descriptors) - 1, MAX_FEATURES_PER_POKEMON).astype(int)
+        ] if len(descriptors) > MAX_FEATURES_PER_POKEMON else descriptors
+        for name, descriptors in list(per_pokemon.items())
+    }
+    per_pokemon.clear()
+    everything = np.vstack(list(compact.values())).astype(np.float32)
     owner = np.concatenate(
-        [np.full(len(per_pokemon[name]), i) for i, name in enumerate(names)]
+        [np.full(len(compact[name]), i) for i, name in enumerate(names)]
     )
     matcher = cv2.FlannBasedMatcher(dict(algorithm=1, trees=4), dict(checks=32))
     matcher.add([everything])
     matcher.train()
     kept_descriptors, kept_labels = [], []
     for index, name in enumerate(names):
-        features = per_pokemon[name].astype(np.float32)
+        features = compact[name].astype(np.float32)
         if len(features) == 0:
             continue
         keep = np.ones(len(features), bool)
@@ -99,9 +107,21 @@ def main() -> None:
         sys.exit(f"No pictures found in {folder}")
     names = sorted(groups)
     per_pokemon = {}
+    processed_images = 0
+    next_pause = 1000
+    total_images = sum(len(paths) for paths in groups.values())
     for number, name in enumerate(names, 1):
         per_pokemon[name] = pokemon_features(name, groups[name], cache)
-        print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features")
+        processed_images += len(groups[name])
+        if number == 1 or number % 25 == 0 or number == len(names):
+            print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)
+        while processed_images >= next_pause and next_pause < total_images:
+            print(
+                f"Processed {processed_images} image files; pausing for 10 seconds.",
+                flush=True,
+            )
+            time.sleep(10)
+            next_pause += 1000
 
     descriptors, labels = assemble_bank(names, per_pokemon)
     np.savez_compressed(

@@ -50,17 +50,90 @@ def pokemon_name_from_file(path: Path) -> str:
 
 
 def reference_images(folder: Path) -> dict[str, list[Path]]:
-    """Group reference pictures by Pokémon (subfolder name or file name)."""
+    """Group images by canonical Pokémon/form name, anywhere below folder."""
+    import json
+    import unicodedata
+
+    def key(value: str) -> str:
+        value = unicodedata.normalize("NFKD", value.casefold())
+        value = "".join(char for char in value if not unicodedata.combining(char))
+        return re.sub(r"[^a-z0-9]", "", value)
+
+    try:
+        species = json.loads(
+            Path(__file__).with_name("pokemon_names.json").read_text(encoding="utf-8")
+        )
+        form_data = json.loads(
+            Path(__file__).with_name("pokemon_forms.json").read_text(encoding="utf-8")
+        )["forms"]
+    except (OSError, ValueError, KeyError, TypeError):
+        species, form_data = [], {}
+
+    species_by_key = {key(name): name for name in species}
+    forms_by_key: dict[str, str] = {}
+    for forms in form_data.values():
+        for form in forms:
+            display = form["display_name"].title()
+            forms_by_key[key(form["identifier"])] = display
+            forms_by_key[key(form["display_name"])] = display
+
+    regions = {
+        "alola": "Alolan",
+        "galar": "Galarian",
+        "hisui": "Hisuian",
+        "paldea": "Paldean",
+    }
+    event_tokens = {
+        "anniversary", "autumn", "christmas", "day", "easter", "festive",
+        "halloween", "of", "pride", "spring", "summer", "thanksgiving",
+        "the", "valentine", "weather", "winter",
+    }
+
+    def canonical_name(raw: str) -> str | None:
+        raw = raw.strip()
+        normalized_key = key(raw)
+        if normalized_key in forms_by_key:
+            return forms_by_key[normalized_key]
+        if normalized_key in species_by_key:
+            return species_by_key[normalized_key]
+
+        tokens = raw.casefold().replace("_", "-").split("-")
+        for index, token in enumerate(tokens):
+            if token in regions:
+                base = species_by_key.get(key("".join(tokens[:index])))
+                if base:
+                    return f"{regions[token]} {base}"
+
+        # Event costumes remain catchable as their base species. Composite
+        # pictures containing multiple species are intentionally not assigned.
+        kept = [token for token in tokens if token not in event_tokens]
+        found: set[str] = set()
+        for start in range(len(kept)):
+            for end in range(start + 1, len(kept) + 1):
+                name = species_by_key.get(key("".join(kept[start:end])))
+                if name:
+                    found.add(name)
+        if len(found) == 1:
+            return next(iter(found))
+        if len(found) > 1:
+            return None
+
+        # Preserve a readable name for hand-created forms such as Zygarde-Core.
+        return "-".join(token[:1].upper() + token[1:] for token in raw.replace("_", "-").split("-"))
+
     groups: dict[str, list[Path]] = {}
+    skipped: set[str] = set()
     for path in sorted(folder.rglob("*")):
         if path.suffix.lower() not in IMAGE_SUFFIXES or path.name.startswith("."):
             continue
-        if path.parent != folder:
-            name = path.parent.relative_to(folder).parts[0].strip()
-        else:
-            name = pokemon_name_from_file(path)
-        if name:
-            groups.setdefault(name, []).append(path)
+        raw_name = path.parent.name if path.parent != folder else pokemon_name_from_file(path)
+        name = canonical_name(raw_name)
+        if name is None:
+            skipped.add(raw_name)
+            continue
+        groups.setdefault(name, []).append(path)
+    if skipped:
+        logger.warning("Skipped ambiguous composite image folders: %s", ", ".join(sorted(skipped)))
     return groups
 
 

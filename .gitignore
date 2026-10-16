@@ -5,3 +5,4 @@ __pycache__/
 reserves.json
 reserves.json.tmp
 .bank_cache/
+pokemon_images/archive/

@@ -127,6 +127,8 @@ def create_app(
 ) -> web.Application:
     @web.middleware
     async def guard(request: web.Request, handler: Any) -> web.StreamResponse:
+        if request.path == "/api/org/health":
+            return await handler(request)
         supplied = request.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied.encode(), f"Bearer {api_key}".encode()):
             return web.json_response(
@@ -227,7 +229,12 @@ def create_app(
         del request
         return web.json_response({"success": True, "cleared": org.reset()})
 
+    async def health(request: web.Request) -> web.Response:
+        del request
+        return web.json_response({"success": True, "status": "ok"})
+
     app = web.Application(middlewares=[guard])
+    app.router.add_get("/api/org/health", health)
     app.router.add_post("/api/org/reserves", reserves)
     app.router.add_post("/api/org/validate", validate)
     app.router.add_get("/api/org/reserves", list_reserves)

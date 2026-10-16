@@ -218,6 +218,7 @@ Restriction file (optional; slots without a rule allow anything):
 
 All requests need the `Authorization` header and return JSON with `"success"`. Errors use `{"success": false, "error": "..."}`: `400` invalid request, `401` unauthorized, `403` not allowed in that slot, `404` Pokémon not found / not reserved.
 
+- `GET /api/org/health` needs no key; open it in a browser to check the URL works (`{"success": true, "status": "ok"}`).
 - `POST /api/org/validate` with `{"pokemon": "Pikachu", "slot": "slot1"}` checks the name exists and the slot allows it. `slot` is optional; `"All Eevee"` is accepted for all forms.
 - `POST /api/org/reserves` with `{"action": "add" or "remove", "pokemon": "Pikachu", "userId": "123456789012345678", "slot": "slot1"}` validates, then adds/removes the reserve in the org list and in Vivillon's saved reserves (same as `v!r add`). Success: `{"success": true, "action": "add", "pokemon": "Pikachu", "userId": "...", "slot": "slot1", "changed": true}`.
 - `GET /api/org/reserves` lists the org's reserves: `{"success": true, "count": 1, "reserves": [{"pokemon": "Pikachu", "userId": "...", "slot": "slot1"}]}`. Use this for `!res list`.

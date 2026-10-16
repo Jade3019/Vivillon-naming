@@ -197,3 +197,36 @@ a separate list of every Pokémon (not just the visible page), all in one messag
   (using `all <pokemon>` where All forms is on). Pokémon without an `@user` are skipped. After Yes, the bot posts each reserve as two separate messages, one at a time: `v!r add <pokemon> @user`, then `<Pokémon> added to @user` (without pinging anyone). Large lists take a while because Discord rate-limits message sending.
 
 After a bot restart, `v!grab` on an old search message only sees the page shown in it.
+
+## Org bot API
+
+Vivillon can expose a small HTTP API so your org bot can manage reserves. It is off unless you set:
+
+| Variable | Meaning |
+| --- | --- |
+| `ORG_BOT_API_KEY` | Secret the org bot sends as `Authorization: Bearer <key>`. Enables the API. |
+| `ORG_GUILD_ID` | Server whose Vivillon reserves the org bot adds to / removes from. |
+| `ORG_API_PORT` | Port to listen on (falls back to `PORT`, then `8080`). The host must expose this port publicly. |
+| `ORG_RESERVES_FILE` | Optional. Org list file, default `org_reserves.json`. |
+| `ORG_RESTRICTIONS_FILE` | Optional. Slot rules, default `org_restrictions.json`. |
+
+Restriction file (optional; slots without a rule allow anything):
+
+```json
+{"slots": {"slot1": {"allowed": ["Pikachu", "Eevee"]}, "slot2": {"blocked": ["Mewtwo"]}}}
+```
+
+All requests need the `Authorization` header and return JSON with `"success"`. Errors use `{"success": false, "error": "..."}`: `400` invalid request, `401` unauthorized, `403` not allowed in that slot, `404` Pokémon not found / not reserved.
+
+- `POST /api/org/validate` with `{"pokemon": "Pikachu", "slot": "slot1"}` checks the name exists and the slot allows it. `slot` is optional; `"All Eevee"` is accepted for all forms.
+- `POST /api/org/reserves` with `{"action": "add" or "remove", "pokemon": "Pikachu", "userId": "123456789012345678", "slot": "slot1"}` validates, then adds/removes the reserve in the org list and in Vivillon's saved reserves (same as `v!r add`). Success: `{"success": true, "action": "add", "pokemon": "Pikachu", "userId": "...", "slot": "slot1", "changed": true}`.
+- `GET /api/org/reserves` lists the org's reserves: `{"success": true, "count": 1, "reserves": [{"pokemon": "Pikachu", "userId": "...", "slot": "slot1"}]}`. Use this for `!res list`.
+- `POST /api/org/reset` (for `!org start`) clears the org list only; Pokémon already saved in Vivillon's reserves are kept.
+
+Example:
+
+```
+curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
+  -H "Authorization: Bearer YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{"action":"add","pokemon":"Pikachu","userId":"123456789012345678"}'
+```

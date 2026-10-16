@@ -14,6 +14,8 @@ from typing import Final
 
 import aiohttp
 import discord
+from aiohttp import web
+from org_api import OrgReserves, create_app
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
 
@@ -2411,6 +2413,7 @@ class NamingBot(discord.Client):
         )
         self.image_http: aiohttp.ClientSession | None = None
         self.handled_spawn_ids: dict[int, None] = {}
+        self.org_runner: web.AppRunner | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
         self.shinyhunt_path = Path(
@@ -2422,7 +2425,53 @@ class NamingBot(discord.Client):
         )
         self.collections = load_reservations(self.collection_path)
 
+    def org_add_reserve(self, name: str, user_id: int) -> None:
+        guild_id = int(os.environ["ORG_GUILD_ID"])
+        updated = add_reservations_bulk(
+            self.reservations, guild_id, [(name, user_id)]
+        )
+        save_reservations(self.reserve_path, updated)
+        self.reservations = updated
+
+    def org_remove_reserve(self, name: str, user_id: int) -> bool:
+        guild_id = int(os.environ["ORG_GUILD_ID"])
+        updated, removed = remove_reservation(
+            self.reservations, guild_id, name, user_id
+        )
+        if removed:
+            save_reservations(self.reserve_path, updated)
+            self.reservations = updated
+        return removed
+
+    async def start_org_api(self) -> None:
+        api_key = os.environ.get("ORG_BOT_API_KEY", "").strip()
+        if not api_key:
+            return
+        try:
+            guild_id = int(os.environ["ORG_GUILD_ID"])
+        except (KeyError, ValueError):
+            logger.error("ORG_GUILD_ID is required for the org API; API disabled")
+            return
+        org = OrgReserves(
+            Path(os.environ.get("ORG_RESERVES_FILE", "org_reserves.json")),
+            Path(os.environ.get("ORG_RESTRICTIONS_FILE", "org_restrictions.json")),
+            load_known_pokemon_names(),
+        )
+        app = create_app(
+            api_key,
+            org,
+            guild_id,
+            self.org_add_reserve,
+            self.org_remove_reserve,
+        )
+        self.org_runner = web.AppRunner(app)
+        await self.org_runner.setup()
+        port = int(os.environ.get("ORG_API_PORT") or os.environ.get("PORT") or 8080)
+        await web.TCPSite(self.org_runner, "0.0.0.0", port).start()
+        logger.info("Org API listening on port %s", port)
+
     async def setup_hook(self) -> None:
+        await self.start_org_api()
         self.image_http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=20),
             connector=aiohttp.TCPConnector(limit=0),
@@ -2430,6 +2479,8 @@ class NamingBot(discord.Client):
         )
 
     async def close(self) -> None:
+        if self.org_runner is not None:
+            await self.org_runner.cleanup()
         if self.image_http is not None:
             await self.image_http.close()
         await self.openai.close()

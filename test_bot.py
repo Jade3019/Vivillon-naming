@@ -1406,5 +1406,27 @@ class PokemonNameValidationTests(unittest.TestCase):
         self.assertFalse(is_valid_pokemon_name("Gothorita!"))
 
 
+class OrgReservesTests(unittest.TestCase):
+    def test_validation_and_restrictions(self):
+        import tempfile
+        from org_api import OrgError, OrgReserves
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "r.json").write_text(
+                '{"slots": {"s": {"allowed": ["Pikachu"]}}}', encoding="utf-8"
+            )
+            org = OrgReserves(root / "o.json", root / "r.json", ["Pikachu", "Eevee"])
+            self.assertEqual(org.validate("all pikachu", "s"), ("Pikachu", True))
+            with self.assertRaises(OrgError):
+                org.validate("Eevee", "s")
+            with self.assertRaises(OrgError):
+                org.validate("Nope", None)
+            self.assertTrue(org.add("Pikachu", 1, "s"))
+            self.assertFalse(org.add("Pikachu", 1, "s"))
+            self.assertEqual(org.reset(), 1)
+            self.assertEqual(org.entries, [])
+
+
 if __name__ == "__main__":
     unittest.main()

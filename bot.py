@@ -2407,7 +2407,9 @@ class NamingBot(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.config = config
-        self.openai = AsyncOpenAI(api_key=config.openai_api_key, max_retries=5)
+        self.openai = AsyncOpenAI(
+            api_key=config.openai_api_key, max_retries=1, timeout=10.0
+        )
         self.vision_semaphore = asyncio.Semaphore(
             config.max_concurrent_vision_requests
         )
@@ -3107,6 +3109,7 @@ class NamingBot(discord.Client):
         while len(self.handled_spawn_ids) > 5000:
             del self.handled_spawn_ids[next(iter(self.handled_spawn_ids))]
 
+        started = time.monotonic()
         try:
             async with self.vision_semaphore:
                 for attempt in range(3):
@@ -3119,10 +3122,15 @@ class NamingBot(discord.Client):
                             detail=self.config.openai_image_detail,
                         )
                         break
-                    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                    except (
+                        aiohttp.ClientError,
+                        asyncio.TimeoutError,
+                        ValueError,
+                        OpenAIError,
+                    ):
                         if attempt == 2:
                             raise
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(0.1)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
             logger.exception("Could not recognize spawn in message %s", message.id)
             await message.reply(
@@ -3138,6 +3146,12 @@ class NamingBot(discord.Client):
             )
             return
 
+        logger.info(
+            "Recognized %s in %.2fs (message %s)",
+            name or "nothing",
+            time.monotonic() - started,
+            message.id,
+        )
         if not name:
             await message.reply(
                 "I couldn't confidently identify that Pokémon.",

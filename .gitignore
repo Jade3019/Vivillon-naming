@@ -4,3 +4,4 @@ __pycache__/
 *.py[cod]
 reserves.json
 reserves.json.tmp
+.bank_cache/

@@ -328,9 +328,9 @@ async def recognize_pokemon(
     downloaded: tuple[bytes, str] | None = None
     if matcher is not None and matcher.entries:
         downloaded = await download_image(http, url)
-        found = matcher.match(downloaded[0])
+        found = await asyncio.to_thread(matcher.match, downloaded[0])
         if found is not None:
-            logger.info("Matched %s from reference images (distance %d)", *found)
+            logger.info("Matched %s from reference images (%d votes)", *found)
             return found[0], 100.0
 
     if client is None:
@@ -1935,7 +1935,7 @@ class NamingBot(discord.Client):
         )
         self.image_http: aiohttp.ClientSession | None = None
         self.image_matcher = ImageMatcher(
-            Path(os.environ.get("POKEMON_IMAGES_DIR", "pokemon_images"))
+            Path(os.environ.get("IMAGE_BANK_FILE", "image_bank.npz"))
         )
         self.handled_spawn_ids: dict[int, None] = {}
         self.org_runner: web.AppRunner | None = None

@@ -234,8 +234,16 @@ curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
 
 ## Reference images (faster recognition)
 
-Put one reference spawn picture per Pokémon in `pokemon_images/`, named exactly like the Pokémon (`Pikachu.png`, `Mr. Mime.png`, `Alolan Raichu.png`). You can also make a folder named like the Pokémon (`pokemon_images/Abomasnow/`) and put its pictures inside with any file names. Extra pictures in a single folder get a number (`Pikachu 2.png`, `Pikachu_2.png` or `Pikachu (2).png`; any amount is fine). Use the real spawn image Pokétwo posts, then restart the bot.
+Put each Pokémon's spawn pictures in its own folder inside `pokemon_images/`, named exactly like the Pokémon (`pokemon_images/Abomasnow/`, `pokemon_images/Mega Absol/`). The file names inside don't matter. Use real spawn images Pokétwo posts, ideally with different backgrounds (about 10 to 25 each).
 
-When a spawn's image closely matches a reference, the bot names it instantly without calling OpenAI (shown as 100.00%). Anything that doesn't match still goes to OpenAI as before. With an empty folder nothing changes. Set `POKEMON_IMAGES_DIR` to use a different folder. This needs Pillow (in `requirements.txt`); upload `image_match.py` and the folder with `bot.py`.
+Then build the feature file and upload it to the host:
+
+```
+python build_image_bank.py
+```
+
+This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later runs (cached in `.bank_cache/`). The bot loads `image_bank.npz` at startup (or the file in `IMAGE_BANK_FILE`), so the pictures themselves don't need to be on the host. Upload `image_bank.npz`, `image_match.py` and `bot.py`, then restart.
+
+When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 
 `OPENAI_API_KEY` is optional. Without it the bot names spawns only from the reference images and stays silent (it logs `No reference image matched`) for any spawn that doesn't match, so add pictures for every Pokémon you want named.

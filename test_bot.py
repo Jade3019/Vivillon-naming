@@ -84,7 +84,6 @@ class ConfigTests(unittest.TestCase):
     def load_config(self, **environment: str) -> Config:
         variables = {
             "DISCORD_TOKEN": "test-token",
-            "OPENAI_API_KEY": "test-key",
             "POKETWO_BOT_ID": "12345",
             **environment,
         }
@@ -100,6 +99,12 @@ class ConfigTests(unittest.TestCase):
         config = self.load_config(ALLOWED_CHANNEL_ID="100")
 
         self.assertEqual(config.allowed_channel_ids, frozenset({100}))
+
+    def test_openai_key_is_optional(self) -> None:
+        self.assertIsNone(self.load_config().openai_api_key)
+        self.assertEqual(
+            self.load_config(OPENAI_API_KEY=" abc ").openai_api_key, "abc"
+        )
 
     def test_unset_channel_allowlist_allows_all_channels(self) -> None:
         config = self.load_config()

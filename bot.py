@@ -199,7 +199,7 @@ FIRE_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
 @dataclass(frozen=True)
 class Config:
     discord_token: str
-    openai_api_key: str
+    openai_api_key: str | None
     poketwo_bot_id: int
     allowed_channel_ids: frozenset[int] | None
     max_concurrent_vision_requests: int
@@ -214,8 +214,7 @@ class Config:
         poketwo_bot_id = os.environ.get("POKETWO_BOT_ID")
         if not discord_token:
             raise ValueError("DISCORD_TOKEN is required")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required")
+        openai_api_key = (openai_api_key or "").strip() or None
         if not poketwo_bot_id:
             raise ValueError("POKETWO_BOT_ID is required")
 
@@ -299,6 +298,10 @@ def image_url(message: discord.Message) -> str | None:
     return None
 
 
+class NoMatchError(Exception):
+    pass
+
+
 async def download_image(
     http: aiohttp.ClientSession, url: str
 ) -> tuple[bytes, str]:
@@ -316,7 +319,7 @@ async def download_image(
 async def recognize_pokemon(
     url: str,
     *,
-    client: AsyncOpenAI,
+    client: AsyncOpenAI | None,
     http: aiohttp.ClientSession,
     model: str,
     detail: str = "low",
@@ -329,6 +332,9 @@ async def recognize_pokemon(
         if found is not None:
             logger.info("Matched %s from reference images (distance %d)", *found)
             return found[0], 100.0
+
+    if client is None:
+        raise NoMatchError("No reference image matched and OpenAI is not configured")
 
     if downloaded is None:
         # Letting OpenAI fetch the image skips our own download and base64 step.
@@ -2424,8 +2430,10 @@ class NamingBot(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.config = config
-        self.openai = AsyncOpenAI(
-            api_key=config.openai_api_key, max_retries=1, timeout=10.0
+        self.openai: AsyncOpenAI | None = (
+            AsyncOpenAI(api_key=config.openai_api_key, max_retries=1, timeout=10.0)
+            if config.openai_api_key
+            else None
         )
         self.vision_semaphore = asyncio.Semaphore(
             config.max_concurrent_vision_requests
@@ -2505,7 +2513,8 @@ class NamingBot(discord.Client):
             await self.org_runner.cleanup()
         if self.image_http is not None:
             await self.image_http.close()
-        await self.openai.close()
+        if self.openai is not None:
+            await self.openai.close()
         await super().close()
 
     async def on_ready(self) -> None:
@@ -3143,6 +3152,8 @@ class NamingBot(discord.Client):
                             matcher=self.image_matcher,
                         )
                         break
+                    except NoMatchError:
+                        raise
                     except (
                         aiohttp.ClientError,
                         asyncio.TimeoutError,
@@ -3158,6 +3169,9 @@ class NamingBot(discord.Client):
                 "I couldn't identify that spawn. Check the bot logs for details.",
                 mention_author=False,
             )
+            return
+        except NoMatchError:
+            logger.info("No reference image matched spawn %s", message.id)
             return
         except OpenAIError:
             logger.exception("Vision request failed for message %s", message.id)

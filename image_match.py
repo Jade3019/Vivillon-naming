@@ -40,7 +40,7 @@ def hash_image(data: bytes) -> int | None:
 
 def pokemon_name_from_file(path: Path) -> str:
     # "Pikachu 2.png" is a second picture of Pikachu.
-    return re.sub(r"[\s_]+\d+$", "", path.stem).strip()
+    return re.sub(r"(?:[\s_-]+\(?\d+\)?|\s*\(\d+\))$", "", path.stem).strip()
 
 
 class ImageMatcher:

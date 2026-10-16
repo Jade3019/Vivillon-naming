@@ -48,10 +48,14 @@ class ImageMatcher:
         self.entries: list[tuple[int, str]] = []
         if Image is None or not folder.is_dir():
             return
-        for path in sorted(folder.iterdir()):
+        for path in sorted(folder.rglob("*")):
             if path.suffix.lower() not in IMAGE_SUFFIXES:
                 continue
-            name = pokemon_name_from_file(path)
+            # A file inside a subfolder takes the Pokémon name from the folder.
+            if path.parent != folder:
+                name = path.parent.relative_to(folder).parts[0].strip()
+            else:
+                name = pokemon_name_from_file(path)
             image_hash = hash_image(path.read_bytes())
             if name and image_hash is not None:
                 self.entries.append((image_hash, name))

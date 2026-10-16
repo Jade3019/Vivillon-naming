@@ -231,3 +231,9 @@ curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
   -H "Authorization: Bearer YOUR_KEY" -H "Content-Type: application/json" \
   -d '{"action":"add","pokemon":"Pikachu","userId":"123456789012345678"}'
 ```
+
+## Reference images (faster recognition)
+
+Put one reference spawn picture per Pokémon in `pokemon_images/`, named exactly like the Pokémon (`Pikachu.png`, `Mr. Mime.png`, `Alolan Raichu.png`). Extra pictures of the same Pokémon get a number (`Pikachu 2.png`). Use the real spawn image Pokétwo posts, then restart the bot.
+
+When a spawn's image closely matches a reference, the bot names it instantly without calling OpenAI (shown as 100.00%). Anything that doesn't match still goes to OpenAI as before. With an empty folder nothing changes. Set `POKEMON_IMAGES_DIR` to use a different folder. This needs Pillow (in `requirements.txt`); upload `image_match.py` and the folder with `bot.py`.

@@ -15,6 +15,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
+from image_match import ImageMatcher
 from org_api import OrgReserves, create_app
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
@@ -298,6 +299,20 @@ def image_url(message: discord.Message) -> str | None:
     return None
 
 
+async def download_image(
+    http: aiohttp.ClientSession, url: str
+) -> tuple[bytes, str]:
+    async with http.get(url) as response:
+        response.raise_for_status()
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
+        if not content_type.startswith("image/"):
+            raise ValueError(f"Spawn image URL returned non-image content: {content_type}")
+        image_bytes = await response.read()
+    if not image_bytes:
+        raise ValueError("Spawn image was empty")
+    return image_bytes, content_type
+
+
 async def recognize_pokemon(
     url: str,
     *,
@@ -305,25 +320,27 @@ async def recognize_pokemon(
     http: aiohttp.ClientSession,
     model: str,
     detail: str = "low",
+    matcher: ImageMatcher | None = None,
 ) -> tuple[str, float]:
-    # Letting OpenAI fetch the image skips our own download and base64 step.
-    try:
-        return await request_prediction(
-            url, client=client, model=model, detail=detail
-        )
-    except BadRequestError:
-        logger.info("OpenAI could not fetch the image URL; uploading it instead")
+    downloaded: tuple[bytes, str] | None = None
+    if matcher is not None and matcher.entries:
+        downloaded = await download_image(http, url)
+        found = matcher.match(downloaded[0])
+        if found is not None:
+            logger.info("Matched %s from reference images (distance %d)", *found)
+            return found[0], 100.0
 
-    async with http.get(url) as response:
-        response.raise_for_status()
-        content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
-        if not content_type.startswith("image/"):
-            raise ValueError(f"Spawn image URL returned non-image content: {content_type}")
-        image_bytes = await response.read()
+    if downloaded is None:
+        # Letting OpenAI fetch the image skips our own download and base64 step.
+        try:
+            return await request_prediction(
+                url, client=client, model=model, detail=detail
+            )
+        except BadRequestError:
+            logger.info("OpenAI could not fetch the image URL; uploading it instead")
+            downloaded = await download_image(http, url)
 
-    if not image_bytes:
-        raise ValueError("Spawn image was empty")
-
+    image_bytes, content_type = downloaded
     encoded_image = base64.b64encode(image_bytes).decode("ascii")
     return await request_prediction(
         f"data:{content_type};base64,{encoded_image}",
@@ -2414,6 +2431,9 @@ class NamingBot(discord.Client):
             config.max_concurrent_vision_requests
         )
         self.image_http: aiohttp.ClientSession | None = None
+        self.image_matcher = ImageMatcher(
+            Path(os.environ.get("POKEMON_IMAGES_DIR", "pokemon_images"))
+        )
         self.handled_spawn_ids: dict[int, None] = {}
         self.org_runner: web.AppRunner | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
@@ -3120,6 +3140,7 @@ class NamingBot(discord.Client):
                             http=self.image_http,
                             model=self.config.openai_model,
                             detail=self.config.openai_image_detail,
+                            matcher=self.image_matcher,
                         )
                         break
                     except (

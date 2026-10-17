@@ -2060,6 +2060,23 @@ class NamingBot(discord.Client):
     async def on_ready(self) -> None:
         logger.info("Logged in as %s", self.user)
 
+    async def set_poketwo_blocked(self, channel, blocked: bool) -> None:
+        """Deny (or restore) Pokétwo's Send Messages permission in a channel."""
+        target = discord.Object(id=self.config.poketwo_bot_id)
+        try:
+            if blocked:
+                await channel.set_permissions(
+                    target,
+                    send_messages=False,
+                    reason="Missingno spawned; blocking Pokétwo until v!r",
+                )
+            else:
+                await channel.set_permissions(
+                    target, overwrite=None, reason="v!r: restoring Pokétwo"
+                )
+        except (discord.Forbidden, discord.HTTPException, AttributeError) as error:
+            logger.warning("Could not change Pokétwo permissions: %s", error)
+
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
@@ -2076,7 +2093,9 @@ class NamingBot(discord.Client):
         if message.author.id != self.config.poketwo_bot_id:
             if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
                 if channel_id is not None:
-                    self.muted_poketwo_channels.discard(channel_id)
+                    if channel_id in self.muted_poketwo_channels:
+                        self.muted_poketwo_channels.discard(channel_id)
+                        await self.set_poketwo_blocked(message.channel, False)
                 if re.match(
                     r"^v!r\s+(?:add|list|search|remove|clear|e|exchange)(?:\s|$)",
                     message.content,
@@ -2777,6 +2796,7 @@ class NamingBot(discord.Client):
             channel_id = getattr(message.channel, "id", None)
             if channel_id is not None:
                 self.muted_poketwo_channels.add(channel_id)
+                await self.set_poketwo_blocked(message.channel, True)
             await message.reply(
                 "Ping a staff member. Dont catch the pokemon.",
                 mention_author=False,

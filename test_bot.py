@@ -212,6 +212,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         message = Mock()
         message.id = 123
         message.channel.id = 456
+        message.channel.set_permissions = AsyncMock()
         message.attachments = [
             Mock(content_type="image/png", url="https://example.test/missingno.png")
         ]
@@ -243,6 +244,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         spawn = Mock()
         spawn.id = 123
         spawn.channel.id = 456
+        spawn.channel.set_permissions = AsyncMock()
         spawn.attachments = [
             Mock(content_type="image/png", url="https://example.test/missingno.png")
         ]
@@ -256,6 +258,8 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_spawn(spawn)
 
         self.assertIn(456, self.bot.muted_poketwo_channels)
+        spawn.channel.set_permissions.assert_awaited_once()
+        self.assertIs(spawn.channel.set_permissions.await_args.kwargs["send_messages"], False)
 
         poketwo_message = Mock()
         poketwo_message.author.bot = True
@@ -274,6 +278,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         reserve_command.author.bot = False
         reserve_command.author.id = 789
         reserve_command.channel.id = 456
+        reserve_command.channel.set_permissions = AsyncMock()
         reserve_command.content = "v!r list"
         reserve_command.embeds = []
         reserve_command.attachments = []
@@ -281,6 +286,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(reserve_command)
 
         self.assertNotIn(456, self.bot.muted_poketwo_channels)
+        reserve_command.channel.set_permissions.assert_awaited_once()
         self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
 
 

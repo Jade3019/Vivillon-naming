@@ -68,7 +68,9 @@ Missingno match immediately posts a staff warning.
 Other test matches never send a catch command.
 After a Missingno match (real or `v!test`), Vivillon ignores further Pokétwo messages
 and edits in that channel until someone sends a `v!r` command there. This only
-silences Vivillon's processing; it cannot stop Pokétwo from posting messages.
+silences Vivillon's processing. Vivillon also denies Pokétwo's Send Messages
+permission in that channel (needs Manage Permissions) so no more spawns appear,
+and `v!r` restores it.
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 

@@ -58,6 +58,7 @@ from bot import (
     is_single_type_electric_pokemon,
     type_icon_filename_for_pokemon,
     load_pokemon_forms,
+    load_server_settings,
     load_reservations,
     parse_reserve_add_command,
     parse_reserve_remove_command,
@@ -65,6 +66,7 @@ from bot import (
     parse_shinyhunt_command,
     parse_shinyhunt_remove_command,
     ReservationPagesView,
+    NamingSettingsView,
     ServerSettingsView,
     remove_reservation,
     remove_reservations,
@@ -81,6 +83,7 @@ from bot import (
     poketwo_incense_action,
     POKETWO_COMMAND_BOT_ID,
     SERVER_ID,
+    reservation_key,
     Config,
     NamingBot,
 )
@@ -239,6 +242,153 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         fields = {field.name: field.value for field in embed.fields}
         self.assertEqual(fields["Active Incense"], "2")
 
+    async def test_naming_settings_toggle_persists_per_server(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.server_settings_path = Path(directory) / "settings.json"
+            self.bot.server_settings = {}
+
+            self.assertEqual(
+                self.bot.naming_settings_for_guild(SERVER_ID),
+                {"enabled": True, "assisted": True, "pings": False},
+            )
+            updated = self.bot.toggle_naming_setting(SERVER_ID, "enabled")
+            self.assertFalse(updated["enabled"])
+            self.assertTrue(updated["assisted"])
+            updated = self.bot.toggle_naming_setting(SERVER_ID, "assisted")
+            self.assertFalse(updated["assisted"])
+            self.assertTrue(
+                self.bot.naming_settings_for_guild(SERVER_ID + 1)["enabled"]
+            )
+            self.assertEqual(
+                load_server_settings(self.bot.server_settings_path)[str(SERVER_ID)],
+                {"enabled": False, "assisted": False, "pings": False},
+            )
+
+    async def test_naming_settings_button_requires_permission_and_saves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.server_settings_path = Path(directory) / "settings.json"
+            self.bot.server_settings = {}
+            view = NamingSettingsView(self.bot, SERVER_ID)
+            sections = [
+                child
+                for child in view.children[0].children
+                if isinstance(child, discord.ui.Section)
+            ]
+            enabled_button = sections[0].accessory
+            interaction = Mock()
+            interaction.guild_id = SERVER_ID
+            interaction.user.guild_permissions.manage_guild = False
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+
+            await enabled_button.callback(interaction)
+
+            interaction.response.send_message.assert_awaited_once()
+            interaction.response.edit_message.assert_not_awaited()
+            self.assertTrue(
+                self.bot.naming_settings_for_guild(SERVER_ID)["enabled"]
+            )
+            interaction.user.guild_permissions.manage_guild = True
+
+            await enabled_button.callback(interaction)
+
+            self.assertFalse(
+                self.bot.naming_settings_for_guild(SERVER_ID)["enabled"]
+            )
+            interaction.response.edit_message.assert_awaited_once()
+            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_sections = [
+                child
+                for child in updated_view.children[0].children
+                if isinstance(child, discord.ui.Section)
+            ]
+            self.assertEqual(updated_sections[0].accessory.label, "Off")
+
+            mode_button = updated_sections[1].accessory
+            await mode_button.callback(interaction)
+            self.assertFalse(
+                self.bot.naming_settings_for_guild(SERVER_ID)["assisted"]
+            )
+            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_sections = [
+                child
+                for child in updated_view.children[0].children
+                if isinstance(child, discord.ui.Section)
+            ]
+            self.assertEqual(updated_sections[1].accessory.label, "Name only")
+
+    async def test_spawn_settings_disable_names_filter_pings_and_remove_copy_text(
+        self,
+    ) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+
+        def spawn_message(message_id: int) -> Mock:
+            message = Mock()
+            message.id = message_id
+            message.guild.id = SERVER_ID
+            message.channel.id = 400 + message_id
+            message.attachments = [
+                Mock(content_type="image/png", url="https://example.test/spawn.png")
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+            return message
+
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": False,
+            "assisted": True,
+            "pings": False,
+        }
+        disabled_message = spawn_message(701)
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Pikachu", 99.0)),
+        ):
+            await self.bot.handle_spawn(disabled_message)
+        disabled_message.reply.assert_not_awaited()
+
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": True,
+        }
+        unpinged_message = spawn_message(702)
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Pikachu", 99.0)),
+        ):
+            await self.bot.handle_spawn(unpinged_message)
+        unpinged_message.reply.assert_not_awaited()
+
+        self.bot.collections = {reservation_key(SERVER_ID, "Pikachu"): [123]}
+        pinged_message = spawn_message(703)
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Pikachu", 99.0)),
+        ):
+            await self.bot.handle_spawn(pinged_message)
+
+        pinged_message.reply.assert_awaited_once()
+        content = pinged_message.reply.await_args.args[0]
+        self.assertIn("<@123>", content)
+        self.assertIn("Pikachu", content)
+        self.assertNotIn("c pikachu", content)
+        self.assertIsNone(pinged_message.reply.await_args.kwargs["embed"])
+
+        self.bot.server_settings[str(SERVER_ID)]["pings"] = False
+        name_only_message = spawn_message(704)
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Charizard", 99.0)),
+        ):
+            await self.bot.handle_spawn(name_only_message)
+        name_only_message.reply.assert_awaited_once()
+        name_only_content = name_only_message.reply.await_args.args[0]
+        self.assertIn("Charizard", name_only_content)
+        self.assertNotIn("Copy Here", name_only_content)
+        self.assertNotIn("c charizard", name_only_content)
+        self.assertIsNone(name_only_message.reply.await_args.kwargs["embed"])
+
     async def test_api_status_reports_response_metrics_and_load(self) -> None:
         self.bot.pokemon_named_count = 12
         now = time.monotonic()
@@ -295,6 +445,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         message = Mock()
         message.author.bot = False
         message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
         message.content = "v!settings"
         message.embeds = []
         message.attachments = []
@@ -327,6 +478,15 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 "server_settings:open:appearance",
             ],
         )
+        interaction = Mock()
+        interaction.guild_id = SERVER_ID
+        interaction.response.edit_message = AsyncMock()
+        interaction.response.send_message = AsyncMock()
+
+        await sections[0].accessory.callback(interaction)
+
+        naming_view = interaction.response.edit_message.await_args.kwargs["view"]
+        self.assertIsInstance(naming_view, NamingSettingsView)
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):

@@ -68,23 +68,38 @@ Pokétwo's permission and replies `Channel unpaused.` (a bare `v!r` always repli
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 
-When Pokétwo posts a wild-spawn image, the bot replies with one predicted name
-and its estimated confidence percentage (for example, `Pikachu: 85.00%`). The
-confidence is a model estimate, not a calibrated probability. The vision model
+When naming is enabled and a spawn qualifies under Pings mode, the bot replies
+with one predicted name and its estimated confidence percentage (for example,
+`Pikachu: 85.00%`). The confidence is a model estimate, not a calibrated
+probability. The vision model
 compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
 matching Pokétwo catch command as inline code for easier copying, preceded by a
-bold “Copy Here >” label. A separate desktop copy card below it shows “Catch
-[Pokémon]”, “Copy Below”, and the Pokétwo catch command. Discord displays both
-formats on mobile and desktop.
-Discord's copy controls depend on the client; the bot cannot directly write to a user's
-clipboard. Pure Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Configured paired types that include any of those types show both corresponding custom emojis inline. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
+bold “Copy Here >” label, when Assisted mode is on. A separate desktop copy card
+below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
+Assisted mode can be turned off to show names and mentions without catch commands.
+Discord displays both copy formats on mobile and desktop. Discord's copy controls
+depend on the client; the bot cannot directly write to a user's clipboard. Pure
+Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis
+inline with the guessed name and no embed. Configured paired types that include
+any of those types show both corresponding custom emojis inline. Other
+configured type matches show their icons beside the guessed name in an embed,
+with the catch command in the embed description when Assisted mode is on. Other
+dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and
+collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends
 asks for a staff member; it does not send a catch command for that spawn.
 
 This application does not bypass those restrictions.
+
+Use `v!settings` to configure naming separately for each server. Members with
+Manage Server permission can turn naming on or off, disable Assisted mode to
+remove catch-command copy messages while keeping Pokémon names, and enable
+Pings mode to name only Pokémon with a matching reserve, shinyhunt, or collection
+member. Settings are saved to `server_settings.json` by default; set
+`SERVER_SETTINGS_FILE` to use another path.
 
 Use `v!api` in the configured server to view the number of Pokémon recognized
 since restart, recent inference and response-time statistics, current request

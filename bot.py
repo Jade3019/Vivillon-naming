@@ -471,6 +471,8 @@ def format_spawn_reply(
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
     collection_user_ids: list[int] | None = None,
+    *,
+    assisted: bool = True,
 ) -> str:
     command = format_catch_command(poketwo_bot_id, name)
     lines = [format_guess(name, confidence)]
@@ -481,7 +483,8 @@ def format_spawn_reply(
             collection_user_ids,
         )
     )
-    lines.append(f"**Copy Here >** `{command}`")
+    if assisted:
+        lines.append(f"**Copy Here >** `{command}`")
     return "\n".join(lines)
 
 
@@ -620,6 +623,7 @@ def format_custom_type_spawn_reply(
     include_electric: bool = False,
     include_grass: bool = False,
     include_ice: bool = False,
+    assisted: bool = True,
 ) -> str:
     lines = format_spawn_mention_lines(
         reserved_user_ids,
@@ -683,9 +687,10 @@ def format_custom_type_spawn_reply(
         if type_name in included_types
     ]
     lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence)}")
-    lines.append(
-        f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"
-    )
+    if assisted:
+        lines.append(
+            f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"
+        )
     return "\n".join(lines)
 
 
@@ -750,9 +755,13 @@ def format_type_spawn_embed(
     confidence: float,
     poketwo_bot_id: int,
     icon_filename: str,
+    *,
+    assisted: bool = True,
 ) -> discord.Embed:
     embed = discord.Embed(
-        description=f"`{format_catch_command(poketwo_bot_id, name)}`"
+        description=(
+            f"`{format_catch_command(poketwo_bot_id, name)}`" if assisted else None
+        )
     )
     embed.set_author(
         name=format_guess(name, confidence),
@@ -1775,9 +1784,104 @@ class InertSettingsButton(discord.ui.Button):
         await interaction.response.defer()
 
 
+class NamingSectionButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Open",
+            style=discord.ButtonStyle.primary,
+            custom_id="server_settings:open:naming",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=NamingSettingsView(self.bot, self.guild_id)
+        )
+
+
+class NamingSettingToggleButton(discord.ui.Button):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        setting: str,
+        enabled: bool,
+    ) -> None:
+        if setting == "assisted":
+            label = "Assisted" if enabled else "Name only"
+        else:
+            label = "On" if enabled else "Off"
+        super().__init__(
+            label=label,
+            style=(
+                discord.ButtonStyle.success
+                if enabled
+                else discord.ButtonStyle.secondary
+            ),
+            custom_id=f"server_settings:naming:{setting}",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.setting = setting
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if (
+            interaction.guild_id != self.guild_id
+            or not interaction.user.guild_permissions.manage_guild
+        ):
+            await interaction.response.send_message(
+                "Only members with Manage Server permission can change these settings.",
+                ephemeral=True,
+            )
+            return
+        try:
+            self.bot.toggle_naming_setting(self.guild_id, self.setting)
+        except ValueError:
+            logger.exception("Could not save naming settings for guild %s", self.guild_id)
+            await interaction.response.send_message(
+                "I couldn't save these settings. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=NamingSettingsView(self.bot, self.guild_id)
+        )
+
+
+class NamingSettingsBackButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Back",
+            style=discord.ButtonStyle.secondary,
+            custom_id="server_settings:naming:back",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=ServerSettingsView(self.bot, self.guild_id)
+        )
+
+
 class ServerSettingsView(discord.ui.LayoutView):
-    def __init__(self) -> None:
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
         super().__init__(timeout=None)
+        self.bot = bot
+        settings = bot.naming_settings_for_guild(guild_id)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 "## Server Settings\n"
@@ -1785,8 +1889,12 @@ class ServerSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(),
             discord.ui.Section(
-                discord.ui.TextDisplay("**Naming**\nNaming `On` - Mode `Assisted`"),
-                accessory=InertSettingsButton("naming"),
+                discord.ui.TextDisplay(
+                    "**Naming**\n"
+                    f"Naming `{'On' if settings['enabled'] else 'Off'}` - "
+                    f"Mode `{'Assisted' if settings['assisted'] else 'Name only'}`"
+                ),
+                accessory=NamingSectionButton(bot, guild_id),
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
@@ -1815,6 +1923,57 @@ class ServerSettingsView(discord.ui.LayoutView):
                 "-# Server settings are kept for this server's setup. To have them "
                 "removed, open a ticket in the support server:\n"
                 "https://discord.gg/5XurUaW8"
+            ),
+            accent_color=discord.Color.blurple(),
+        )
+        self.add_item(container)
+
+
+class NamingSettingsView(discord.ui.LayoutView):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(timeout=None)
+        settings = bot.naming_settings_for_guild(guild_id)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                "## Server Settings - Naming\n"
+                "Configure this section, then use Back to choose another."
+            ),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Naming**\n"
+                    f"Enabled: `{'On' if settings['enabled'] else 'Off'}`\n"
+                    "Allow Henna to send Pokémon predictions."
+                ),
+                accessory=NamingSettingToggleButton(
+                    bot, guild_id, "enabled", settings["enabled"]
+                ),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Naming Mode**\n"
+                    f"`{'Assisted' if settings['assisted'] else 'Name only'}`\n"
+                    "Assisted mode adds copy-ready catch commands."
+                ),
+                accessory=NamingSettingToggleButton(
+                    bot, guild_id, "assisted", settings["assisted"]
+                ),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Pings**\n"
+                    f"`{'On' if settings['pings'] else 'Off'}`\n"
+                    "Only name Pokémon when a collection, shinyhunt, or reserve "
+                    "member should be pinged."
+                ),
+                accessory=NamingSettingToggleButton(
+                    bot, guild_id, "pings", settings["pings"]
+                ),
+            ),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay("Return to Server Settings."),
+                accessory=NamingSettingsBackButton(bot, guild_id),
             ),
             accent_color=discord.Color.blurple(),
         )
@@ -2009,6 +2168,62 @@ def save_reservations(path: Path, reservations: dict[str, list[int]]) -> None:
         raise ValueError(f"Could not save reserve data to {path}") from error
 
 
+SERVER_NAMING_DEFAULTS: Final[dict[str, bool]] = {
+    "enabled": True,
+    "assisted": True,
+    "pings": False,
+}
+SERVER_NAMING_SETTING_KEYS: Final[frozenset[str]] = frozenset(
+    SERVER_NAMING_DEFAULTS
+)
+
+
+def load_server_settings(path: Path) -> dict[str, dict[str, bool]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read server settings from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Server settings in {path} have an invalid format")
+
+    settings: dict[str, dict[str, bool]] = {}
+    for guild_id, guild_settings in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(guild_settings, dict)
+            or any(
+                key not in SERVER_NAMING_SETTING_KEYS
+                or not isinstance(value, bool)
+                for key, value in guild_settings.items()
+            )
+        ):
+            raise ValueError(f"Server settings in {path} have an invalid entry")
+        settings[guild_id] = {
+            **SERVER_NAMING_DEFAULTS,
+            **guild_settings,
+        }
+    return settings
+
+
+def save_server_settings(
+    path: Path,
+    settings: dict[str, dict[str, bool]],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save server settings to {path}") from error
+
+
 class NamingBot(discord.Client):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
@@ -2051,6 +2266,31 @@ class NamingBot(discord.Client):
             os.environ.get("COLLECTIONS_FILE", "collections.json")
         )
         self.collections = load_reservations(self.collection_path)
+        self.server_settings_path = Path(
+            os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
+        )
+        self.server_settings = load_server_settings(self.server_settings_path)
+
+    def naming_settings_for_guild(self, guild_id: int) -> dict[str, bool]:
+        return {
+            **SERVER_NAMING_DEFAULTS,
+            **self.server_settings.get(str(guild_id), {}),
+        }
+
+    def toggle_naming_setting(self, guild_id: int, setting: str) -> dict[str, bool]:
+        if setting not in SERVER_NAMING_SETTING_KEYS:
+            raise ValueError(f"Unknown server naming setting: {setting}")
+        updated_settings = {
+            guild_id: dict(settings)
+            for guild_id, settings in self.server_settings.items()
+        }
+        guild_key = str(guild_id)
+        guild_settings = self.naming_settings_for_guild(guild_id)
+        guild_settings[setting] = not guild_settings[setting]
+        updated_settings[guild_key] = guild_settings
+        save_server_settings(self.server_settings_path, updated_settings)
+        self.server_settings = updated_settings
+        return guild_settings
 
     def org_add_reserve(self, name: str, user_id: int) -> None:
         guild_id = int(os.environ["ORG_GUILD_ID"])
@@ -2304,7 +2544,7 @@ class NamingBot(discord.Client):
 
     async def handle_settings_command(self, message: discord.Message) -> None:
         await message.reply(
-            view=ServerSettingsView(),
+            view=ServerSettingsView(self, message.guild.id),
             mention_author=False,
         )
 
@@ -3095,6 +3335,19 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
+        naming_settings = (
+            self.naming_settings_for_guild(message.guild.id)
+            if message.guild
+            else SERVER_NAMING_DEFAULTS
+        )
+        if not naming_settings["enabled"]:
+            return
+        if naming_settings["pings"] and not (
+            reserved_user_ids or shinyhunter_user_ids or collection_user_ids
+        ):
+            return
+        assisted = naming_settings["assisted"]
+
         is_fire_spawn = is_fire_icon_pokemon(name)
         is_water_spawn = is_water_icon_pokemon(name)
         is_normal_spawn = is_normal_icon_pokemon(name)
@@ -3122,6 +3375,7 @@ class NamingBot(discord.Client):
                 include_electric=is_electric_spawn,
                 include_grass=is_grass_spawn,
                 include_ice=is_ice_spawn,
+                assisted=assisted,
             )
             companion_icon_filename = (
                 fire_companion_icon_filename_for_pokemon(name)
@@ -3129,7 +3383,7 @@ class NamingBot(discord.Client):
                 or normal_companion_icon_filename_for_pokemon(name)
                 or electric_companion_icon_filename_for_pokemon(name)
             )
-            if companion_icon_filename:
+            if assisted and companion_icon_filename:
                 await message.reply(
                     reply,
                     embed=format_pc_catch_embed(name),
@@ -3142,7 +3396,7 @@ class NamingBot(discord.Client):
             else:
                 await message.reply(
                     reply,
-                    embed=format_pc_catch_embed(name),
+                    embed=format_pc_catch_embed(name) if assisted else None,
                     mention_author=False,
                 )
             return
@@ -3150,16 +3404,23 @@ class NamingBot(discord.Client):
         icon_filename = type_icon_filename_for_pokemon(name)
         if icon_filename:
             type_embed = format_type_spawn_embed(
-                name, confidence, POKETWO_COMMAND_BOT_ID, icon_filename
+                name,
+                confidence,
+                POKETWO_COMMAND_BOT_ID,
+                icon_filename,
+                assisted=assisted,
             )
             content_lines = format_spawn_mention_lines(
                 reserved_user_ids,
                 shinyhunter_user_ids,
                 collection_user_ids,
             )
+            embeds = [type_embed]
+            if assisted:
+                embeds.append(format_pc_catch_embed(name))
             await message.reply(
                 content="\n".join(content_lines),
-                embeds=[type_embed, format_pc_catch_embed(name)],
+                embeds=embeds,
                 file=discord.File(
                     Path(__file__).with_name("assets") / icon_filename,
                     filename=icon_filename,
@@ -3175,8 +3436,9 @@ class NamingBot(discord.Client):
                     reserved_user_ids,
                     shinyhunter_user_ids,
                     collection_user_ids,
+                    assisted=assisted,
                 ),
-                embed=format_pc_catch_embed(name),
+                embed=format_pc_catch_embed(name) if assisted else None,
                 mention_author=False,
             )
 

@@ -120,8 +120,19 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.max_concurrent_vision_requests, 8)
 
+    def test_defaults_to_200_concurrent_vision_requests(self) -> None:
+        self.assertEqual(
+            self.load_config().max_concurrent_vision_requests,
+            200,
+        )
+
+    def test_allows_200_concurrent_vision_requests(self) -> None:
+        config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="200")
+
+        self.assertEqual(config.max_concurrent_vision_requests, 200)
+
     def test_rejects_invalid_vision_request_limit(self) -> None:
-        for value in ("0", "-1", "200", "many"):
+        for value in ("0", "-1", "201", "many"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
 

@@ -41,9 +41,9 @@ approval for privileged intents on larger bots.
    The bot responds in every channel and thread in server
    `1530949341013868635`. Messages from other servers and direct messages are
    ignored.
-   The bot queues spawn recognition and processes up to 199 vision requests
+   The bot queues spawn recognition and processes up to 200 vision requests
    concurrently by default. Set `MAX_CONCURRENT_VISION_REQUESTS` to adjust this
-   between 1 and 199 for your OpenAI project’s rate limits; the client retries
+   between 1 and 200 for your OpenAI project’s rate limits; the client retries
    temporary API errors.
    A larger channel count does not increase OpenAI API quota, so billing,
    project limits, and the exact error in the bot logs still matter if requests

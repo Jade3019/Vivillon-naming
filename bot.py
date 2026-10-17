@@ -243,9 +243,9 @@ class Config:
         try:
             poketwo_bot_id = int(poketwo_bot_id)
             max_concurrent_vision_requests = int(
-                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "199")
+                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "200")
             )
-            if not 1 <= max_concurrent_vision_requests < 200:
+            if not 1 <= max_concurrent_vision_requests <= 200:
                 raise ValueError
             return cls(
                 discord_token=discord_token,
@@ -258,7 +258,7 @@ class Config:
         except ValueError as error:
             raise ValueError(
                 "POKETWO_BOT_ID must be a positive numeric Discord ID; "
-                "MAX_CONCURRENT_VISION_REQUESTS must be an integer from 1 to 199"
+                "MAX_CONCURRENT_VISION_REQUESTS must be an integer from 1 to 200"
             ) from error
 
 

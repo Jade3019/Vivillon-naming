@@ -9,7 +9,6 @@ Pokémon only that one is recomputed.
 
 import hashlib
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
@@ -107,21 +106,10 @@ def main() -> None:
         sys.exit(f"No pictures found in {folder}")
     names = sorted(groups)
     per_pokemon = {}
-    processed_images = 0
-    next_pause = 1000
-    total_images = sum(len(paths) for paths in groups.values())
     for number, name in enumerate(names, 1):
         per_pokemon[name] = pokemon_features(name, groups[name], cache)
-        processed_images += len(groups[name])
         if number == 1 or number % 25 == 0 or number == len(names):
             print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)
-        while processed_images >= next_pause and next_pause < total_images:
-            print(
-                f"Processed {processed_images} image files; pausing for 10 seconds.",
-                flush=True,
-            )
-            time.sleep(10)
-            next_pause += 1000
 
     descriptors, labels = assemble_bank(names, per_pokemon)
     np.savez_compressed(

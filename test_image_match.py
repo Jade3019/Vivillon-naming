@@ -48,6 +48,36 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertEqual(list(groups), ["Rapid Strike Urshifu"])
 
+    def test_confined_hoopa_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "hoopa" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Hoopa"])
+
+    def test_power_construct_zygarde_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "zygarde-10-power-construct" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Zygarde"])
+
+    def test_incarnate_tornadus_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "tornadus-incarnate" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Tornadus"])
+
     def test_matches_reference_when_spawn_image_is_flipped(self) -> None:
         cv2 = image_match.cv2
         np = image_match.np

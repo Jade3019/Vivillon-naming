@@ -675,6 +675,20 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Copy Below\n```\n<@716390085896962058> c pikachu\n```",
         )
 
+    def test_zygarde_catch_embed_uses_ten_percent_form_sprite(self) -> None:
+        embed = format_pc_catch_embed("Zygarde")
+
+        self.assertEqual(embed.title, "Catch Zygarde")
+        self.assertEqual(
+            embed.description,
+            "Copy Below\n```\n<@716390085896962058> c zygarde\n```",
+        )
+        self.assertEqual(
+            embed.thumbnail.url,
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/official-artwork/10118.png",
+        )
+
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
         self.assertEqual(
             format_custom_type_spawn_reply(

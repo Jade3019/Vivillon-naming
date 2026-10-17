@@ -20,6 +20,9 @@ PREFIX_SUFFIXES = {
     "paldean": "paldea",
     "primal": "primal",
 }
+SPRITE_OVERRIDES = {
+    "Zygarde": 10118,
+}
 
 
 def fetch_ids(endpoint: str) -> dict[str, int]:
@@ -64,7 +67,9 @@ def main() -> None:
     names += json.loads((root / "pokemon_names.json").read_text(encoding="utf-8"))
     mapping: dict[str, int] = {}
     for name in sorted(set(names)):
-        sprite_id = resolve(name, pokemon, species)
+        sprite_id = SPRITE_OVERRIDES.get(name)
+        if sprite_id is None:
+            sprite_id = resolve(name, pokemon, species)
         if sprite_id is None:
             print(f"No sprite for {name}")
         else:

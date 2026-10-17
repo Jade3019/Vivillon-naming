@@ -1331,7 +1331,7 @@
     "tornadus": [
       {
         "identifier": "tornadus-incarnate",
-        "display_name": "incarnate tornadus"
+        "display_name": "tornadus"
       },
       {
         "identifier": "tornadus-therian",
@@ -1953,7 +1953,7 @@
       },
       {
         "identifier": "zygarde-10-power-construct",
-        "display_name": "10-power-construct zygarde"
+        "display_name": "zygarde"
       },
       {
         "identifier": "zygarde-50-power-construct",
@@ -1981,7 +1981,7 @@
     "hoopa": [
       {
         "identifier": "hoopa",
-        "display_name": "confined hoopa"
+        "display_name": "hoopa"
       },
       {
         "identifier": "hoopa-unbound",

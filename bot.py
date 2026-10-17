@@ -6,7 +6,7 @@ import math
 import os
 import re
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
@@ -33,6 +33,12 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
 POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
 SERVER_ID: Final[int] = 1530949341013868635
+INCENSE_DURATION_SECONDS: Final[int] = 60 * 60
+API_STATUS_WINDOW_SECONDS: Final[int] = 5 * 60
+API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!api\s*$",
+    re.IGNORECASE,
+)
 SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -264,6 +270,18 @@ def message_text(message: discord.Message) -> str:
     return unicodedata.normalize(
         "NFC", "\n".join(part for part in parts if part)
     )
+
+
+def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
+    mention = rf"<@!?{poketwo_bot_id}>"
+    match = re.search(
+        rf"(?:^|\s){mention}\s+(buy\s+incense|stopincense)\b",
+        content,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return "start" if match.group(1).casefold().startswith("buy") else "stop"
 
 
 def image_url(message: discord.Message) -> str | None:
@@ -1949,6 +1967,15 @@ class NamingBot(discord.Client):
         )
         self.handled_spawn_ids: dict[int, None] = {}
         self.muted_poketwo_channels: set[int] = set()
+        self.incense_path = Path(
+            os.environ.get("INCENSE_TRACKING_FILE", "incenses.json")
+        )
+        self.active_incenses = self.load_active_incenses()
+        self.pokemon_named_count = 0
+        self.failed_recognition_count = 0
+        self.active_vision_requests = 0
+        self.pending_vision_requests = 0
+        self.recognition_durations: deque[tuple[float, float]] = deque(maxlen=1000)
         self.org_runner: web.AppRunner | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
@@ -2049,6 +2076,7 @@ class NamingBot(discord.Client):
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
+        self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
             return
         channel_id = getattr(message.channel, "id", None)
@@ -2086,6 +2114,9 @@ class NamingBot(discord.Client):
             if re.fullmatch(r"v!ping\s*", message.content, re.IGNORECASE):
                 await self.handle_ping_command(message)
                 return
+            if API_STATUS_COMMAND_PATTERN.fullmatch(message.content):
+                await self.handle_api_status(message)
+                return
             if re.match(r"^v!sh(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_shinyhunt_command(message)
                 return
@@ -2106,6 +2137,189 @@ class NamingBot(discord.Client):
     def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
         guild = getattr(channel, "guild", None)
         return getattr(guild, "id", None) == SERVER_ID
+
+    def load_active_incenses(self) -> dict[str, dict[str, int | str]]:
+        if not self.incense_path.is_file():
+            return {}
+        try:
+            data = json.loads(self.incense_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning(
+                "Could not load incense tracking from %s: %s",
+                self.incense_path,
+                error,
+            )
+            return {}
+        if not isinstance(data, dict):
+            logger.warning(
+                "Incense tracking file %s has an invalid format", self.incense_path
+            )
+            return {}
+        now = int(time.time())
+        records: dict[str, dict[str, int | str]] = {}
+        for channel_id, record in data.items():
+            if (
+                not isinstance(channel_id, str)
+                or not isinstance(record, dict)
+                or not isinstance(record.get("guild"), str)
+                or not isinstance(record.get("channel"), str)
+                or isinstance(record.get("expires_at"), bool)
+                or not isinstance(record.get("expires_at"), int)
+                or isinstance(record.get("guild_id"), bool)
+                or not isinstance(record.get("guild_id"), int)
+            ):
+                logger.warning(
+                    "Incense tracking file %s has an invalid entry",
+                    self.incense_path,
+                )
+                return {}
+            if record["expires_at"] > now:
+                records[channel_id] = {
+                    "guild": record["guild"],
+                    "channel": record["channel"],
+                    "guild_id": record["guild_id"],
+                    "expires_at": record["expires_at"],
+                }
+        return records
+
+    def save_active_incenses(self) -> None:
+        try:
+            self.incense_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = self.incense_path.with_name(
+                f"{self.incense_path.name}.tmp"
+            )
+            temporary_path.write_text(
+                json.dumps(self.active_incenses, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temporary_path.replace(self.incense_path)
+        except OSError:
+            logger.exception("Could not save incense tracking to %s", self.incense_path)
+
+    def track_incense_command(self, message: discord.Message) -> None:
+        guild = message.guild
+        channel = message.channel
+        if guild is None or message.author.id == self.config.poketwo_bot_id:
+            return
+        action = poketwo_incense_action(message.content, self.config.poketwo_bot_id)
+        if action is None:
+            return
+        channel_id = str(channel.id)
+        if action == "stop":
+            self.active_incenses.pop(channel_id, None)
+        else:
+            self.active_incenses[channel_id] = {
+                "guild": guild.name,
+                "channel": getattr(channel, "name", f"channel-{channel.id}"),
+                "guild_id": guild.id,
+                "expires_at": int(time.time()) + INCENSE_DURATION_SECONDS,
+            }
+        self.save_active_incenses()
+
+    def current_active_incenses(self) -> list[dict[str, int | str]]:
+        now = int(time.time())
+        expired = [
+            channel_id
+            for channel_id, record in self.active_incenses.items()
+            if record["expires_at"] <= now
+        ]
+        if expired:
+            for channel_id in expired:
+                del self.active_incenses[channel_id]
+            self.save_active_incenses()
+        return sorted(
+            self.active_incenses.values(),
+            key=lambda record: (
+                str(record["guild"]).casefold(),
+                str(record["channel"]).casefold(),
+            ),
+        )
+
+    async def handle_api_status(self, message: discord.Message) -> None:
+        now = time.monotonic()
+        recent = [
+            duration
+            for timestamp, duration in self.recognition_durations
+            if now - timestamp <= API_STATUS_WINDOW_SECONDS
+        ]
+        self.recognition_durations = deque(
+            (
+                (timestamp, duration)
+                for timestamp, duration in self.recognition_durations
+                if now - timestamp <= API_STATUS_WINDOW_SECONDS
+            ),
+            maxlen=1000,
+        )
+        active_incenses = self.current_active_incenses()
+        active_text = "\n".join(
+            f"{record['guild']} / #{record['channel']}"
+            for record in active_incenses[:10]
+        )
+        if len(active_incenses) > 10:
+            active_text += f"\n… and {len(active_incenses) - 10} more"
+        if not active_text:
+            active_text = "None detected"
+
+        max_requests = self.config.max_concurrent_vision_requests
+        if self.pending_vision_requests:
+            load_text = f"🟠 Busy: {self.pending_vision_requests} waiting"
+        elif self.active_vision_requests >= max_requests:
+            load_text = "🟠 At capacity"
+        else:
+            load_text = "🟢 Normal"
+        openai_status = (
+            f"SIFT reference matching + OpenAI ({self.config.openai_model}) fallback"
+            if self.openai is not None
+            else "SIFT reference matching only (no OpenAI key)"
+        )
+        if recent:
+            response_text = (
+                f"Avg: {sum(recent) / len(recent):.2f}s · "
+                f"Fastest: {min(recent):.2f}s · "
+                f"Slowest: {max(recent):.2f}s · "
+                f"Latest: {recent[-1]:.2f}s"
+            )
+        else:
+            response_text = "No recognized spawns in the last 5 minutes"
+
+        embed = discord.Embed(title="API Status", color=discord.Color.blurple())
+        embed.add_field(name="Activity", value="Recent" if recent else "Low Activity")
+        embed.add_field(
+            name="Active Incense (estimated)",
+            value=f"{len(active_incenses)}\n{active_text}",
+            inline=False,
+        )
+        embed.add_field(
+            name="Pokémon Named",
+            value=f"{self.pokemon_named_count} since restart",
+        )
+        embed.add_field(
+            name="Responses (last 5 min)",
+            value=response_text,
+            inline=False,
+        )
+        embed.add_field(
+            name="Load",
+            value=(
+                f"{load_text}\n"
+                f"Running: {self.active_vision_requests} · "
+                f"Waiting: {self.pending_vision_requests} · "
+                f"Limit: {max_requests}"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Failed recognitions",
+            value=f"{self.failed_recognition_count} since restart",
+        )
+        embed.add_field(name="Model / Backend", value=openai_status, inline=False)
+        embed.set_footer(
+            text=(
+                "Incense is estimated from observed buy/stop commands and a "
+                "1-hour timer; confirmation/cancellation is not visible to this bot."
+            )
+        )
+        await message.reply(embed=embed, mention_author=False)
 
     async def on_message_edit(
         self, before: discord.Message, after: discord.Message
@@ -2685,57 +2899,79 @@ class NamingBot(discord.Client):
             del self.handled_spawn_ids[next(iter(self.handled_spawn_ids))]
 
         started = time.monotonic()
+        self.pending_vision_requests += 1
+        waiting_for_vision_slot = True
         try:
-            async with self.vision_semaphore:
-                for attempt in range(3):
+            try:
+                async with self.vision_semaphore:
+                    self.pending_vision_requests -= 1
+                    waiting_for_vision_slot = False
+                    self.active_vision_requests += 1
                     try:
-                        name, confidence = await recognize_pokemon(
-                            url,
-                            client=self.openai,
-                            http=self.image_http,
-                            model=self.config.openai_model,
-                            detail=self.config.openai_image_detail,
-                            matcher=self.image_matcher,
-                        )
-                        break
-                    except NoMatchError:
-                        raise
-                    except (
-                        aiohttp.ClientError,
-                        asyncio.TimeoutError,
-                        ValueError,
-                        OpenAIError,
-                    ):
-                        if attempt == 2:
-                            raise
-                        await asyncio.sleep(0.1)
-        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
-            logger.exception("Could not recognize spawn in message %s", message.id)
-            await message.reply(
-                "I couldn't identify that spawn. Check the bot logs for details.",
-                mention_author=False,
-            )
-            return
-        except NoMatchError:
-            logger.info("No reference image matched spawn %s", message.id)
-            if test_mode:
+                        for attempt in range(3):
+                            try:
+                                name, confidence = await recognize_pokemon(
+                                    url,
+                                    client=self.openai,
+                                    http=self.image_http,
+                                    model=self.config.openai_model,
+                                    detail=self.config.openai_image_detail,
+                                    matcher=self.image_matcher,
+                                )
+                                break
+                            except NoMatchError:
+                                raise
+                            except (
+                                aiohttp.ClientError,
+                                asyncio.TimeoutError,
+                                ValueError,
+                                OpenAIError,
+                            ):
+                                if attempt == 2:
+                                    raise
+                                await asyncio.sleep(0.1)
+                    finally:
+                        self.active_vision_requests -= 1
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                self.failed_recognition_count += 1
+                logger.exception("Could not recognize spawn in message %s", message.id)
                 await message.reply(
-                    "I couldn't match that test image to a reference Pokémon.",
+                    "I couldn't identify that spawn. Check the bot logs for details.",
                     mention_author=False,
                 )
-            return
-        except OpenAIError:
-            logger.exception("Vision request failed for message %s", message.id)
-            await message.reply(
-                "I couldn't identify that spawn because the vision request failed.",
-                mention_author=False,
-            )
-            return
+                return
+            except NoMatchError:
+                self.failed_recognition_count += 1
+                logger.info("No reference image matched spawn %s", message.id)
+                if test_mode:
+                    await message.reply(
+                        "I couldn't match that test image to a reference Pokémon.",
+                        mention_author=False,
+                    )
+                return
+            except OpenAIError:
+                self.failed_recognition_count += 1
+                logger.exception("Vision request failed for message %s", message.id)
+                await message.reply(
+                    "I couldn't identify that spawn because the vision request failed.",
+                    mention_author=False,
+                )
+                return
+        finally:
+            if waiting_for_vision_slot:
+                self.pending_vision_requests -= 1
 
+        completed = time.monotonic()
+        response_seconds = completed - started
+        if name and not test_mode:
+            self.pokemon_named_count += 1
+            self.recognition_durations.append((completed, response_seconds))
+        elif not name and not test_mode:
+            self.failed_recognition_count += 1
         logger.info(
             "Recognized %s in %.2fs (message %s)",
             name or "nothing",
-            time.monotonic() - started,
+            response_seconds,
             message.id,
         )
         if not name:

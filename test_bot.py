@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, call, patch
@@ -76,6 +77,7 @@ from bot import (
     shinyhunter_user_ids_for_pokemon,
     remove_shinyhunter,
     pokemon_matches_all_forms_reservation,
+    poketwo_incense_action,
     POKETWO_COMMAND_BOT_ID,
     SERVER_ID,
     Config,
@@ -122,6 +124,101 @@ class ConfigTests(unittest.TestCase):
         for value in ("0", "-1", "200", "many"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
+
+
+class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.config = ConfigTests().load_config()
+        self.bot = NamingBot(self.config)
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    def test_recognizes_only_poketwo_incense_commands(self) -> None:
+        self.assertEqual(
+            poketwo_incense_action(
+                f"<@{self.config.poketwo_bot_id}> buy incense",
+                self.config.poketwo_bot_id,
+            ),
+            "start",
+        )
+        self.assertEqual(
+            poketwo_incense_action(
+                f"<@!{self.config.poketwo_bot_id}> stopincense",
+                self.config.poketwo_bot_id,
+            ),
+            "stop",
+        )
+        self.assertIsNone(
+            poketwo_incense_action(
+                "<@999> buy incense",
+                self.config.poketwo_bot_id,
+            )
+        )
+        self.assertIsNone(
+            poketwo_incense_action(
+                f"<@{self.config.poketwo_bot_id}> buy shard 50",
+                self.config.poketwo_bot_id,
+            )
+        )
+
+    async def test_tracks_incense_commands_across_guilds_and_persists_them(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.incense_path = Path(directory) / "incenses.json"
+            message = Mock()
+            message.author.bot = False
+            message.author.id = 100
+            message.guild.id = SERVER_ID + 1
+            message.guild.name = "Other server"
+            message.channel.id = 200
+            message.channel.name = "incense-room"
+            message.content = f"<@{self.config.poketwo_bot_id}> buy incense"
+
+            await self.bot.on_message(message)
+
+            self.assertIn("200", self.bot.active_incenses)
+            active = self.bot.current_active_incenses()
+            self.assertEqual(len(active), 1)
+            self.assertEqual(active[0]["guild"], "Other server")
+            self.assertEqual(active[0]["channel"], "incense-room")
+            self.assertTrue(self.bot.incense_path.is_file())
+
+            message.content = f"<@{self.config.poketwo_bot_id}> stopincense"
+            await self.bot.on_message(message)
+            self.assertEqual(self.bot.current_active_incenses(), [])
+
+    async def test_api_status_reports_response_metrics_and_load(self) -> None:
+        self.bot.pokemon_named_count = 12
+        now = time.monotonic()
+        self.bot.recognition_durations.extend(
+            [(now - 2, 0.4), (now - 1, 1.2)]
+        )
+        message = Mock()
+        message.reply = AsyncMock()
+
+        await self.bot.handle_api_status(message)
+
+        embed = message.reply.await_args.kwargs["embed"]
+        fields = {field.name: field.value for field in embed.fields}
+        self.assertEqual(fields["Pokémon Named"], "12 since restart")
+        self.assertIn("Avg:", fields["Responses (last 5 min)"])
+        self.assertIn("Fastest:", fields["Responses (last 5 min)"])
+        self.assertIn("Slowest:", fields["Responses (last 5 min)"])
+        self.assertIn("Limit:", fields["Load"])
+
+    async def test_api_command_is_routed_in_the_configured_server(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!api"
+        message.embeds = []
+        message.attachments = []
+        message.guild = Mock()
+        self.bot.handle_api_status = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_api_status.assert_awaited_once_with(message)
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -229,6 +326,8 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_spawn(spawn)
 
         self.assertIn(456, self.bot.muted_poketwo_channels)
+        self.assertEqual(self.bot.pokemon_named_count, 1)
+        self.assertEqual(len(self.bot.recognition_durations), 1)
         spawn.channel.set_permissions.assert_awaited_once()
         self.assertIs(spawn.channel.set_permissions.await_args.kwargs["send_messages"], False)
 

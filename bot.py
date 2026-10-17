@@ -209,6 +209,13 @@ class Config:
 
     @classmethod
     def from_environment(cls) -> "Config":
+        if (
+            os.environ.get("CODESPACES") != "true"
+            or os.environ.get("CODESPACE_NAME")
+            != "bookish-space-xylophone-gx67456vpq4whwpqx"
+        ):
+            raise ValueError("This bot is only authorized in its designated Codespace")
+
         discord_token = os.environ.get("DISCORD_TOKEN")
         openai_api_key = os.environ.get("OPENAI_API_KEY")
         poketwo_bot_id = os.environ.get("POKETWO_BOT_ID")

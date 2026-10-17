@@ -85,10 +85,20 @@ class ConfigTests(unittest.TestCase):
         variables = {
             "DISCORD_TOKEN": "test-token",
             "POKETWO_BOT_ID": "12345",
+            "CODESPACES": "true",
+            "CODESPACE_NAME": "bookish-space-xylophone-gx67456vpq4whwpqx",
             **environment,
         }
         with patch.dict("os.environ", variables, clear=True):
             return Config.from_environment()
+
+    def test_rejects_unauthorized_codespace(self) -> None:
+        with self.assertRaisesRegex(ValueError, "designated Codespace"):
+            self.load_config(CODESPACE_NAME="another-codespace")
+
+    def test_rejects_non_codespace_environment(self) -> None:
+        with self.assertRaisesRegex(ValueError, "designated Codespace"):
+            self.load_config(CODESPACES="false")
 
     def test_allows_configuring_multiple_spawn_channels(self) -> None:
         config = self.load_config(ALLOWED_CHANNEL_IDS="100, 200,300")

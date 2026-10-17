@@ -2756,7 +2756,7 @@ class NamingBot(discord.Client):
             return
         if is_missingno_name(name):
             await message.reply(
-                f"<@{POKETWO_COMMAND_BOT_ID}> inc p",
+                "!p",
                 mention_author=False,
             )
             await asyncio.sleep(0.5)

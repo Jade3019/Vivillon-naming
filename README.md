@@ -64,7 +64,7 @@ approval for privileged intents on larger bots.
 The bot also handles spawns whose image or text Pokétwo adds by editing the message, processes each spawn message once, and retries temporary image-download or recognition failures up to three times before replying with an error.
 
 To test an image manually, post it with `v!test` as the message caption. A
-Missingno match runs the same `inc p` and staff-warning flow as a Pokétwo spawn.
+Missingno match sends `!p`, then follows the usual staff-warning flow.
 Other test matches never send a catch command.
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
@@ -83,7 +83,7 @@ formats on mobile and desktop.
 Discord's copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pure Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Configured paired types that include any of those types show both corresponding custom emojis inline. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends
-the Pokétwo `inc p` command, waits 500 milliseconds, and asks for a staff
+the `!p` command, waits 500 milliseconds, and asks for a staff
 member; it does not send a catch command for that spawn.
 
 This application does not bypass those restrictions.

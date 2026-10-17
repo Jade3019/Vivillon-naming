@@ -229,7 +229,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             message.reply.await_args_list,
             [
-                call("<@716390085896962058> inc p", mention_author=False),
+                call("!p", mention_author=False),
                 call(
                     "Ping a staff member. Dont catch the pokemon.",
                     mention_author=False,

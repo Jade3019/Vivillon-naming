@@ -1077,7 +1077,7 @@
     "shaymin": [
       {
         "identifier": "shaymin-land",
-        "display_name": "land shaymin"
+        "display_name": "shaymin"
       },
       {
         "identifier": "shaymin-sky",
@@ -1375,7 +1375,7 @@
     "keldeo": [
       {
         "identifier": "keldeo-ordinary",
-        "display_name": "ordinary keldeo"
+        "display_name": "keldeo"
       },
       {
         "identifier": "keldeo-resolute",
@@ -2901,7 +2901,7 @@
       },
       {
         "identifier": "urshifu-rapid-strike",
-        "display_name": "rapid-strike urshifu"
+        "display_name": "rapid strike urshifu"
       }
     ],
     "zarude": [

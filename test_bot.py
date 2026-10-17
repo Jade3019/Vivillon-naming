@@ -1559,7 +1559,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             [
                 "all forms of marshadow",
                 "rapid strike gmax urshifu",
-                "rapid-strike urshifu",
+                "rapid strike urshifu",
                 "single strike gmax urshifu",
                 "single-strike urshifu",
             ],

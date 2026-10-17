@@ -18,6 +18,36 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertEqual(list(groups), ["Deoxys"])
 
+    def test_ordinary_keldeo_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "keldeo-ordinary" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Keldeo"])
+
+    def test_land_shaymin_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "shaymin-land" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Shaymin"])
+
+    def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "urshifu-rapid-strike" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Rapid Strike Urshifu"])
+
     def test_matches_reference_when_spawn_image_is_flipped(self) -> None:
         cv2 = image_match.cv2
         np = image_match.np

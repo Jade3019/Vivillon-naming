@@ -202,7 +202,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.bot.pokemon_named_count = 12
         now = time.monotonic()
         self.bot.recognition_durations.extend(
-            [(now - 2, 0.4), (now - 1, 1.2)]
+            [(now - 2, 0.02, 0.4), (now - 1, 0.03, 1.2)]
         )
         message = Mock()
         message.reply = AsyncMock()
@@ -211,11 +211,30 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         embed = message.reply.await_args.kwargs["embed"]
         fields = {field.name: field.value for field in embed.fields}
-        self.assertEqual(fields["Pokémon Named"], "12 since restart")
-        self.assertIn("Avg:", fields["Responses (last 5 min)"])
-        self.assertIn("Fastest:", fields["Responses (last 5 min)"])
-        self.assertIn("Slowest:", fields["Responses (last 5 min)"])
-        self.assertIn("Limit:", fields["Load"])
+        self.assertEqual(len(embed.fields), 15)
+        self.assertEqual(
+            [field.name for field in embed.fields[:6]],
+            [
+                "Activity",
+                "Active Incense",
+                "Store (latest)",
+                "Store (avg)",
+                "JSON load",
+                "CSV load",
+            ],
+        )
+        self.assertTrue(all(field.inline for field in embed.fields))
+        self.assertEqual(fields["Pokémons Named"], "12")
+        self.assertEqual(fields["Inference Fastest"], "20 ms")
+        self.assertEqual(fields["Inference Slowest"], "30 ms")
+        self.assertEqual(fields["Inference Avg"], "25 ms")
+        self.assertEqual(fields["Inference Latest"], "30 ms")
+        self.assertEqual(fields["Response Fastest"], "400 ms")
+        self.assertEqual(fields["Response Slowest"], "1200 ms")
+        self.assertEqual(fields["Response Avg"], "800 ms")
+        self.assertEqual(fields["Response Latest"], "1200 ms")
+        self.assertEqual(fields["CSV load"], "Not used")
+        self.assertIn("Window: 5 min rolling", embed.footer.text)
 
     async def test_api_command_is_routed_in_the_configured_server(self) -> None:
         message = Mock()

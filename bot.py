@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import re
+import threading
 import time
 from collections import OrderedDict, deque
 import unicodedata
@@ -1975,7 +1976,9 @@ class NamingBot(discord.Client):
         self.failed_recognition_count = 0
         self.active_vision_requests = 0
         self.pending_vision_requests = 0
-        self.recognition_durations: deque[tuple[float, float]] = deque(maxlen=1000)
+        self.recognition_durations: deque[tuple[float, float, float]] = deque(
+            maxlen=1000
+        )
         self.org_runner: web.AppRunner | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
@@ -2238,85 +2241,78 @@ class NamingBot(discord.Client):
     async def handle_api_status(self, message: discord.Message) -> None:
         now = time.monotonic()
         recent = [
-            duration
-            for timestamp, duration in self.recognition_durations
-            if now - timestamp <= API_STATUS_WINDOW_SECONDS
+            record
+            for record in self.recognition_durations
+            if now - record[0] <= API_STATUS_WINDOW_SECONDS
         ]
         self.recognition_durations = deque(
             (
-                (timestamp, duration)
-                for timestamp, duration in self.recognition_durations
-                if now - timestamp <= API_STATUS_WINDOW_SECONDS
+                record
+                for record in self.recognition_durations
+                if now - record[0] <= API_STATUS_WINDOW_SECONDS
             ),
             maxlen=1000,
         )
         active_incenses = self.current_active_incenses()
-        active_text = "\n".join(
-            f"{record['guild']} / #{record['channel']}"
-            for record in active_incenses[:10]
-        )
-        if len(active_incenses) > 10:
-            active_text += f"\n… and {len(active_incenses) - 10} more"
-        if not active_text:
-            active_text = "None detected"
-
         max_requests = self.config.max_concurrent_vision_requests
         if self.pending_vision_requests:
-            load_text = f"🟠 Busy: {self.pending_vision_requests} waiting"
+            activity = "🟠 Busy"
         elif self.active_vision_requests >= max_requests:
-            load_text = "🟠 At capacity"
+            activity = "🟠 At capacity"
+        elif not recent:
+            activity = "🟢 Low Activity"
         else:
-            load_text = "🟢 Normal"
-        openai_status = (
-            f"SIFT reference matching + OpenAI ({self.config.openai_model}) fallback"
-            if self.openai is not None
-            else "SIFT reference matching only (no OpenAI key)"
+            activity = "🟢 Active"
+        inference = [record[1] for record in recent]
+        response = [record[2] for record in recent]
+
+        def format_duration(seconds: float | None) -> str:
+            return f"{seconds * 1000:.0f} ms" if seconds is not None else "—"
+
+        inference_fastest = format_duration(min(inference)) if inference else "—"
+        inference_slowest = format_duration(max(inference)) if inference else "—"
+        inference_average = (
+            format_duration(sum(inference) / len(inference)) if inference else "—"
         )
-        if recent:
-            response_text = (
-                f"Avg: {sum(recent) / len(recent):.2f}s · "
-                f"Fastest: {min(recent):.2f}s · "
-                f"Slowest: {max(recent):.2f}s · "
-                f"Latest: {recent[-1]:.2f}s"
-            )
-        else:
-            response_text = "No recognized spawns in the last 5 minutes"
+        inference_latest = format_duration(inference[-1]) if inference else "—"
+        response_fastest = format_duration(min(response)) if response else "—"
+        response_slowest = format_duration(max(response)) if response else "—"
+        response_average = (
+            format_duration(sum(response) / len(response)) if response else "—"
+        )
+        response_latest = format_duration(response[-1]) if response else "—"
+        openai_backend = self.openai is not None
+        model = self.config.openai_model if openai_backend else "SIFT reference matching"
+        backend = "SIFT + OpenAI fallback" if openai_backend else "SIFT only"
 
         embed = discord.Embed(title="API Status", color=discord.Color.blurple())
-        embed.add_field(name="Activity", value="Recent" if recent else "Low Activity")
-        embed.add_field(
-            name="Active Incense (estimated)",
-            value=f"{len(active_incenses)}\n{active_text}",
-            inline=False,
+        fields = (
+            ("Activity", activity),
+            ("Active Incense", str(len(active_incenses))),
+            ("Store (latest)", "—"),
+            ("Store (avg)", "—"),
+            ("JSON load", "—"),
+            ("CSV load", "Not used"),
+            ("Inference Fastest", inference_fastest),
+            ("Inference Slowest", inference_slowest),
+            ("Inference Avg", inference_average),
+            ("Inference Latest", inference_latest),
+            ("Response Fastest", response_fastest),
+            ("Response Slowest", response_slowest),
+            ("Response Avg", response_average),
+            ("Response Latest", response_latest),
+            ("Pokémons Named", str(self.pokemon_named_count)),
         )
-        embed.add_field(
-            name="Pokémon Named",
-            value=f"{self.pokemon_named_count} since restart",
-        )
-        embed.add_field(
-            name="Responses (last 5 min)",
-            value=response_text,
-            inline=False,
-        )
-        embed.add_field(
-            name="Load",
-            value=(
-                f"{load_text}\n"
-                f"Running: {self.active_vision_requests} · "
-                f"Waiting: {self.pending_vision_requests} · "
-                f"Limit: {max_requests}"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="Failed recognitions",
-            value=f"{self.failed_recognition_count} since restart",
-        )
-        embed.add_field(name="Model / Backend", value=openai_status, inline=False)
+        for name, value in fields:
+            embed.add_field(name=name, value=value, inline=True)
         embed.set_footer(
             text=(
-                "Incense is estimated from observed buy/stop commands and a "
-                "1-hour timer; confirmation/cancellation is not visible to this bot."
+                f"Model: {model} | Backend: {backend} | "
+                f"Threads: {threading.active_count()} | Window: 5 min rolling | "
+                f"Load: {self.active_vision_requests}/{max_requests} "
+                f"(+{self.pending_vision_requests} waiting) | "
+                f"Failed: {self.failed_recognition_count} | "
+                "Incense is estimated"
             )
         )
         await message.reply(embed=embed, mention_author=False)
@@ -2908,6 +2904,7 @@ class NamingBot(discord.Client):
                     waiting_for_vision_slot = False
                     self.active_vision_requests += 1
                     try:
+                        inference_started = time.monotonic()
                         for attempt in range(3):
                             try:
                                 name, confidence = await recognize_pokemon(
@@ -2930,6 +2927,7 @@ class NamingBot(discord.Client):
                                 if attempt == 2:
                                     raise
                                 await asyncio.sleep(0.1)
+                        inference_seconds = time.monotonic() - inference_started
                     finally:
                         self.active_vision_requests -= 1
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
@@ -2965,7 +2963,9 @@ class NamingBot(discord.Client):
         response_seconds = completed - started
         if name and not test_mode:
             self.pokemon_named_count += 1
-            self.recognition_durations.append((completed, response_seconds))
+            self.recognition_durations.append(
+                (completed, inference_seconds, response_seconds)
+            )
         elif not name and not test_mode:
             self.failed_recognition_count += 1
         logger.info(

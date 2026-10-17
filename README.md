@@ -87,13 +87,14 @@ asks for a staff member; it does not send a catch command for that spawn.
 This application does not bypass those restrictions.
 
 Use `v!api` in the configured server to view the number of Pokémon recognized
-since restart, recent response-time statistics, failed recognitions, current
-request load, and configured recognition backend. It also lists incense channels
-across all servers the bot is in. Incense status is estimated by observing
-`@Pokétwo buy incense` and `@Pokétwo stopincense` commands and using a one-hour
-timer; this bot cannot see whether a purchase was confirmed or cancelled.
-Incense tracking is saved in `incenses.json` (override with
-`INCENSE_TRACKING_FILE`).
+since restart, recent inference and response-time statistics, current request
+load, and configured recognition backend in a three-column status layout.
+Store and JSON load timings are not measured by this bot; CSV loading is not
+used. It also counts incenses across all servers the bot is in. Incense status
+is estimated by observing `@Pokétwo buy incense` and `@Pokétwo stopincense`
+commands and using a one-hour timer; this bot cannot see whether a purchase was
+confirmed or cancelled. Incense tracking is saved in `incenses.json` (override
+with `INCENSE_TRACKING_FILE`).
 
 ## Pokémon reservations
 

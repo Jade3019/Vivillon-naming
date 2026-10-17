@@ -77,6 +77,7 @@ from bot import (
     remove_shinyhunter,
     pokemon_matches_all_forms_reservation,
     POKETWO_COMMAND_BOT_ID,
+    SERVER_ID,
     Config,
     NamingBot,
 )
@@ -106,49 +107,16 @@ class ConfigTests(unittest.TestCase):
         config = self.load_config(CODESPACES="false", ALLOW_EXTERNAL_HOST="true")
         self.assertEqual(config.poketwo_bot_id, 12345)
 
-    def test_allows_configuring_multiple_spawn_channels(self) -> None:
-        config = self.load_config(ALLOWED_CHANNEL_IDS="100, 200,300")
-
-        self.assertEqual(config.allowed_channel_ids, frozenset({100, 200, 300}))
-
-    def test_keeps_legacy_single_channel_setting(self) -> None:
-        config = self.load_config(ALLOWED_CHANNEL_ID="100")
-
-        self.assertEqual(config.allowed_channel_ids, frozenset({100}))
-
     def test_openai_key_is_optional(self) -> None:
         self.assertIsNone(self.load_config().openai_api_key)
         self.assertEqual(
             self.load_config(OPENAI_API_KEY=" abc ").openai_api_key, "abc"
         )
 
-    def test_unset_channel_allowlist_allows_all_channels(self) -> None:
-        config = self.load_config()
-
-        self.assertIsNone(config.allowed_channel_ids)
-        self.assertEqual(config.max_concurrent_vision_requests, 199)
-
     def test_configures_concurrent_vision_request_limit(self) -> None:
         config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="8")
 
         self.assertEqual(config.max_concurrent_vision_requests, 8)
-
-    def test_configures_allowed_categories(self) -> None:
-        config = self.load_config(ALLOWED_CATEGORY_IDS="10, 20")
-
-        self.assertEqual(config.allowed_category_ids, frozenset({10, 20}))
-        self.assertIsNone(self.load_config().allowed_category_ids)
-        with self.assertRaises(ValueError):
-            self.load_config(ALLOWED_CATEGORY_IDS="abc")
-
-    def test_rejects_invalid_channel_allowlist(self) -> None:
-        for value in ("100,,200", "abc", "0", "-10"):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                self.load_config(ALLOWED_CHANNEL_IDS=value)
-
-    def test_rejects_both_channel_settings_at_once(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Set only one"):
-            self.load_config(ALLOWED_CHANNEL_ID="100", ALLOWED_CHANNEL_IDS="200")
 
     def test_rejects_invalid_vision_request_limit(self) -> None:
         for value in ("0", "-1", "200", "many"):
@@ -170,6 +138,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         message.author.bot = False
         message.author.id = 99
         message.channel = unittest.mock.Mock()
+        message.channel.guild.id = SERVER_ID
         message.content = "v!test"
         message.embeds = []
         message.attachments = [
@@ -187,6 +156,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         message.author.bot = False
         message.author.id = 99
         message.channel = unittest.mock.Mock()
+        message.channel.guild.id = SERVER_ID
         message.content = "v!test"
         message.embeds = []
         message.attachments = []
@@ -244,6 +214,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         spawn = Mock()
         spawn.id = 123
         spawn.channel.id = 456
+        spawn.channel.guild.id = SERVER_ID
         spawn.channel.set_permissions = AsyncMock()
         spawn.attachments = [
             Mock(content_type="image/png", url="https://example.test/missingno.png")
@@ -265,6 +236,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         poketwo_message.author.bot = True
         poketwo_message.author.id = self.config.poketwo_bot_id
         poketwo_message.channel.id = 456
+        poketwo_message.channel.guild.id = SERVER_ID
         poketwo_message.content = "A wild Pokémon has appeared!"
         poketwo_message.embeds = []
         poketwo_message.attachments = [
@@ -278,6 +250,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         reserve_command.author.bot = False
         reserve_command.author.id = 789
         reserve_command.channel.id = 456
+        reserve_command.channel.guild.id = SERVER_ID
         reserve_command.channel.set_permissions = AsyncMock()
         reserve_command.reply = AsyncMock()
         reserve_command.content = "v!r list"
@@ -292,6 +265,21 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
             "Channel unpaused.", mention_author=False
         )
         self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
+
+    async def test_channel_filter_allows_every_channel_only_in_configured_server(self) -> None:
+        allowed_channel = Mock()
+        allowed_channel.guild.id = SERVER_ID
+        allowed_channel.id = 456
+        another_allowed_channel = Mock()
+        another_allowed_channel.guild.id = SERVER_ID
+        another_allowed_channel.id = 789
+        other_server_channel = Mock()
+        other_server_channel.guild.id = SERVER_ID + 1
+
+        self.assertTrue(self.bot.is_allowed_channel(allowed_channel))
+        self.assertTrue(self.bot.is_allowed_channel(another_allowed_channel))
+        self.assertFalse(self.bot.is_allowed_channel(other_server_channel))
+        self.assertFalse(self.bot.is_allowed_channel(Mock()))
 
 
 class FireSpawnFormattingTests(unittest.TestCase):

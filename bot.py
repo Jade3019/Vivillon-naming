@@ -32,6 +32,7 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
 POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
+SERVER_ID: Final[int] = 1530949341013868635
 SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -202,11 +203,9 @@ class Config:
     discord_token: str
     openai_api_key: str | None
     poketwo_bot_id: int
-    allowed_channel_ids: frozenset[int] | None
     max_concurrent_vision_requests: int
     openai_model: str
     openai_image_detail: str = "low"
-    allowed_category_ids: frozenset[int] | None = None
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -232,26 +231,6 @@ class Config:
         if not poketwo_bot_id:
             raise ValueError("POKETWO_BOT_ID is required")
 
-        channel_ids = os.environ.get("ALLOWED_CHANNEL_IDS")
-        legacy_channel_id = os.environ.get("ALLOWED_CHANNEL_ID")
-        if channel_ids and legacy_channel_id:
-            raise ValueError(
-                "Set only one of ALLOWED_CHANNEL_IDS or ALLOWED_CHANNEL_ID"
-            )
-        configured_channel_ids = channel_ids or legacy_channel_id
-        category_values = [
-            value.strip()
-            for value in os.environ.get("ALLOWED_CATEGORY_IDS", "").split(",")
-            if value.strip()
-        ]
-        try:
-            allowed_category_ids = frozenset(int(value) for value in category_values)
-            if any(value <= 0 for value in allowed_category_ids):
-                raise ValueError
-        except ValueError as error:
-            raise ValueError(
-                "ALLOWED_CATEGORY_IDS must be comma-separated positive Discord IDs"
-            ) from error
         image_detail = os.environ.get("OPENAI_IMAGE_DETAIL", "low").strip().lower()
         if image_detail not in {"low", "high", "auto"}:
             raise ValueError("OPENAI_IMAGE_DETAIL must be low, high, or auto")
@@ -262,31 +241,18 @@ class Config:
             )
             if not 1 <= max_concurrent_vision_requests < 200:
                 raise ValueError
-            channel_id_values = (
-                configured_channel_ids.split(",") if configured_channel_ids else []
-            )
-            if any(not channel_id.strip() for channel_id in channel_id_values):
-                raise ValueError
-            allowed_channel_ids = frozenset(
-                int(channel_id.strip()) for channel_id in channel_id_values
-            )
-            if any(channel_id <= 0 for channel_id in allowed_channel_ids):
-                raise ValueError
             return cls(
                 discord_token=discord_token,
                 openai_api_key=openai_api_key,
                 poketwo_bot_id=poketwo_bot_id,
-                allowed_channel_ids=allowed_channel_ids or None,
                 max_concurrent_vision_requests=max_concurrent_vision_requests,
                 openai_model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
                 openai_image_detail=image_detail,
-                allowed_category_ids=allowed_category_ids or None,
             )
         except ValueError as error:
             raise ValueError(
-                "POKETWO_BOT_ID and configured channel IDs must be positive "
-                "numeric Discord IDs; MAX_CONCURRENT_VISION_REQUESTS must be "
-                "an integer from 1 to 199"
+                "POKETWO_BOT_ID must be a positive numeric Discord ID; "
+                "MAX_CONCURRENT_VISION_REQUESTS must be an integer from 1 to 199"
             ) from error
 
 
@@ -2138,16 +2104,8 @@ class NamingBot(discord.Client):
             await self.handle_spawn(message)
 
     def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
-        channel_ids = self.config.allowed_channel_ids
-        category_ids = self.config.allowed_category_ids
-        if channel_ids is None and category_ids is None:
-            return True
-        if channel_ids is not None and getattr(channel, "id", None) in channel_ids:
-            return True
-        if category_ids is None:
-            return False
-        parent = getattr(channel, "parent", None) or channel
-        return getattr(parent, "category_id", None) in category_ids
+        guild = getattr(channel, "guild", None)
+        return getattr(guild, "id", None) == SERVER_ID
 
     async def on_message_edit(
         self, before: discord.Message, after: discord.Message

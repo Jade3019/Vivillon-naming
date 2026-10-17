@@ -279,13 +279,16 @@ def message_text(message: discord.Message) -> str:
 def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
     mention = rf"<@!?{poketwo_bot_id}>"
     match = re.search(
-        rf"(?:^|\s){mention}\s+(buy\s+incense|stopincense)\b",
+        rf"(?:^|\s)(?:{mention}\s+|p!\s*)"
+        rf"(?P<start>buy\s+incense)\b|"
+        rf"(?:^|\s)(?:{mention}\s+|p!\s*)"
+        rf"(?P<stop>stopincense)\b",
         content,
         re.IGNORECASE,
     )
     if match is None:
         return None
-    return "start" if match.group(1).casefold().startswith("buy") else "stop"
+    return "start" if match.group("start") else "stop"
 
 
 def image_url(message: discord.Message) -> str | None:

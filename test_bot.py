@@ -164,6 +164,14 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             ),
             "stop",
         )
+        self.assertEqual(
+            poketwo_incense_action("p!buy incense", self.config.poketwo_bot_id),
+            "start",
+        )
+        self.assertEqual(
+            poketwo_incense_action("p!stopincense", self.config.poketwo_bot_id),
+            "stop",
+        )
         self.assertIsNone(
             poketwo_incense_action(
                 "<@999> buy incense",
@@ -205,9 +213,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             second_server_message.guild.name = "Another server"
             second_server_message.channel.id = 201
             second_server_message.channel.name = "another-incense-room"
-            second_server_message.content = (
-                f"<@{self.config.poketwo_bot_id}> buy incense"
-            )
+            second_server_message.content = "p!buy incense"
             await self.bot.on_message(second_server_message)
             self.assertEqual(len(self.bot.current_active_incenses()), 2)
 

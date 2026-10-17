@@ -279,6 +279,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         reserve_command.author.id = 789
         reserve_command.channel.id = 456
         reserve_command.channel.set_permissions = AsyncMock()
+        reserve_command.reply = AsyncMock()
         reserve_command.content = "v!r list"
         reserve_command.embeds = []
         reserve_command.attachments = []
@@ -287,6 +288,9 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn(456, self.bot.muted_poketwo_channels)
         reserve_command.channel.set_permissions.assert_awaited_once()
+        reserve_command.reply.assert_awaited_once_with(
+            "Channel unpaused.", mention_author=False
+        )
         self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
 
 

@@ -2087,16 +2087,20 @@ class NamingBot(discord.Client):
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
             if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
-                if channel_id is not None:
-                    if channel_id in self.muted_poketwo_channels:
-                        self.muted_poketwo_channels.discard(channel_id)
-                        await self.set_poketwo_blocked(message.channel, False)
+                was_paused = channel_id in self.muted_poketwo_channels
+                if was_paused:
+                    self.muted_poketwo_channels.discard(channel_id)
+                    await self.set_poketwo_blocked(message.channel, False)
                 if re.match(
                     r"^v!r\s+(?:add|list|search|remove|clear|e|exchange)(?:\s|$)",
                     message.content,
                     re.IGNORECASE,
                 ):
+                    if was_paused:
+                        await message.reply("Channel unpaused.", mention_author=False)
                     await self.handle_reserve_command(message)
+                else:
+                    await message.reply("Channel unpaused.", mention_author=False)
                 return
             if is_image_test_command(message.content):
                 if image_url(message) is None:

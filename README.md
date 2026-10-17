@@ -69,7 +69,7 @@ Other test matches never send a catch command.
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. `v!r` in that channel restores
-Pokétwo's permission.
+Pokétwo's permission and replies `Channel unpaused.` (a bare `v!r` always replies).
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 

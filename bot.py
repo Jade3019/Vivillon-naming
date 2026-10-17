@@ -270,6 +270,7 @@ def message_text(message: discord.Message) -> str:
     parts = [message.content]
     for embed in message.embeds:
         parts.extend((embed.title or "", embed.description or ""))
+        parts.extend((embed.author.name or "", embed.footer.text or ""))
         parts.extend(f"{field.name}: {field.value}" for field in embed.fields)
     return unicodedata.normalize(
         "NFC", "\n".join(part for part in parts if part)

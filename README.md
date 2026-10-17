@@ -107,10 +107,10 @@ load, and configured recognition backend in a three-column status layout.
 Store and JSON load timings are not measured by this bot; CSV loading is not
 used. It also counts incenses across all servers the bot is in. Incense status
 is tracked from observed buy/stop commands and Pokétwo spawn messages that
-report `Incense: Active` or `Incense: Inactive`, with a one-hour fallback timer.
-A previously running incense is detected when Pokétwo next reports its status.
-Incense tracking is saved in `incenses.json` (override with
-`INCENSE_TRACKING_FILE`).
+report `Incense: Active` or `Incense: Inactive`, including embed footers, with
+a one-hour fallback timer. A previously running incense is detected when
+Pokétwo next reports its status. Incense tracking is saved in `incenses.json`
+(override with `INCENSE_TRACKING_FILE`).
 
 ## Pokémon reservations
 

@@ -262,9 +262,10 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             message.content = ""
             message.embeds = [
                 discord.Embed(
-                    description="Incense: Active.\nSpawns Remaining: 42"
+                    description="Spawns Remaining: 42"
                 )
             ]
+            message.embeds[0].set_footer(text="Incense: Active")
 
             await self.bot.on_message(message)
 
@@ -275,9 +276,9 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             fields = {field.name: field.value for field in embed.fields}
             self.assertEqual(fields["Active Incense"], "1")
 
-            message.embeds = [
-                discord.Embed(description="Incense: Inactive")
-            ]
+            inactive_embed = discord.Embed(description="Spawns Remaining: 0")
+            inactive_embed.set_footer(text="Incense: Inactive")
+            message.embeds = [inactive_embed]
             await self.bot.on_message_edit(Mock(), message)
             status_message.reply.reset_mock()
             await self.bot.handle_api_status(status_message)

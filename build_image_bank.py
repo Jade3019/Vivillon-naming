@@ -67,7 +67,13 @@ def foreground_mask(data: bytes):
     rect = (int(width * 0.12), int(height * 0.1), int(width * 0.76), int(height * 0.8))
     cv2.grabCut(image, mask, rect, np.zeros((1, 65)), np.zeros((1, 65)), 5, cv2.GC_INIT_WITH_RECT)
     cut = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
-    cut = cv2.dilate(cut, np.ones((9, 9), np.uint8))
+    cut = cv2.morphologyEx(cut, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+    # Keep only the biggest blob so stray background (glow, grass) is dropped.
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(cut)
+    if count > 1:
+        biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        cut = np.where(labels == biggest, 255, 0).astype(np.uint8)
+    cut = cv2.dilate(cut, np.ones((5, 5), np.uint8))
     return cut if cut.any() else None
 
 
@@ -82,7 +88,7 @@ def remove_background(descriptors, pool):
 
 def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths) + "-fg1"
+    wanted = signature(paths) + "-fg2"
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:

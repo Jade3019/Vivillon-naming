@@ -2062,8 +2062,11 @@ class NamingBot(discord.Client):
 
     async def set_poketwo_blocked(self, channel, blocked: bool) -> None:
         """Deny (or restore) Pokétwo's Send Messages permission in a channel."""
-        target = discord.Object(id=self.config.poketwo_bot_id)
         try:
+            guild = channel.guild
+            target = guild.get_member(self.config.poketwo_bot_id)
+            if target is None:
+                target = await guild.fetch_member(self.config.poketwo_bot_id)
             if blocked:
                 await channel.set_permissions(
                     target,
@@ -2074,7 +2077,7 @@ class NamingBot(discord.Client):
                 await channel.set_permissions(
                     target, overwrite=None, reason="v!r: restoring Pokétwo"
                 )
-        except (discord.Forbidden, discord.HTTPException, AttributeError) as error:
+        except Exception as error:
             logger.warning("Could not change Pokétwo permissions: %s", error)
 
     async def on_message(self, message: discord.Message) -> None:
@@ -2793,11 +2796,12 @@ class NamingBot(discord.Client):
             channel_id = getattr(message.channel, "id", None)
             if channel_id is not None:
                 self.muted_poketwo_channels.add(channel_id)
-                await self.set_poketwo_blocked(message.channel, True)
             await message.reply(
                 "Ping a staff member. Dont catch the pokemon.",
                 mention_author=False,
             )
+            if channel_id is not None:
+                await self.set_poketwo_blocked(message.channel, True)
             return
 
         reserved_user_ids = (

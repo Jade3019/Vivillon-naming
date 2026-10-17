@@ -38,9 +38,9 @@ approval for privileged intents on larger bots.
    `POKETWO_BOT_ID` identifies the account whose spawn messages the bot
    monitors. Generated catch commands target `<@716390085896962058>`.
 
-   The bot responds in every channel and thread in server
-   `1530949341013868635`. Messages from other servers and direct messages are
-   ignored.
+   The bot responds in every channel and thread in servers
+   `1530949341013868635` and `1543384606630481920`. Messages from other servers
+   and direct messages are ignored.
    The bot queues spawn recognition and processes up to 200 vision requests
    concurrently by default. Set `MAX_CONCURRENT_VISION_REQUESTS` to adjust this
    between 1 and 200 for your OpenAI project’s rate limits; the client retries

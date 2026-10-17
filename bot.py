@@ -34,6 +34,9 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
 POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
 SERVER_ID: Final[int] = 1530949341013868635
+SERVER_IDS: Final[frozenset[int]] = frozenset(
+    {SERVER_ID, 1543384606630481920}
+)
 INCENSE_DURATION_SECONDS: Final[int] = 60 * 60
 API_STATUS_WINDOW_SECONDS: Final[int] = 5 * 60
 API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -2139,7 +2142,7 @@ class NamingBot(discord.Client):
 
     def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
         guild = getattr(channel, "guild", None)
-        return getattr(guild, "id", None) == SERVER_ID
+        return getattr(guild, "id", None) in SERVER_IDS
 
     def load_active_incenses(self) -> dict[str, dict[str, int | str]]:
         if not self.incense_path.is_file():

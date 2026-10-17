@@ -395,12 +395,12 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         )
         self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
 
-    async def test_channel_filter_allows_every_channel_only_in_configured_server(self) -> None:
+    async def test_channel_filter_allows_both_configured_servers_only(self) -> None:
         allowed_channel = Mock()
         allowed_channel.guild.id = SERVER_ID
         allowed_channel.id = 456
         another_allowed_channel = Mock()
-        another_allowed_channel.guild.id = SERVER_ID
+        another_allowed_channel.guild.id = 1543384606630481920
         another_allowed_channel.id = 789
         other_server_channel = Mock()
         other_server_channel.guild.id = SERVER_ID + 1

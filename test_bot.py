@@ -248,6 +248,43 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         fields = {field.name: field.value for field in embed.fields}
         self.assertEqual(fields["Active Incense"], "2")
 
+    async def test_api_status_tracks_poketwo_incense_spawn_updates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.incense_path = Path(directory) / "incenses.json"
+            message = Mock()
+            message.author.bot = True
+            message.author.id = self.config.poketwo_bot_id
+            message.guild.id = SERVER_ID + 100
+            message.guild.name = "Other server"
+            message.channel.id = 500
+            message.channel.name = "incense-room"
+            message.channel.guild = message.guild
+            message.content = ""
+            message.embeds = [
+                discord.Embed(
+                    description="Incense: Active.\nSpawns Remaining: 42"
+                )
+            ]
+
+            await self.bot.on_message(message)
+
+            status_message = Mock()
+            status_message.reply = AsyncMock()
+            await self.bot.handle_api_status(status_message)
+            embed = status_message.reply.await_args.kwargs["embed"]
+            fields = {field.name: field.value for field in embed.fields}
+            self.assertEqual(fields["Active Incense"], "1")
+
+            message.embeds = [
+                discord.Embed(description="Incense: Inactive")
+            ]
+            await self.bot.on_message_edit(Mock(), message)
+            status_message.reply.reset_mock()
+            await self.bot.handle_api_status(status_message)
+            embed = status_message.reply.await_args.kwargs["embed"]
+            fields = {field.name: field.value for field in embed.fields}
+            self.assertEqual(fields["Active Incense"], "0")
+
     async def test_naming_settings_toggle_persists_per_server(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.server_settings_path = Path(directory) / "settings.json"

@@ -2509,9 +2509,23 @@ class NamingBot(discord.Client):
     def track_incense_command(self, message: discord.Message) -> None:
         guild = message.guild
         channel = message.channel
-        if guild is None or message.author.id == self.config.poketwo_bot_id:
+        if guild is None:
             return
-        action = poketwo_incense_action(message.content, self.config.poketwo_bot_id)
+        if message.author.id == self.config.poketwo_bot_id:
+            status = re.search(
+                r"\bIncense\s*:\s*(Active|Inactive)\b",
+                message_text(message),
+                re.IGNORECASE,
+            )
+            if status is None:
+                return
+            action = (
+                "start" if status.group(1).casefold() == "active" else "stop"
+            )
+        else:
+            action = poketwo_incense_action(
+                message.content, self.config.poketwo_bot_id
+            )
         if action is None:
             return
         channel_id = str(channel.id)
@@ -2636,6 +2650,7 @@ class NamingBot(discord.Client):
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         if after.author.id != self.config.poketwo_bot_id:
             return
+        self.track_incense_command(after)
         if not self.is_allowed_channel(after.channel):
             return
         if SPAWN_PATTERN.search(message_text(after)):

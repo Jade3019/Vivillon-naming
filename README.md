@@ -235,7 +235,7 @@ Vivillon can expose a small HTTP API so your org bot can manage reserves. It is 
 | --- | --- |
 | `ORG_BOT_API_KEY` | Secret the org bot sends as `Authorization: Bearer <key>`. Enables the API. |
 | `ORG_GUILD_ID` | Server whose Vivillon reserves the org bot adds to / removes from. |
-| `ORG_API_PORT` | Port to listen on (falls back to `PORT`, then `8080`). The host must expose this port publicly. |
+| `ORG_API_PORT` | Port to listen on (falls back to `SERVER_PORT`, then `PORT`, then `8080`). The host must expose this port publicly. |
 | `ORG_RESERVES_FILE` | Optional. Org list file, default `org_reserves.json`. |
 | `ORG_RESTRICTIONS_FILE` | Optional. Slot rules, default `org_restrictions.json`. |
 
@@ -255,7 +255,7 @@ Legacy per-slot rules remain supported:
 {"slots": {"slot1": {"allowed": ["Pikachu", "Eevee"]}, "slot2": {"blocked": ["Mewtwo"]}}}
 ```
 
-All requests need the `Authorization` header and return JSON with `"success"`. Errors use `{"success": false, "error": "..."}`: `400` invalid request, `401` unauthorized, `403` not allowed in that slot, `404` Pokémon not found / not reserved.
+All requests except the health endpoint need the `Authorization: Bearer <ORG_BOT_API_KEY>` header and return JSON with `"success"`. Errors use `{"success": false, "error": "..."}`: `400` invalid request, `401` unauthorized, `403` not allowed in that slot, `404` Pokémon not found / not reserved.
 
 - `GET /api/org/health` needs no key; open it in a browser to check the URL works (`{"success": true, "status": "ok"}`).
 - `POST /api/org/validate` with `{"pokemon": "Pikachu", "slot": "slot1"}` checks the name exists and the slot allows it. `slot` is optional; `"All Eevee"` is accepted for all forms.

@@ -60,6 +60,7 @@ from bot import (
     load_pokemon_forms,
     load_server_settings,
     load_reservations,
+    _org_api_port_from_environment,
     parse_reserve_add_command,
     parse_reserve_remove_command,
     parse_collection_add_command,
@@ -139,6 +140,31 @@ class ConfigTests(unittest.TestCase):
         for value in ("0", "-1", "201", "many"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
+
+    def test_org_api_port_prefers_explicit_then_host_then_generic_port(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "ORG_API_PORT": "1111",
+                "SERVER_PORT": "2222",
+                "PORT": "3333",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_org_api_port_from_environment(), 1111)
+        with patch.dict(
+            "os.environ", {"SERVER_PORT": "2222", "PORT": "3333"}, clear=True
+        ):
+            self.assertEqual(_org_api_port_from_environment(), 2222)
+        with patch.dict("os.environ", {"PORT": "3333"}, clear=True):
+            self.assertEqual(_org_api_port_from_environment(), 3333)
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(_org_api_port_from_environment(), 8080)
+
+    def test_org_api_port_reports_invalid_environment_value(self) -> None:
+        with patch.dict("os.environ", {"SERVER_PORT": "invalid"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "SERVER_PORT"):
+                _org_api_port_from_environment()
 
 
 class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
@@ -2031,6 +2057,54 @@ class OrgReservesTests(unittest.TestCase):
                     org.validate("Orbeetle", slot)
                 with self.assertRaises(OrgError):
                     org.validate("Gmax Orbeetle", slot)
+
+
+class OrgApiValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_validate_rpc_matches_org_reserves_for_every_slot(self) -> None:
+        from aiohttp.test_utils import TestClient, TestServer
+        from org_api import OrgError, OrgReserves, create_app
+
+        slots = (
+            "rares",
+            "regionals",
+            "gmax",
+            "eevos",
+            "paradox",
+            "slot1",
+            "slot2",
+            "slot3",
+            "slot4",
+            "donator",
+            "boostie",
+        )
+        org = OrgReserves(
+            Path(__file__).with_name("org_reserves.json"),
+            Path(__file__).with_name("org_restrictions.json"),
+            ["Abomasnow", "Orbeetle"],
+        )
+        app = create_app("test-api-key", org, 1, lambda *_: None, lambda *_: False)
+
+        async with TestClient(TestServer(app)) as client:
+            for slot in slots:
+                for pokemon in ("Abomasnow", "Orbeetle"):
+                    try:
+                        name, all_forms = org.validate(pokemon, slot)
+                        expected = {
+                            "success": True,
+                            "valid": True,
+                            "pokemon": f"All {name}" if all_forms else name,
+                        }
+                    except OrgError as error:
+                        expected = {"success": False, "error": error.message}
+                    response = await client.post(
+                        "/api/org/validate",
+                        json={"pokemon": pokemon, "slot": slot},
+                        headers={"Authorization": "Bearer test-api-key"},
+                    )
+                    self.assertEqual(
+                        response.status, 200 if expected["success"] else 403
+                    )
+                    self.assertEqual(await response.json(), expected)
 
 
 if __name__ == "__main__":

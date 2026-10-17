@@ -2014,6 +2014,17 @@ def load_known_pokemon_names() -> list[str]:
     )
 
 
+def _org_api_port_from_environment() -> int:
+    for variable in ("ORG_API_PORT", "SERVER_PORT", "PORT"):
+        value = os.environ.get(variable)
+        if value:
+            try:
+                return int(value)
+            except ValueError as error:
+                raise ValueError(f"{variable} must be a valid port number") from error
+    return 8080
+
+
 GRAB_NAME_PREFIXES: Final[str] = (
     r"(?:(?:all\s+forms\s+of|all|mega|alolan|galarian|hisuian|paldean|gmax|"
     r"gigantamax|primal)\s+)*"
@@ -2317,16 +2328,40 @@ class NamingBot(discord.Client):
     async def start_org_api(self) -> None:
         api_key = os.environ.get("ORG_BOT_API_KEY", "").strip()
         if not api_key:
+            logger.info("Org API is disabled because ORG_BOT_API_KEY is not set")
             return
         try:
             guild_id = int(os.environ["ORG_GUILD_ID"])
         except (KeyError, ValueError):
             logger.error("ORG_GUILD_ID is required for the org API; API disabled")
             return
+        restrictions_path = Path(
+            os.environ.get(
+                "ORG_RESTRICTIONS_FILE",
+                str(Path(__file__).with_name("org_restrictions.json")),
+            )
+        )
+        if not restrictions_path.is_file():
+            logger.warning(
+                "Org restrictions file not found at %s; slots will have no restrictions",
+                restrictions_path.resolve(),
+            )
         org = OrgReserves(
             Path(os.environ.get("ORG_RESERVES_FILE", "org_reserves.json")),
-            Path(os.environ.get("ORG_RESTRICTIONS_FILE", "org_restrictions.json")),
+            restrictions_path,
             load_known_pokemon_names(),
+        )
+        allowed_lists = [
+            rule["allowed"]
+            for rule in org.restrictions.values()
+            if "allowed" in rule
+        ]
+        allowed_count = len(allowed_lists[0]) if allowed_lists else 0
+        logger.info(
+            "Loaded org restrictions from %s (%d slots, %d allowed names)",
+            restrictions_path.resolve(),
+            len(org.restrictions),
+            allowed_count,
         )
         app = create_app(
             api_key,
@@ -2337,8 +2372,12 @@ class NamingBot(discord.Client):
         )
         self.org_runner = web.AppRunner(app)
         await self.org_runner.setup()
-        port = int(os.environ.get("ORG_API_PORT") or os.environ.get("PORT") or 8080)
-        await web.TCPSite(self.org_runner, "0.0.0.0", port).start()
+        port = _org_api_port_from_environment()
+        try:
+            await web.TCPSite(self.org_runner, "0.0.0.0", port).start()
+        except OSError:
+            logger.exception("Could not bind Org API on 0.0.0.0:%s", port)
+            raise
         logger.info("Org API listening on port %s", port)
 
     async def setup_hook(self) -> None:

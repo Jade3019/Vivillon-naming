@@ -1914,7 +1914,7 @@ class ServerSettingsView(discord.ui.LayoutView):
             discord.ui.Section(
                 discord.ui.TextDisplay(
                     "**Appearance**\n"
-                    "Set Henna's server profile, banner, and embed color."
+                    "Set Vivillon's server profile, banner, and embed color."
                 ),
                 accessory=InertSettingsButton("appearance"),
             ),
@@ -1943,7 +1943,7 @@ class NamingSettingsView(discord.ui.LayoutView):
                 discord.ui.TextDisplay(
                     "**Naming**\n"
                     f"Enabled: `{'On' if settings['enabled'] else 'Off'}`\n"
-                    "Allow Henna to send Pokémon predictions."
+                    "Allow Vivillon to send Pokémon predictions."
                 ),
                 accessory=NamingSettingToggleButton(
                     bot, guild_id, "enabled", settings["enabled"]

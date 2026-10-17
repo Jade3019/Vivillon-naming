@@ -52,9 +52,15 @@ class OrgReserves:
     ) -> None:
         self.path = path
         self.entries: list[dict[str, Any]] = load_json(path, [])
-        self.restrictions: dict[str, dict[str, list[str]]] = load_json(
-            restrictions_path, {}
-        ).get("slots", {})
+        restriction_data = load_json(restrictions_path, {})
+        slots = restriction_data.get("slots", {})
+        if isinstance(slots, list):
+            shared_rule = restriction_data.get("shared", {})
+            self.restrictions: dict[str, dict[str, list[str]]] = {
+                slot: shared_rule for slot in slots
+            }
+        else:
+            self.restrictions = slots
         self.names: dict[str, str] = {}
         for name in known_names:
             current = self.names.get(fold(name))

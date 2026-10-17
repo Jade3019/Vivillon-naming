@@ -239,7 +239,17 @@ Vivillon can expose a small HTTP API so your org bot can manage reserves. It is 
 | `ORG_RESERVES_FILE` | Optional. Org list file, default `org_reserves.json`. |
 | `ORG_RESTRICTIONS_FILE` | Optional. Slot rules, default `org_restrictions.json`. |
 
-Restriction file (optional; slots without a rule allow anything):
+Restriction file (optional; slots without a rule allow anything). A shared rule
+can be assigned to a list of slot names, or individual slot rules can be
+specified using the legacy mapping format. `allowed` is a whitelist: when
+present, Pokémon not listed are rejected. `blocked` rejects listed Pokémon and
+can also be used alongside `allowed`.
+
+```json
+{"shared": {"allowed": ["Pikachu", "Eevee"]}, "slots": ["slot1", "slot2"]}
+```
+
+Legacy per-slot rules remain supported:
 
 ```json
 {"slots": {"slot1": {"allowed": ["Pikachu", "Eevee"]}, "slot2": {"blocked": ["Mewtwo"]}}}

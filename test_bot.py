@@ -1999,6 +1999,39 @@ class OrgReservesTests(unittest.TestCase):
             self.assertEqual(org.reset(), 1)
             self.assertEqual(org.entries, [])
 
+    def test_shared_org_restrictions_apply_to_all_configured_slots(self):
+        from org_api import OrgError, OrgReserves
+
+        slot_names = (
+            "rares",
+            "regionals",
+            "gmax",
+            "eevos",
+            "paradox",
+            "slot1",
+            "slot2",
+            "slot3",
+            "slot4",
+            "donator",
+            "boostie",
+        )
+        org = OrgReserves(
+            Path(__file__).with_name("org_reserves.json"),
+            Path(__file__).with_name("org_restrictions.json"),
+            ["Abomasnow", "Orbeetle", "Gmax Orbeetle"],
+        )
+
+        self.assertEqual(set(org.restrictions), set(slot_names))
+        shared_rule = org.restrictions[slot_names[0]]
+        for slot in slot_names:
+            with self.subTest(slot=slot):
+                self.assertEqual(org.restrictions[slot], shared_rule)
+                self.assertEqual(org.validate("Abomasnow", slot), ("Abomasnow", False))
+                with self.assertRaises(OrgError):
+                    org.validate("Orbeetle", slot)
+                with self.assertRaises(OrgError):
+                    org.validate("Gmax Orbeetle", slot)
+
 
 if __name__ == "__main__":
     unittest.main()

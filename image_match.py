@@ -30,13 +30,15 @@ DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
 
 
-def compute_descriptors(data: bytes):
+def compute_descriptors(data: bytes, mirror: bool = False):
     """SIFT descriptors (float32) of an image, or None if unreadable."""
     if cv2 is None:
         return None
     image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
     if image is None:
         return None
+    if mirror:
+        image = cv2.flip(image, 1)
     scale = MAX_SIDE / max(image.shape)
     if scale < 1:
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
@@ -206,10 +208,21 @@ class ImageMatcher:
         return self.names
 
     def match(self, data: bytes) -> tuple[str, int] | None:
-        """Return (pokemon name, votes) when one Pokémon clearly wins."""
+        """Return (pokemon name, votes) when one Pokémon clearly wins.
+
+        Spawns can face either way, so the picture is also tried mirrored.
+        """
         if not self.names or self.matcher is None:
             return None
-        descriptors = compute_descriptors(data)
+        results = [
+            result
+            for result in (self._match(data, False), self._match(data, True))
+            if result is not None
+        ]
+        return max(results, key=lambda result: result[1]) if results else None
+
+    def _match(self, data: bytes, mirror: bool) -> tuple[str, int] | None:
+        descriptors = compute_descriptors(data, mirror)
         if descriptors is None or len(descriptors) < 2:
             return None
         votes = np.zeros(len(self.names), int)

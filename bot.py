@@ -489,7 +489,7 @@ def format_spawn_reply(
             collection_user_ids,
         )
     )
-    lines.append(f"`{command}`")
+    lines.append(f"**Copy Here >** `{command}`")
     return "\n".join(lines)
 
 
@@ -691,7 +691,9 @@ def format_custom_type_spawn_reply(
         if type_name in included_types
     ]
     lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence)}")
-    lines.append(f"`{format_catch_command(poketwo_bot_id, name)}`")
+    lines.append(
+        f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"
+    )
     return "\n".join(lines)
 
 
@@ -791,7 +793,7 @@ def format_pc_catch_embed(name: str) -> discord.Embed:
     embed = discord.Embed(
         title=f"Catch {name}",
         description=(
-            f"Copy Below\n"
+            f"**Copy Here >**\n"
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
         ),
     )

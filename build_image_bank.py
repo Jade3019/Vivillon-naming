@@ -34,9 +34,37 @@ def signature(paths: list[Path]) -> str:
     return digest.hexdigest()
 
 
-def pokemon_features(name: str, paths: list[Path], cache: Path):
+BACKGROUND_SAMPLE = 120
+
+
+def background_pool(folder: Path, exclude: set[str]):
+    """Raw features of many other Pokémon's pictures, mostly scenery."""
+    numbered = sorted(
+        path
+        for path in folder.rglob("*.png")
+        if path.stem.isdigit() and path.parent.name not in exclude
+    )
+    step = max(1, len(numbered) // BACKGROUND_SAMPLE)
+    sets = [
+        found
+        for found in (compute_descriptors(p.read_bytes()) for p in numbered[::step])
+        if found is not None
+    ]
+    return np.vstack(sets).astype(np.float32)
+
+
+def remove_background(descriptors, pool):
+    matcher = cv2.BFMatcher()
+    keep = np.ones(len(descriptors), bool)
+    for position, pair in enumerate(matcher.knnMatch(descriptors, pool, k=1)):
+        if pair and pair[0].distance < SHARED_DISTANCE:
+            keep[position] = False
+    return descriptors[keep]
+
+
+def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths)
+    wanted = signature(paths) + "-bg2"
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:
@@ -49,7 +77,10 @@ def pokemon_features(name: str, paths: list[Path], cache: Path):
             continue
         # Hand-added pictures (not the numbered scraped ones) are a different
         # render, so they can't pass the repeat check; keep all their features.
-        (sets if path.stem.isdigit() else extra).append(found)
+        if path.stem.isdigit():
+            sets.append(found)
+        else:
+            extra.append(remove_background(found, pool) if pool is not None else found)
     parts = ([consensus_descriptors(sets)] if sets else []) + extra
     if not parts:
         return np.zeros((0, 128), np.float32)
@@ -109,10 +140,14 @@ def main() -> None:
     groups = reference_images(folder)
     if not groups:
         sys.exit(f"No pictures found in {folder}")
+    pool = None
+    if any(not path.stem.isdigit() for paths in groups.values() for path in paths):
+        print("Building background pool for hand-added pictures...", flush=True)
+        pool = background_pool(folder, set())
     names = sorted(groups)
     per_pokemon = {}
     for number, name in enumerate(names, 1):
-        per_pokemon[name] = pokemon_features(name, groups[name], cache)
+        per_pokemon[name] = pokemon_features(name, groups[name], cache, pool)
         if number == 1 or number % 25 == 0 or number == len(names):
             print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)
 

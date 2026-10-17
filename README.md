@@ -72,9 +72,10 @@ compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. It then posts the
-matching Pokétwo catch command as inline code for easier copying. A separate
-desktop copy card below it shows “Catch [Pokémon]”, “Copy Below”, and the
-Pokétwo catch command. Discord displays both formats on mobile and desktop.
+matching Pokétwo catch command as inline code for easier copying, preceded by a
+bold “Copy Here >” label. A separate desktop copy card below it shows “Catch
+[Pokémon]”, the same bold label, and the Pokétwo catch command. Discord displays
+both formats on mobile and desktop.
 Discord's copy controls depend on the client; the bot cannot directly write to a user's
 clipboard. Pure Ice, Grass, Fire, Water, Normal, and Electric spawns use their custom emojis inline with the guessed name and no embed. Configured paired types that include any of those types show both corresponding custom emojis inline. Other configured type matches show their icons beside the guessed name in an embed, with the catch command in the embed description. Other dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
 another bot account. If the prediction is `Missingno.` or `???`, the bot sends
@@ -245,6 +246,10 @@ python build_image_bank.py
 ```
 
 This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later runs (cached in `.bank_cache/`). The bot loads `image_bank.npz` at startup (or the file in `IMAGE_BANK_FILE`), so the pictures themselves don't need to be on the host. Upload `image_bank.npz`, `image_match.py` and `bot.py`, then restart.
+
+Reference-image matching checks both the original and horizontally flipped
+spawn image, so Pokémon can be recognized facing either direction without
+adding flipped copies to the image bank.
 
 When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 

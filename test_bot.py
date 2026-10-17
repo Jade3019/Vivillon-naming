@@ -177,7 +177,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(
             embed.description,
-            "Copy Below\n```\n<@716390085896962058> c pikachu\n```",
+            "**Copy Here >**\n```\n<@716390085896962058> c pikachu\n```",
         )
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
@@ -187,7 +187,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "Reserved: <@123>\n"
             "## <:fire:1560301436074729532> Vulpix: 87.50%\n"
-            "`<@789> c vulpix`",
+            "**Copy Here >** `<@789> c vulpix`",
         )
         self.assertTrue(is_fire_icon_pokemon("Vulpix"))
         self.assertTrue(is_fire_icon_pokemon("Litleo"))
@@ -216,7 +216,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 "Eevee", 87.5, 789, include_normal=True
             ),
             "## <:Normal:1560305235279482930> Eevee: 87.50%\n"
-            "`<@789> c eevee`",
+            "**Copy Here >** `<@789> c eevee`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -224,7 +224,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:water:1560303864094130357> "
             "<:fire:1560301436074729532> Volcanion: 87.50%\n"
-            "`<@789> c volcanion`",
+            "**Copy Here >** `<@789> c volcanion`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -232,7 +232,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:fire:1560301436074729532> "
             "<:Normal:1560305235279482930> Litleo: 87.50%\n"
-            "`<@789> c litleo`",
+            "**Copy Here >** `<@789> c litleo`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -240,7 +240,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:Normal:1560305235279482930> "
             "<:water:1560303864094130357> Bibarel: 87.50%\n"
-            "`<@789> c bibarel`",
+            "**Copy Here >** `<@789> c bibarel`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -248,7 +248,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:Electric:1560306053164572732> "
             "<:Normal:1560305235279482930> Heliolisk: 87.50%\n"
-            "`<@789> c heliolisk`",
+            "**Copy Here >** `<@789> c heliolisk`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -256,7 +256,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:fire:1560301436074729532> "
             "<:Electric:1560306053164572732> Rotom Heat: 87.50%\n"
-            "`<@789> c rotom heat`",
+            "**Copy Here >** `<@789> c rotom heat`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -264,7 +264,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:grass:1560307079896502282> "
             "<:fire:1560301436074729532> Scovillain: 87.50%\n"
-            "`<@789> c scovillain`",
+            "**Copy Here >** `<@789> c scovillain`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -272,7 +272,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:grass:1560307079896502282> "
             "<:water:1560303864094130357> Lotad: 87.50%\n"
-            "`<@789> c lotad`",
+            "**Copy Here >** `<@789> c lotad`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -280,7 +280,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:grass:1560307079896502282> "
             "<:Normal:1560305235279482930> Smoliv: 87.50%\n"
-            "`<@789> c smoliv`",
+            "**Copy Here >** `<@789> c smoliv`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -288,14 +288,14 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:grass:1560307079896502282> "
             "<:Electric:1560306053164572732> Rotom Mow: 87.50%\n"
-            "`<@789> c rotom mow`",
+            "**Copy Here >** `<@789> c rotom mow`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
                 "Glaceon", 87.5, 789, include_ice=True
             ),
             "## <:Ice:1560307867200782386> Glaceon: 87.50%\n"
-            "`<@789> c glaceon`",
+            "**Copy Here >** `<@789> c glaceon`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -307,7 +307,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:Ice:1560307867200782386> "
             "<:fire:1560301436074729532> Darmanitan-Galar-Zen: 87.50%\n"
-            "`<@789> c darmanitan-galar-zen`",
+            "**Copy Here >** `<@789> c darmanitan-galar-zen`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -315,7 +315,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:Ice:1560307867200782386> "
             "<:water:1560303864094130357> Lapras: 87.50%\n"
-            "`<@789> c lapras`",
+            "**Copy Here >** `<@789> c lapras`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -323,7 +323,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ),
             "## <:Ice:1560307867200782386> "
             "<:Electric:1560306053164572732> Arctozolt: 87.50%\n"
-            "`<@789> c arctozolt`",
+            "**Copy Here >** `<@789> c arctozolt`",
         )
         with patch("bot.NORMAL_AND_ICE_TYPE_ALIASES", frozenset({"test pokemon"})):
             self.assertTrue(is_ice_icon_pokemon("Test Pokemon"))
@@ -337,7 +337,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 ),
                 "## <:Normal:1560305235279482930> "
                 "<:Ice:1560307867200782386> Test Pokemon: 87.50%\n"
-                "`<@789> c test pokemon`",
+                "**Copy Here >** `<@789> c test pokemon`",
             )
         self.assertIsNone(fire_companion_icon_filename_for_pokemon("Volcanion"))
         self.assertIsNone(water_companion_icon_filename_for_pokemon("Volcanion"))
@@ -465,7 +465,7 @@ class GuessFormatTests(unittest.TestCase):
         self.assertEqual(
             format_spawn_reply("Pikachu", 85, 716390085896962058),
             "Pikachu: 85.00%\n"
-            "`<@716390085896962058> c pikachu`",
+            "**Copy Here >** `<@716390085896962058> c pikachu`",
         )
 
     def test_formats_only_the_reserved_members_as_mentions(self) -> None:
@@ -473,7 +473,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Pikachu", 95, 716390085896962058, [123, 456]),
             "Pikachu: 95.00%\n"
             "Reserved: <@123>, <@456>\n"
-            "`<@716390085896962058> c pikachu`",
+            "**Copy Here >** `<@716390085896962058> c pikachu`",
         )
 
     def test_formats_shinyhunters_without_empty_collection_line(self) -> None:
@@ -481,7 +481,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Absol", 95, 789, [], [123, 456]),
             "Absol: 95.00%\n"
             "Shinyhunt: <@123>, <@456>\n"
-            "`<@789> c absol`",
+            "**Copy Here >** `<@789> c absol`",
         )
 
     def test_reservations_override_shinyhunters_in_spawn_reply(self) -> None:
@@ -489,7 +489,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Absol", 95, 789, [999], [123, 456]),
             "Absol: 95.00%\n"
             "Reserved: <@999>\n"
-            "`<@789> c absol`",
+            "**Copy Here >** `<@789> c absol`",
         )
 
     def test_collection_ping_is_included_without_empty_shinyhunt_line(self) -> None:
@@ -497,7 +497,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Pikachu", 95, 789, [], [], [123]),
             "Pikachu: 95.00%\n"
             "Collection: <@123>\n"
-            "`<@789> c pikachu`",
+            "**Copy Here >** `<@789> c pikachu`",
         )
 
     def test_collection_and_shinyhunt_ping_multiple_members(self) -> None:
@@ -506,7 +506,7 @@ class GuessFormatTests(unittest.TestCase):
             "Pikachu: 95.00%\n"
             "Shinyhunt: <@123>\n"
             "Collection: <@456>, <@789>\n"
-            "`<@789> c pikachu`",
+            "**Copy Here >** `<@789> c pikachu`",
         )
 
     def test_reservation_overrides_shinyhunt_and_collection_pings(self) -> None:
@@ -514,7 +514,7 @@ class GuessFormatTests(unittest.TestCase):
             format_spawn_reply("Pikachu", 95, 789, [111], [123], [456]),
             "Pikachu: 95.00%\n"
             "Reserved: <@111>\n"
-            "`<@789> c pikachu`",
+            "**Copy Here >** `<@789> c pikachu`",
         )
 
 

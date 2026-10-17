@@ -2083,11 +2083,6 @@ class NamingBot(discord.Client):
         if not self.is_allowed_channel(message.channel):
             return
         channel_id = getattr(message.channel, "id", None)
-        if (
-            message.author.id == self.config.poketwo_bot_id
-            and channel_id in self.muted_poketwo_channels
-        ):
-            return
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
@@ -2152,8 +2147,6 @@ class NamingBot(discord.Client):
     ) -> None:
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         if after.author.id != self.config.poketwo_bot_id:
-            return
-        if getattr(after.channel, "id", None) in self.muted_poketwo_channels:
             return
         if not self.is_allowed_channel(after.channel):
             return

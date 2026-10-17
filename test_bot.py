@@ -238,7 +238,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn(456, self.bot.muted_poketwo_channels)
 
-    async def test_real_missingno_mutes_poketwo_until_vr_command(self) -> None:
+    async def test_real_missingno_blocks_poketwo_until_vr_command(self) -> None:
         self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
         self.bot.image_http = Mock(close=AsyncMock())
         spawn = Mock()
@@ -272,7 +272,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.bot.handle_spawn = AsyncMock()
         await self.bot.on_message(poketwo_message)
-        self.bot.handle_spawn.assert_not_awaited()
+        self.bot.handle_spawn.assert_awaited_once_with(poketwo_message)
 
         reserve_command = Mock()
         reserve_command.author.bot = False

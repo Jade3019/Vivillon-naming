@@ -63,6 +63,10 @@ approval for privileged intents on larger bots.
 
 The bot also handles spawns whose image or text Pokétwo adds by editing the message, processes each spawn message once, and retries temporary image-download or recognition failures up to three times before replying with an error.
 
+To test an image manually, post it with `v!test` as the message caption. A
+Missingno match runs the same `inc p` and staff-warning flow as a Pokétwo spawn.
+Other test matches never send a catch command.
+
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 
 When Pokétwo posts a wild-spawn image, the bot replies with one predicted name

@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
 
@@ -48,6 +48,7 @@ from bot import (
     format_spawn_reply,
     format_shinyhunt_status,
     is_valid_pokemon_name,
+    is_image_test_command,
     is_missingno_name,
     is_single_type_fire_pokemon,
     is_single_type_normal_pokemon,
@@ -77,6 +78,7 @@ from bot import (
     pokemon_matches_all_forms_reservation,
     POKETWO_COMMAND_BOT_ID,
     Config,
+    NamingBot,
 )
 
 
@@ -152,6 +154,89 @@ class ConfigTests(unittest.TestCase):
         for value in ("0", "-1", "200", "many"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
+
+
+class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.config = ConfigTests().load_config()
+        self.bot = NamingBot(self.config)
+        self.bot.handle_spawn = AsyncMock()
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    async def test_test_command_with_image_runs_spawn_handler_in_test_mode(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 99
+        message.channel = unittest.mock.Mock()
+        message.content = "v!test"
+        message.embeds = []
+        message.attachments = [
+            unittest.mock.Mock(content_type="image/png", url="https://example.test/missingno.png")
+        ]
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_spawn.assert_awaited_once_with(message, test_mode=True)
+        message.reply.assert_not_awaited()
+
+    async def test_test_command_without_image_explains_usage(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 99
+        message.channel = unittest.mock.Mock()
+        message.content = "v!test"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_spawn.assert_not_awaited()
+        message.reply.assert_awaited_once_with(
+            "Attach an image to `v!test` to test spawn recognition.",
+            mention_author=False,
+        )
+
+    def test_only_exact_test_command_matches(self) -> None:
+        self.assertTrue(is_image_test_command("v!test"))
+        self.assertTrue(is_image_test_command("V!TEST  "))
+        self.assertFalse(is_image_test_command("v!test now"))
+        self.assertFalse(is_image_test_command("test"))
+
+    async def test_missingno_image_test_sends_inc_p_then_staff_warning(self) -> None:
+        self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
+        self.bot.image_http = Mock(close=AsyncMock())
+        message = Mock()
+        message.id = 123
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/missingno.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with (
+            patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Missingno", 100.0)),
+            ),
+            patch("bot.asyncio.sleep", new=AsyncMock()) as sleep,
+        ):
+            await self.bot.handle_spawn(message, test_mode=True)
+
+        self.assertEqual(
+            message.reply.await_args_list,
+            [
+                call("<@716390085896962058> inc p", mention_author=False),
+                call(
+                    "Ping a staff member. Dont catch the pokemon.",
+                    mention_author=False,
+                ),
+            ],
+        )
+        sleep.assert_awaited_once_with(0.5)
 
 
 class FireSpawnFormattingTests(unittest.TestCase):

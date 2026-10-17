@@ -312,6 +312,10 @@ def image_url(message: discord.Message) -> str | None:
     return None
 
 
+def is_image_test_command(content: str) -> bool:
+    return re.fullmatch(r"v!test\s*", content, re.IGNORECASE) is not None
+
+
 class NoMatchError(Exception):
     pass
 
@@ -2063,6 +2067,15 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if is_image_test_command(message.content):
+                if image_url(message) is None:
+                    await message.reply(
+                        "Attach an image to `v!test` to test spawn recognition.",
+                        mention_author=False,
+                    )
+                    return
+                await self.handle_spawn(message, test_mode=True)
+                return
             if re.fullmatch(r"v!grab\s*", message.content, re.IGNORECASE):
                 await self.handle_grab_command(message)
                 return
@@ -2659,10 +2672,12 @@ class NamingBot(discord.Client):
             )
         await reply_with_reservation_embeds(message, embeds)
 
-    async def handle_spawn(self, message: discord.Message) -> None:
+    async def handle_spawn(
+        self, message: discord.Message, *, test_mode: bool = False
+    ) -> None:
         url = image_url(message)
         if not url:
-            logger.warning("Pokétwo spawn message %s had no image", message.id)
+            logger.warning("Image test or spawn message %s had no image", message.id)
             return
         if self.image_http is None:
             logger.error("HTTP client was not initialized")
@@ -2707,6 +2722,11 @@ class NamingBot(discord.Client):
             return
         except NoMatchError:
             logger.info("No reference image matched spawn %s", message.id)
+            if test_mode:
+                await message.reply(
+                    "I couldn't match that test image to a reference Pokémon.",
+                    mention_author=False,
+                )
             return
         except OpenAIError:
             logger.exception("Vision request failed for message %s", message.id)
@@ -2725,6 +2745,12 @@ class NamingBot(discord.Client):
         if not name:
             await message.reply(
                 "I couldn't confidently identify that Pokémon.",
+                mention_author=False,
+            )
+            return
+        if test_mode and not is_missingno_name(name):
+            await message.reply(
+                f"Test image recognized as {name}; Missingno action was not triggered.",
                 mention_author=False,
             )
             return

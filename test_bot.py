@@ -206,11 +206,12 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_image_test_command("v!test now"))
         self.assertFalse(is_image_test_command("test"))
 
-    async def test_missingno_image_test_sends_inc_p_then_staff_warning(self) -> None:
+    async def test_missingno_image_test_only_sends_staff_warning(self) -> None:
         self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
         self.bot.image_http = Mock(close=AsyncMock())
         message = Mock()
         message.id = 123
+        message.channel.id = 456
         message.attachments = [
             Mock(content_type="image/png", url="https://example.test/missingno.png")
         ]
@@ -222,21 +223,65 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
                 "bot.recognize_pokemon",
                 new=AsyncMock(return_value=("Missingno", 100.0)),
             ),
-            patch("bot.asyncio.sleep", new=AsyncMock()) as sleep,
         ):
             await self.bot.handle_spawn(message, test_mode=True)
 
         self.assertEqual(
             message.reply.await_args_list,
             [
-                call("!p", mention_author=False),
                 call(
                     "Ping a staff member. Dont catch the pokemon.",
                     mention_author=False,
                 ),
             ],
         )
-        sleep.assert_awaited_once_with(0.5)
+        self.assertNotIn(456, self.bot.muted_poketwo_channels)
+
+    async def test_real_missingno_mutes_poketwo_until_vr_command(self) -> None:
+        self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
+        self.bot.image_http = Mock(close=AsyncMock())
+        spawn = Mock()
+        spawn.id = 123
+        spawn.channel.id = 456
+        spawn.attachments = [
+            Mock(content_type="image/png", url="https://example.test/missingno.png")
+        ]
+        spawn.embeds = []
+        spawn.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Missingno", 100.0)),
+        ):
+            await self.bot.handle_spawn(spawn)
+
+        self.assertIn(456, self.bot.muted_poketwo_channels)
+
+        poketwo_message = Mock()
+        poketwo_message.author.bot = True
+        poketwo_message.author.id = self.config.poketwo_bot_id
+        poketwo_message.channel.id = 456
+        poketwo_message.content = "A wild Pokémon has appeared!"
+        poketwo_message.embeds = []
+        poketwo_message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/another.png")
+        ]
+        self.bot.handle_spawn = AsyncMock()
+        await self.bot.on_message(poketwo_message)
+        self.bot.handle_spawn.assert_not_awaited()
+
+        reserve_command = Mock()
+        reserve_command.author.bot = False
+        reserve_command.author.id = 789
+        reserve_command.channel.id = 456
+        reserve_command.content = "v!r list"
+        reserve_command.embeds = []
+        reserve_command.attachments = []
+        self.bot.handle_reserve_command = AsyncMock()
+        await self.bot.on_message(reserve_command)
+
+        self.assertNotIn(456, self.bot.muted_poketwo_channels)
+        self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
 
 
 class FireSpawnFormattingTests(unittest.TestCase):

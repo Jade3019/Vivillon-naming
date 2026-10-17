@@ -1982,6 +1982,7 @@ class NamingBot(discord.Client):
             Path(os.environ.get("IMAGE_BANK_FILE", "image_bank.npz"))
         )
         self.handled_spawn_ids: dict[int, None] = {}
+        self.muted_poketwo_channels: set[int] = set()
         self.org_runner: web.AppRunner | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
@@ -2064,9 +2065,25 @@ class NamingBot(discord.Client):
             return
         if not self.is_allowed_channel(message.channel):
             return
+        channel_id = getattr(message.channel, "id", None)
+        if (
+            message.author.id == self.config.poketwo_bot_id
+            and channel_id in self.muted_poketwo_channels
+        ):
+            return
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
+                if channel_id is not None:
+                    self.muted_poketwo_channels.discard(channel_id)
+                if re.match(
+                    r"^v!r\s+(?:add|list|search|remove|clear|e|exchange)(?:\s|$)",
+                    message.content,
+                    re.IGNORECASE,
+                ):
+                    await self.handle_reserve_command(message)
+                return
             if is_image_test_command(message.content):
                 if image_url(message) is None:
                     await message.reply(
@@ -2116,6 +2133,8 @@ class NamingBot(discord.Client):
     ) -> None:
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         if after.author.id != self.config.poketwo_bot_id:
+            return
+        if getattr(after.channel, "id", None) in self.muted_poketwo_channels:
             return
         if not self.is_allowed_channel(after.channel):
             return
@@ -2755,11 +2774,10 @@ class NamingBot(discord.Client):
             )
             return
         if is_missingno_name(name):
-            await message.reply(
-                "!p",
-                mention_author=False,
-            )
-            await asyncio.sleep(0.5)
+            if not test_mode:
+                channel_id = getattr(message.channel, "id", None)
+                if channel_id is not None:
+                    self.muted_poketwo_channels.add(channel_id)
             await message.reply(
                 "Ping a staff member. Dont catch the pokemon.",
                 mention_author=False,

@@ -41,14 +41,19 @@ def pokemon_features(name: str, paths: list[Path], cache: Path):
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:
                 return data["descriptors"]
-    sets = [
-        descriptors
-        for descriptors in (compute_descriptors(path.read_bytes()) for path in paths)
-        if descriptors is not None and len(descriptors) >= 2
-    ]
-    if not sets:
+    sets = []
+    extra = []
+    for path in paths:
+        found = compute_descriptors(path.read_bytes())
+        if found is None or len(found) < 2:
+            continue
+        # Hand-added pictures (not the numbered scraped ones) are a different
+        # render, so they can't pass the repeat check; keep all their features.
+        (sets if path.stem.isdigit() else extra).append(found)
+    parts = ([consensus_descriptors(sets)] if sets else []) + extra
+    if not parts:
         return np.zeros((0, 128), np.float32)
-    descriptors = drop_duplicates(consensus_descriptors(sets))
+    descriptors = drop_duplicates(np.vstack(parts))
     np.savez(cache_file, signature=wanted, descriptors=descriptors)
     return descriptors
 

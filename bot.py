@@ -9,6 +9,7 @@ import time
 from collections import OrderedDict
 import unicodedata
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Final
 
@@ -209,12 +210,18 @@ class Config:
 
     @classmethod
     def from_environment(cls) -> "Config":
-        if (
-            os.environ.get("CODESPACES") != "true"
-            or os.environ.get("CODESPACE_NAME")
-            != "bookish-space-xylophone-gx67456vpq4whwpqx"
-        ):
-            raise ValueError("This bot is only authorized in its designated Codespace")
+        in_designated_codespace = (
+            os.environ.get("CODESPACES") == "true"
+            and os.environ.get("CODESPACE_NAME")
+            == "bookish-space-xylophone-gx67456vpq4whwpqx"
+        )
+        # Set ALLOW_EXTERNAL_HOST=true to explicitly authorize another host.
+        external_host_allowed = os.environ.get("ALLOW_EXTERNAL_HOST") == "true"
+        if not (in_designated_codespace or external_host_allowed):
+            raise ValueError(
+                "This bot is only authorized in its designated Codespace "
+                "(or set ALLOW_EXTERNAL_HOST=true)"
+            )
 
         discord_token = os.environ.get("DISCORD_TOKEN")
         openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -760,14 +767,38 @@ def format_type_spawn_embed(
     return embed
 
 
+SPRITE_URL = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+    "sprites/pokemon/other/official-artwork/{}.png"
+)
+
+
+@lru_cache(maxsize=1)
+def load_sprite_ids() -> dict[str, int]:
+    path = Path(__file__).with_name("pokemon_sprites.json")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def sprite_url_for_pokemon(name: str) -> str | None:
+    sprite_id = load_sprite_ids().get(name)
+    return SPRITE_URL.format(sprite_id) if sprite_id else None
+
+
 def format_pc_catch_embed(name: str) -> discord.Embed:
-    return discord.Embed(
+    embed = discord.Embed(
         title=f"Catch {name}",
         description=(
             f"Copy Below\n"
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
         ),
     )
+    sprite_url = sprite_url_for_pokemon(name)
+    if sprite_url:
+        embed.set_thumbnail(url=sprite_url)
+    return embed
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:

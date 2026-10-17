@@ -100,6 +100,10 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "designated Codespace"):
             self.load_config(CODESPACES="false")
 
+    def test_allows_external_host_when_opted_in(self) -> None:
+        config = self.load_config(CODESPACES="false", ALLOW_EXTERNAL_HOST="true")
+        self.assertEqual(config.poketwo_bot_id, 12345)
+
     def test_allows_configuring_multiple_spawn_channels(self) -> None:
         config = self.load_config(ALLOWED_CHANNEL_IDS="100, 200,300")
 

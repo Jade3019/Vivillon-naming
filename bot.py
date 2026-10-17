@@ -1763,6 +1763,64 @@ class ReservationPagesView(discord.ui.View):
         )
 
 
+class InertSettingsButton(discord.ui.Button):
+    def __init__(self, section: str) -> None:
+        super().__init__(
+            label="Open",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"server_settings:open:{section}",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+
+
+class ServerSettingsView(discord.ui.LayoutView):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                "## Server Settings\n"
+                "Pick a section to configure. Changes inside each section save immediately."
+            ),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay("**Naming**\nNaming `On` - Mode `Assisted`"),
+                accessory=InertSettingsButton("naming"),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Roles & Pings**\n"
+                    "Configure ping roles and rare, regional, hunt, collection, "
+                    "reserve, and quest output."
+                ),
+                accessory=InertSettingsButton("roles"),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Starboard**\n"
+                    "Configure the main starboard and the separate shinyboard system."
+                ),
+                accessory=InertSettingsButton("starboard"),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Appearance**\n"
+                    "Set Henna's server profile, banner, and embed color."
+                ),
+                accessory=InertSettingsButton("appearance"),
+            ),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(
+                "-# Server settings are kept for this server's setup. To have them "
+                "removed, open a ticket in the support server:\n"
+                "https://discord.gg/5XurUaW8"
+            ),
+            accent_color=discord.Color.blurple(),
+        )
+        self.add_item(container)
+
+
 RESERVE_LIST_CACHE: Final[OrderedDict[int, list[str]]] = OrderedDict()
 MENTION_PATTERN: Final[re.Pattern[str]] = re.compile(r"<@!?(\d+)>")
 GRAB_PAGE_CHARS: Final[int] = 3800
@@ -2120,6 +2178,9 @@ class NamingBot(discord.Client):
             if re.fullmatch(r"v!ping\s*", message.content, re.IGNORECASE):
                 await self.handle_ping_command(message)
                 return
+            if re.fullmatch(r"v!settings\s*", message.content, re.IGNORECASE):
+                await self.handle_settings_command(message)
+                return
             if API_STATUS_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_api_status(message)
                 return
@@ -2239,6 +2300,12 @@ class NamingBot(discord.Client):
                 str(record["guild"]).casefold(),
                 str(record["channel"]).casefold(),
             ),
+        )
+
+    async def handle_settings_command(self, message: discord.Message) -> None:
+        await message.reply(
+            view=ServerSettingsView(),
+            mention_author=False,
         )
 
     async def handle_api_status(self, message: discord.Message) -> None:

@@ -65,6 +65,7 @@ from bot import (
     parse_shinyhunt_command,
     parse_shinyhunt_remove_command,
     ReservationPagesView,
+    ServerSettingsView,
     remove_reservation,
     remove_reservations,
     remove_collection_pokemon,
@@ -194,9 +195,49 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(active[0]["channel"], "incense-room")
             self.assertTrue(self.bot.incense_path.is_file())
 
+            second_server_message = Mock()
+            second_server_message.author.bot = False
+            second_server_message.author.id = 101
+            second_server_message.guild.id = SERVER_ID + 2
+            second_server_message.guild.name = "Another server"
+            second_server_message.channel.id = 201
+            second_server_message.channel.name = "another-incense-room"
+            second_server_message.content = (
+                f"<@{self.config.poketwo_bot_id}> buy incense"
+            )
+            await self.bot.on_message(second_server_message)
+            self.assertEqual(len(self.bot.current_active_incenses()), 2)
+
             message.content = f"<@{self.config.poketwo_bot_id}> stopincense"
             await self.bot.on_message(message)
-            self.assertEqual(self.bot.current_active_incenses(), [])
+            active = self.bot.current_active_incenses()
+            self.assertEqual(len(active), 1)
+            self.assertEqual(active[0]["guild"], "Another server")
+
+    async def test_api_status_counts_incenses_across_all_servers(self) -> None:
+        now = int(time.time())
+        self.bot.active_incenses = {
+            "200": {
+                "guild": "First server",
+                "channel": "incense-room",
+                "guild_id": SERVER_ID,
+                "expires_at": now + 3600,
+            },
+            "201": {
+                "guild": "Second server",
+                "channel": "incense-room",
+                "guild_id": SERVER_ID + 1,
+                "expires_at": now + 3600,
+            },
+        }
+        message = Mock()
+        message.reply = AsyncMock()
+
+        await self.bot.handle_api_status(message)
+
+        embed = message.reply.await_args.kwargs["embed"]
+        fields = {field.name: field.value for field in embed.fields}
+        self.assertEqual(fields["Active Incense"], "2")
 
     async def test_api_status_reports_response_metrics_and_load(self) -> None:
         self.bot.pokemon_named_count = 12
@@ -249,6 +290,43 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(message)
 
         self.bot.handle_api_status.assert_awaited_once_with(message)
+
+    async def test_settings_command_sends_server_settings_layout(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!settings"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        message.reply.assert_awaited_once()
+        reply_kwargs = message.reply.await_args.kwargs
+        self.assertFalse(reply_kwargs["mention_author"])
+        view = reply_kwargs["view"]
+        self.assertIsInstance(view, ServerSettingsView)
+        self.assertTrue(view.has_components_v2())
+        sections = [
+            child
+            for child in view.children[0].children
+            if isinstance(child, discord.ui.Section)
+        ]
+        self.assertEqual(len(sections), 4)
+        self.assertEqual(
+            [section.accessory.label for section in sections],
+            ["Open"] * 4,
+        )
+        self.assertEqual(
+            [section.accessory.custom_id for section in sections],
+            [
+                "server_settings:open:naming",
+                "server_settings:open:roles",
+                "server_settings:open:starboard",
+                "server_settings:open:appearance",
+            ],
+        )
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):

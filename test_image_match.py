@@ -3,11 +3,21 @@ import unittest
 from pathlib import Path
 
 import image_match
-from image_match import ImageMatcher, compute_descriptors
+from image_match import ImageMatcher, compute_descriptors, reference_images
 
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
 class ImageMatcherTests(unittest.TestCase):
+    def test_normal_deoxys_reference_uses_species_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "deoxys-normal" / "1.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"")
+
+            groups = reference_images(Path(directory))
+
+        self.assertEqual(list(groups), ["Deoxys"])
+
     def test_matches_reference_when_spawn_image_is_flipped(self) -> None:
         cv2 = image_match.cv2
         np = image_match.np

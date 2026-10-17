@@ -66,7 +66,7 @@ The bot also handles spawns whose image or text Pokétwo adds by editing the mes
 To test an image manually, post it with `v!test` as the message caption. A
 Missingno match immediately posts a staff warning.
 Other test matches never send a catch command.
-After a real Pokétwo Missingno spawn, Vivillon ignores further Pokétwo messages
+After a Missingno match (real or `v!test`), Vivillon ignores further Pokétwo messages
 and edits in that channel until someone sends a `v!r` command there. This only
 silences Vivillon's processing; it cannot stop Pokétwo from posting messages.
 

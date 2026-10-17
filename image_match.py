@@ -30,7 +30,7 @@ DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
 
 
-def compute_descriptors(data: bytes, mirror: bool = False):
+def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
     """SIFT descriptors (float32) of an image, or None if unreadable."""
     if cv2 is None:
         return None
@@ -39,11 +39,15 @@ def compute_descriptors(data: bytes, mirror: bool = False):
         return None
     if mirror:
         image = cv2.flip(image, 1)
+        if mask is not None:
+            mask = cv2.flip(mask, 1)
     scale = MAX_SIDE / max(image.shape)
     if scale < 1:
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if mask is not None:
+            mask = cv2.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
     sift = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE)
-    _, descriptors = sift.detectAndCompute(image, None)
+    _, descriptors = sift.detectAndCompute(image, mask)
     return descriptors
 
 

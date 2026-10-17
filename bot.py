@@ -2774,10 +2774,9 @@ class NamingBot(discord.Client):
             )
             return
         if is_missingno_name(name):
-            if not test_mode:
-                channel_id = getattr(message.channel, "id", None)
-                if channel_id is not None:
-                    self.muted_poketwo_channels.add(channel_id)
+            channel_id = getattr(message.channel, "id", None)
+            if channel_id is not None:
+                self.muted_poketwo_channels.add(channel_id)
             await message.reply(
                 "Ping a staff member. Dont catch the pokemon.",
                 mention_author=False,

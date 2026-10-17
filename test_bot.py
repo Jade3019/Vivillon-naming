@@ -235,7 +235,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ],
         )
-        self.assertNotIn(456, self.bot.muted_poketwo_channels)
+        self.assertIn(456, self.bot.muted_poketwo_channels)
 
     async def test_real_missingno_mutes_poketwo_until_vr_command(self) -> None:
         self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)

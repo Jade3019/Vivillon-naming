@@ -53,6 +53,24 @@ def background_pool(folder: Path, exclude: set[str]):
     return np.vstack(sets).astype(np.float32)
 
 
+def foreground_mask(data: bytes):
+    """Mask of the Pokémon itself: the alpha channel, else a GrabCut cutout."""
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+    if image is None:
+        return None
+    if image.ndim == 3 and image.shape[2] == 4:
+        return np.where(image[..., 3] > 128, 255, 0).astype(np.uint8)
+    if image.ndim != 3:
+        return None
+    height, width = image.shape[:2]
+    mask = np.zeros((height, width), np.uint8)
+    rect = (int(width * 0.12), int(height * 0.1), int(width * 0.76), int(height * 0.8))
+    cv2.grabCut(image, mask, rect, np.zeros((1, 65)), np.zeros((1, 65)), 5, cv2.GC_INIT_WITH_RECT)
+    cut = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
+    cut = cv2.dilate(cut, np.ones((9, 9), np.uint8))
+    return cut if cut.any() else None
+
+
 def remove_background(descriptors, pool):
     matcher = cv2.BFMatcher()
     keep = np.ones(len(descriptors), bool)
@@ -64,7 +82,7 @@ def remove_background(descriptors, pool):
 
 def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths) + "-bg2"
+    wanted = signature(paths) + "-fg1"
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:
@@ -72,7 +90,8 @@ def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
     sets = []
     extra = []
     for path in paths:
-        found = compute_descriptors(path.read_bytes())
+        data = path.read_bytes()
+        found = compute_descriptors(data, mask=None if path.stem.isdigit() else foreground_mask(data))
         if found is None or len(found) < 2:
             continue
         # Hand-added pictures (not the numbered scraped ones) are a different

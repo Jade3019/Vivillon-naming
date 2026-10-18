@@ -2473,7 +2473,8 @@ class NamingBot(discord.Client):
             self._ping_loop(message.channel, mentions, allowed)
         )
         await message.reply(
-            "Pinging every 3 minutes. Use `v!timereset` to stop.",
+            f"✅ Timer set! I'll ping {mentions} every 3 minutes "
+            "(first ping in 3 minutes). Use `v!timereset` to stop.",
             mention_author=False,
             allowed_mentions=discord.AllowedMentions.none(),
         )

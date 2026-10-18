@@ -2252,6 +2252,7 @@ class NamingBot(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.config = config
+        self.time_tasks: dict[int, asyncio.Task] = {}
         self.openai: AsyncOpenAI | None = (
             AsyncOpenAI(api_key=config.openai_api_key, max_retries=1, timeout=10.0)
             if config.openai_api_key
@@ -2429,6 +2430,9 @@ class NamingBot(discord.Client):
         )
 
     async def close(self) -> None:
+        for task in self.time_tasks.values():
+            task.cancel()
+        self.time_tasks.clear()
         if self.org_runner is not None:
             await self.org_runner.cleanup()
         if self.image_http is not None:
@@ -2439,6 +2443,51 @@ class NamingBot(discord.Client):
 
     async def on_ready(self) -> None:
         logger.info("Logged in as %s", self.user)
+
+    async def _ping_loop(self, channel, mentions: str, allowed) -> None:
+        try:
+            while True:
+                await asyncio.sleep(180)
+                try:
+                    await channel.send(mentions, allowed_mentions=allowed)
+                except discord.HTTPException as error:
+                    logger.warning("v!settime ping failed: %s", error)
+        except asyncio.CancelledError:
+            pass
+
+    async def handle_settime_command(self, message: discord.Message) -> None:
+        roles = message.role_mentions
+        users = [user for user in message.mentions if not user.bot]
+        if not roles and not users:
+            await message.reply(
+                "Usage: `v!settime @role [@role ...]`", mention_author=False
+            )
+            return
+        mentions = " ".join([role.mention for role in roles] + [u.mention for u in users])
+        allowed = discord.AllowedMentions(roles=list(roles), users=users, everyone=False)
+        channel_id = message.channel.id
+        old = self.time_tasks.pop(channel_id, None)
+        if old is not None:
+            old.cancel()
+        self.time_tasks[channel_id] = asyncio.create_task(
+            self._ping_loop(message.channel, mentions, allowed)
+        )
+        await message.reply(
+            "Pinging every 3 minutes. Use `v!timereset` to stop.",
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    async def handle_timereset_command(self, message: discord.Message) -> None:
+        task = self.time_tasks.pop(message.channel.id, None)
+        if task is None:
+            await message.reply("No timer is running.", mention_author=False)
+            return
+        task.cancel()
+        await message.reply(
+            "Timer stopped. Use `v!settime` with roles to start again.",
+            mention_author=False,
+        )
 
     async def set_poketwo_blocked(self, channel, blocked: bool) -> None:
         """Deny (or restore) Pokétwo's Send Messages permission in a channel."""
@@ -2498,6 +2547,12 @@ class NamingBot(discord.Client):
                     )
                     return
                 await self.handle_spawn(message, test_mode=True)
+                return
+            if re.match(r"^v!settime(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_settime_command(message)
+                return
+            if re.fullmatch(r"v!timereset\s*", message.content, re.IGNORECASE):
+                await self.handle_timereset_command(message)
                 return
             if re.fullmatch(r"v!grab\s*", message.content, re.IGNORECASE):
                 await self.handle_grab_command(message)

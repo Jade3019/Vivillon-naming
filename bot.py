@@ -1915,47 +1915,47 @@ class ServerSettingsView(discord.ui.LayoutView):
         settings = bot.naming_settings_for_guild(guild_id)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                "## Server Settings\n"
-                "Pick a section to configure. Changes inside each section save immediately."
+                "# ⚙️ Vivillon Control Panel\n"
+                "Choose a section below. Changes save instantly."
             ),
             discord.ui.Separator(),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Naming**\n"
-                    f"Naming `{'On' if settings['enabled'] else 'Off'}` - "
-                    f"Mode `{'Assisted' if settings['assisted'] else 'Name only'}`"
+                    "### 🏷️ Naming\n"
+                    f"{'🟢 On' if settings['enabled'] else '🔴 Off'}  •  "
+                    f"{'Assisted' if settings['assisted'] else 'Name only'}"
                 ),
                 accessory=NamingSectionButton(bot, guild_id),
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Roles & Pings**\n"
-                    "Configure ping roles and rare, regional, hunt, collection, "
-                    "reserve, and quest output."
+                    "### 🔔 Roles & Pings\n"
+                    "Ping roles plus rare, regional, hunt, collection, "
+                    "reserve and quest output."
                 ),
                 accessory=InertSettingsButton("roles"),
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Starboard**\n"
-                    "Configure the main starboard and the separate shinyboard system."
+                    "### ⭐ Starboard\n"
+                    "Main starboard and the separate shinyboard."
                 ),
                 accessory=InertSettingsButton("starboard"),
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Appearance**\n"
-                    "Set Vivillon's server profile, banner, and embed color."
+                    "### 🎨 Appearance\n"
+                    "Server profile, banner and embed color."
                 ),
                 accessory=InertSettingsButton("appearance"),
             ),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
-                "-# Server settings are kept for this server's setup. To have them "
-                "removed, open a ticket in the support server:\n"
-                "https://discord.gg/5XurUaW8"
+                "-# Settings are stored for this server. To have them removed, "
+                "open a ticket in the support server:\n"
+                "-# https://discord.gg/5XurUaW8"
             ),
-            accent_color=discord.Color.blurple(),
+            accent_color=discord.Color(0x9B59F5),
         )
         self.add_item(container)
 
@@ -1966,14 +1966,14 @@ class NamingSettingsView(discord.ui.LayoutView):
         settings = bot.naming_settings_for_guild(guild_id)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                "## Server Settings - Naming\n"
-                "Configure this section, then use Back to choose another."
+                "# 🏷️ Naming Settings\n"
+                "Tap a button to switch a setting. Use Back when you're done."
             ),
             discord.ui.Separator(),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Naming**\n"
-                    f"Enabled: `{'On' if settings['enabled'] else 'Off'}`\n"
+                    "### Naming\n"
+                    f"{'🟢 On' if settings['enabled'] else '🔴 Off'}\n"
                     "Allow Vivillon to send Pokémon predictions."
                 ),
                 accessory=NamingSettingToggleButton(
@@ -1982,8 +1982,8 @@ class NamingSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Naming Mode**\n"
-                    f"`{'Assisted' if settings['assisted'] else 'Name only'}`\n"
+                    "### Naming Mode\n"
+                    f"{'🟢 Assisted' if settings['assisted'] else '⚪ Name only'}\n"
                     "Assisted mode adds copy-ready catch commands."
                 ),
                 accessory=NamingSettingToggleButton(
@@ -1992,8 +1992,8 @@ class NamingSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "**Pings**\n"
-                    f"`{'On' if settings['pings'] else 'Off'}`\n"
+                    "### Pings\n"
+                    f"{'🟢 On' if settings['pings'] else '🔴 Off'}\n"
                     "Only name Pokémon when a collection, shinyhunt, or reserve "
                     "member should be pinged."
                 ),
@@ -2003,10 +2003,10 @@ class NamingSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(),
             discord.ui.Section(
-                discord.ui.TextDisplay("Return to Server Settings."),
+                discord.ui.TextDisplay("↩️ Back to the Control Panel."),
                 accessory=NamingSettingsBackButton(bot, guild_id),
             ),
-            accent_color=discord.Color.blurple(),
+            accent_color=discord.Color(0x9B59F5),
         )
         self.add_item(container)
 

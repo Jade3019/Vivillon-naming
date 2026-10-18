@@ -34,6 +34,7 @@ from bot import (
     format_shinyhunt_confirmation,
     format_type_spawn_embed,
     format_pc_catch_embed,
+    catch_card_files,
     format_custom_type_spawn_reply,
     fire_companion_icon_filename_for_pokemon,
     is_normal_icon_pokemon,
@@ -773,6 +774,17 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "sprites/pokemon/other/official-artwork/10118.png",
         )
 
+    def test_custom_pokemon_catch_card_uses_bundled_thumbnail(self) -> None:
+        for name in ("Mosslax", "Peakychu"):
+            with self.subTest(name=name):
+                filename = f"{name.lower()}.png"
+                embed = format_pc_catch_embed(name)
+                files = catch_card_files(name)
+
+                self.assertEqual(embed.thumbnail.url, f"attachment://{filename}")
+                self.assertEqual([file.filename for file in files], [filename])
+        self.assertEqual(catch_card_files("Pikachu"), [])
+
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
         self.assertEqual(
             format_custom_type_spawn_reply(
@@ -966,6 +978,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             water_companion_icon_filename_for_pokemon("Lapras"),
             None,
         )
+        self.assertIsNone(normal_companion_icon_filename_for_pokemon("Bibarel"))
         with patch("bot.NORMAL_AND_ICE_TYPE_ALIASES", frozenset({"test pokemon"})):
             self.assertTrue(is_normal_icon_pokemon("Test Pokemon"))
             self.assertEqual(

@@ -78,6 +78,24 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertEqual(list(groups), ["Tornadus"])
 
+    def test_paldean_tauros_match_is_reported_as_tauros(self) -> None:
+        cv2 = image_match.cv2
+        np = image_match.np
+        image = np.random.default_rng(5).integers(0, 256, (256, 256), dtype=np.uint8)
+        descriptors = compute_descriptors(cv2.imencode(".png", image)[1].tobytes())
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.zeros(len(descriptors), dtype=np.int32),
+                names=np.array(["Paldean Tauros"]),
+            )
+            result = ImageMatcher(bank_path).match(cv2.imencode(".png", image)[1].tobytes())
+
+        self.assertEqual(result[0], "Tauros")
+
     def test_matches_reference_when_spawn_image_is_flipped(self) -> None:
         cv2 = image_match.cv2
         np = image_match.np

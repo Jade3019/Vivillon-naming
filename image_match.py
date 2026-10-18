@@ -28,6 +28,8 @@ MIN_MARGIN = 3
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
+# Bank entries that are kept separate for recognition but reported under another name.
+DISPLAY_NAMES = {"Paldean Tauros": "Tauros"}
 
 
 def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
@@ -237,5 +239,6 @@ class ImageMatcher:
         best = int(votes[order[0]])
         second = int(votes[order[1]]) if len(order) > 1 else 0
         if best >= MIN_VOTES and best - second >= max(MIN_MARGIN, 0.3 * best):
-            return self.names[int(order[0])], best
+            name = self.names[int(order[0])]
+            return DISPLAY_NAMES.get(name, name), best
         return None

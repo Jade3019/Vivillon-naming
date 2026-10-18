@@ -602,7 +602,7 @@ def normal_companion_icon_filename_for_pokemon(name: str) -> str | None:
     if normalized_name in NORMAL_AND_ICE_TYPE_ALIASES:
         return None
     if normalized_name in NORMAL_AND_WATER_TYPE_ALIASES:
-        return "water_type.png"
+        return None
     if normalized_name in ELECTRIC_AND_NORMAL_TYPE_ALIASES:
         return None
     if normalized_name in GRASS_AND_NORMAL_TYPE_ALIASES:
@@ -801,6 +801,21 @@ def sprite_url_for_pokemon(name: str) -> str | None:
     return SPRITE_URL.format(sprite_id) if sprite_id else None
 
 
+THUMBNAIL_ASSETS_DIR: Final[Path] = Path(__file__).with_name("assets") / "thumbnails"
+
+
+def custom_thumbnail_path(name: str) -> Path | None:
+    """Bundled thumbnail for Pokémon that PokeAPI has no artwork for."""
+    filename = re.sub(r"[^a-z0-9]", "", normalize_pokemon_alias(name)) + ".png"
+    path = THUMBNAIL_ASSETS_DIR / filename
+    return path if path.is_file() else None
+
+
+def catch_card_files(name: str) -> list[discord.File]:
+    path = custom_thumbnail_path(name)
+    return [discord.File(path, filename=path.name)] if path else []
+
+
 def format_pc_catch_embed(name: str) -> discord.Embed:
     embed = discord.Embed(
         title=f"Catch {display_pokemon_name(name)}",
@@ -809,8 +824,11 @@ def format_pc_catch_embed(name: str) -> discord.Embed:
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
         ),
     )
+    custom_path = custom_thumbnail_path(name)
     sprite_url = sprite_url_for_pokemon(name)
-    if sprite_url:
+    if custom_path:
+        embed.set_thumbnail(url=f"attachment://{custom_path.name}")
+    elif sprite_url:
         embed.set_thumbnail(url=sprite_url)
     return embed
 
@@ -3552,9 +3570,11 @@ class NamingBot(discord.Client):
                     mention_author=False,
                 )
             else:
+                card_files = catch_card_files(name) if assisted else []
                 await message.reply(
                     reply,
                     embed=format_pc_catch_embed(name) if assisted else None,
+                    **({"files": card_files} if card_files else {}),
                     mention_author=False,
                 )
             return
@@ -3574,18 +3594,23 @@ class NamingBot(discord.Client):
                 collection_user_ids,
             )
             embeds = [type_embed]
+            files = [
+                discord.File(
+                    Path(__file__).with_name("assets") / icon_filename,
+                    filename=icon_filename,
+                )
+            ]
             if assisted:
                 embeds.append(format_pc_catch_embed(name))
+                files.extend(catch_card_files(name))
             await message.reply(
                 content="\n".join(content_lines),
                 embeds=embeds,
-                file=discord.File(
-                    Path(__file__).with_name("assets") / icon_filename,
-                    filename=icon_filename,
-                ),
+                files=files,
                 mention_author=False,
             )
         else:
+            card_files = catch_card_files(name) if assisted else []
             await message.reply(
                 format_spawn_reply(
                     name,
@@ -3597,6 +3622,7 @@ class NamingBot(discord.Client):
                     assisted=assisted,
                 ),
                 embed=format_pc_catch_embed(name) if assisted else None,
+                **({"files": card_files} if card_files else {}),
                 mention_author=False,
             )
 

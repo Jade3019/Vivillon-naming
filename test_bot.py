@@ -89,6 +89,8 @@ from bot import (
     reservation_key,
     Config,
     NamingBot,
+    AFKSettingsView,
+    load_afk_settings,
 )
 
 
@@ -461,6 +463,60 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("c charizard", name_only_content)
         self.assertIsNone(name_only_message.reply.await_args.kwargs["embed"])
 
+    async def test_afk_preferences_filter_shinyhunt_and_collection_pings(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": False,
+        }
+        self.bot.shinyhunters = {reservation_key(SERVER_ID, "Absol"): [123]}
+        self.bot.collections = {reservation_key(SERVER_ID, "Absol"): [456]}
+        self.bot.afk_settings = {
+            f"{SERVER_ID}:123": {"shinyhunt": False, "collection": True},
+            f"{SERVER_ID}:456": {"shinyhunt": True, "collection": True},
+        }
+        message = Mock()
+        message.id = 705
+        message.guild.id = SERVER_ID
+        message.channel.id = 1205
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Absol", 99.0)),
+        ):
+            await self.bot.handle_spawn(message)
+
+        message.reply.assert_awaited_once()
+        content = message.reply.await_args.args[0]
+        self.assertIn("Collection: <@456>", content)
+        self.assertNotIn("Shinyhunt:", content)
+
+        self.bot.server_settings[str(SERVER_ID)]["pings"] = True
+        self.bot.afk_settings[f"{SERVER_ID}:456"]["collection"] = False
+        muted_message = Mock()
+        muted_message.id = 706
+        muted_message.guild.id = SERVER_ID
+        muted_message.channel.id = 1206
+        muted_message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        muted_message.embeds = []
+        muted_message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Absol", 99.0)),
+        ):
+            await self.bot.handle_spawn(muted_message)
+
+        muted_message.reply.assert_not_awaited()
+
     async def test_api_status_reports_response_metrics_and_load(self) -> None:
         self.bot.pokemon_named_count = 12
         now = time.monotonic()
@@ -559,6 +615,83 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         naming_view = interaction.response.edit_message.await_args.kwargs["view"]
         self.assertIsInstance(naming_view, NamingSettingsView)
+
+    async def test_afk_command_sends_personal_toggle_layout(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!afk"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        message.reply.assert_awaited_once()
+        view = message.reply.await_args.kwargs["view"]
+        self.assertIsInstance(view, AFKSettingsView)
+        self.assertTrue(view.has_components_v2())
+        sections = [
+            child
+            for child in view.children[0].children
+            if isinstance(child, discord.ui.Section)
+        ]
+        self.assertEqual(
+            [section.accessory.label for section in sections],
+            ["On", "On"],
+        )
+        self.assertEqual(
+            [section.accessory.custom_id for section in sections],
+            ["afk_settings:shinyhunt", "afk_settings:collection"],
+        )
+
+    async def test_afk_toggle_persists_for_user_and_requires_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.afk_settings_path = Path(directory) / "afk_settings.json"
+            self.bot.afk_settings = {}
+            view = AFKSettingsView(self.bot, SERVER_ID, 123)
+            sections = [
+                child
+                for child in view.children[0].children
+                if isinstance(child, discord.ui.Section)
+            ]
+            collection_button = sections[1].accessory
+            interaction = Mock()
+            interaction.guild_id = SERVER_ID
+            interaction.user.id = 456
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+
+            await collection_button.callback(interaction)
+
+            interaction.response.send_message.assert_awaited_once()
+            interaction.response.edit_message.assert_not_awaited()
+            self.assertTrue(
+                self.bot.afk_settings_for_user(SERVER_ID, 123)["collection"]
+            )
+
+            interaction.user.id = 123
+            await collection_button.callback(interaction)
+
+            self.assertFalse(
+                self.bot.afk_settings_for_user(SERVER_ID, 123)["collection"]
+            )
+            self.assertTrue(
+                self.bot.afk_settings_for_user(SERVER_ID, 123)["shinyhunt"]
+            )
+            self.assertEqual(
+                load_afk_settings(self.bot.afk_settings_path),
+                {f"{SERVER_ID}:123": {"shinyhunt": True, "collection": False}},
+            )
+            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_sections = [
+                child
+                for child in updated_view.children[0].children
+                if isinstance(child, discord.ui.Section)
+            ]
+            self.assertEqual(updated_sections[1].accessory.label, "Off")
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):

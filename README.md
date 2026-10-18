@@ -185,6 +185,12 @@ the bot shows a `Shinyhunt:` line and/or a `Collection:` line only for groups
 with matching members. If no one matches, it shows the normal naming reply
 without empty mention lines.
 
+Use `v!afk` to open your personal ping settings. The **Shiny Hunt** and
+**Collection** buttons independently turn those notifications on or off; the
+settings are saved per member and server in `afk_settings.json` by default
+(override the path with `AFK_SETTINGS_FILE`). Both are on by default, preserving
+existing notification behavior.
+
 ## Exchanging reservations
 
 Reserve managers can move one member's reservations to others. Post a list

@@ -1886,6 +1886,98 @@ class NamingSettingToggleButton(discord.ui.Button):
         )
 
 
+class AFKSettingToggleButton(discord.ui.Button):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        user_id: int,
+        setting: str,
+        enabled: bool,
+    ) -> None:
+        super().__init__(
+            label="On" if enabled else "Off",
+            style=(
+                discord.ButtonStyle.success
+                if enabled
+                else discord.ButtonStyle.danger
+            ),
+            custom_id=f"afk_settings:{setting}",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.setting = setting
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if (
+            interaction.guild_id != self.guild_id
+            or interaction.user.id != self.user_id
+        ):
+            await interaction.response.send_message(
+                "Only the member who opened these AFK settings can change them.",
+                ephemeral=True,
+            )
+            return
+        try:
+            self.bot.toggle_afk_setting(
+                self.guild_id, self.user_id, self.setting
+            )
+        except ValueError:
+            logger.exception(
+                "Could not save AFK settings for guild %s user %s",
+                self.guild_id,
+                self.user_id,
+            )
+            await interaction.response.send_message(
+                "I couldn't save your AFK settings. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=AFKSettingsView(self.bot, self.guild_id, self.user_id)
+        )
+
+
+class AFKSettingsView(discord.ui.LayoutView):
+    def __init__(self, bot: "NamingBot", guild_id: int, user_id: int) -> None:
+        super().__init__(timeout=300)
+        settings = bot.afk_settings_for_user(guild_id, user_id)
+        status = (
+            "🟢 Receiving pings"
+            if all(settings.values())
+            else "🔴 AFK (muted)"
+        )
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                "# AFK Settings\n"
+                f"{status}\n"
+                "Choose which Pokémon notifications you want to receive."
+            ),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "### Shiny Hunt\n"
+                    f"{'Receiving pings' if settings['shinyhunt'] else 'AFK (muted)'}"
+                ),
+                accessory=AFKSettingToggleButton(
+                    bot, guild_id, user_id, "shinyhunt", settings["shinyhunt"]
+                ),
+            ),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "### Collection\n"
+                    f"{'Receiving pings' if settings['collection'] else 'AFK (muted)'}"
+                ),
+                accessory=AFKSettingToggleButton(
+                    bot, guild_id, user_id, "collection", settings["collection"]
+                ),
+            ),
+            accent_color=discord.Color(0x9B59F5),
+        )
+        self.add_item(container)
+
+
 class NamingSettingsBackButton(discord.ui.Button):
     def __init__(self, bot: "NamingBot", guild_id: int) -> None:
         super().__init__(
@@ -2266,6 +2358,56 @@ def save_server_settings(
         raise ValueError(f"Could not save server settings to {path}") from error
 
 
+AFK_DEFAULTS: Final[dict[str, bool]] = {
+    "shinyhunt": True,
+    "collection": True,
+}
+AFK_SETTING_KEYS: Final[frozenset[str]] = frozenset(AFK_DEFAULTS)
+
+
+def load_afk_settings(path: Path) -> dict[str, dict[str, bool]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read AFK settings from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"AFK settings in {path} have an invalid format")
+
+    settings: dict[str, dict[str, bool]] = {}
+    for user_key, user_settings in data.items():
+        ids = user_key.split(":") if isinstance(user_key, str) else []
+        if (
+            len(ids) != 2
+            or any(not identifier.isdecimal() for identifier in ids)
+            or not isinstance(user_settings, dict)
+            or any(
+                key not in AFK_SETTING_KEYS or not isinstance(value, bool)
+                for key, value in user_settings.items()
+            )
+        ):
+            raise ValueError(f"AFK settings in {path} have an invalid entry")
+        settings[user_key] = {**AFK_DEFAULTS, **user_settings}
+    return settings
+
+
+def save_afk_settings(
+    path: Path,
+    settings: dict[str, dict[str, bool]],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save AFK settings to {path}") from error
+
+
 class NamingBot(discord.Client):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
@@ -2315,6 +2457,10 @@ class NamingBot(discord.Client):
             os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
         )
         self.server_settings = load_server_settings(self.server_settings_path)
+        self.afk_settings_path = Path(
+            os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
+        )
+        self.afk_settings = load_afk_settings(self.afk_settings_path)
 
     def naming_settings_for_guild(self, guild_id: int) -> dict[str, bool]:
         return {
@@ -2336,6 +2482,30 @@ class NamingBot(discord.Client):
         save_server_settings(self.server_settings_path, updated_settings)
         self.server_settings = updated_settings
         return guild_settings
+
+    def afk_settings_for_user(
+        self, guild_id: int, user_id: int
+    ) -> dict[str, bool]:
+        return {
+            **AFK_DEFAULTS,
+            **self.afk_settings.get(f"{guild_id}:{user_id}", {}),
+        }
+
+    def toggle_afk_setting(
+        self, guild_id: int, user_id: int, setting: str
+    ) -> dict[str, bool]:
+        if setting not in AFK_SETTING_KEYS:
+            raise ValueError(f"Unknown AFK setting: {setting}")
+        updated_settings = {
+            key: dict(settings) for key, settings in self.afk_settings.items()
+        }
+        user_key = f"{guild_id}:{user_id}"
+        user_settings = self.afk_settings_for_user(guild_id, user_id)
+        user_settings[setting] = not user_settings[setting]
+        updated_settings[user_key] = user_settings
+        save_afk_settings(self.afk_settings_path, updated_settings)
+        self.afk_settings = updated_settings
+        return user_settings
 
     def org_add_reserve(self, name: str, user_id: int) -> None:
         guild_id = int(os.environ["ORG_GUILD_ID"])
@@ -2584,6 +2754,9 @@ class NamingBot(discord.Client):
             if re.fullmatch(r"v!settings\s*", message.content, re.IGNORECASE):
                 await self.handle_settings_command(message)
                 return
+            if re.fullmatch(r"v!afk\s*", message.content, re.IGNORECASE):
+                await self.handle_afk_command(message)
+                return
             if API_STATUS_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_api_status(message)
                 return
@@ -2723,6 +2896,19 @@ class NamingBot(discord.Client):
         await message.reply(
             view=ServerSettingsView(self, message.guild.id),
             mention_author=False,
+        )
+
+    async def handle_afk_command(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "AFK settings can only be used in a server.",
+                mention_author=False,
+            )
+            return
+        await message.reply(
+            view=AFKSettingsView(self, message.guild.id, message.author.id),
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
         )
 
     async def handle_api_status(self, message: discord.Message) -> None:
@@ -3515,6 +3701,21 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
+        if message.guild:
+            shinyhunter_user_ids = [
+                user_id
+                for user_id in shinyhunter_user_ids
+                if self.afk_settings_for_user(message.guild.id, user_id)[
+                    "shinyhunt"
+                ]
+            ]
+            collection_user_ids = [
+                user_id
+                for user_id in collection_user_ids
+                if self.afk_settings_for_user(message.guild.id, user_id)[
+                    "collection"
+                ]
+            ]
         naming_settings = (
             self.naming_settings_for_guild(message.guild.id)
             if message.guild

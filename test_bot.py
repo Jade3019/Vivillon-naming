@@ -745,6 +745,20 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Copy Below\n```\n<@716390085896962058> c pikachu\n```",
         )
 
+    def test_meowstic_spawn_uses_species_name_without_gender_prefix(self) -> None:
+        embed = format_pc_catch_embed("Male Meowstic")
+
+        self.assertEqual(format_guess("Male Meowstic", 100), "Meowstic: 100.00%")
+        self.assertEqual(
+            format_catch_command(789, "Male Meowstic"),
+            "<@789> c meowstic",
+        )
+        self.assertEqual(embed.title, "Catch Meowstic")
+        self.assertEqual(
+            embed.description,
+            "Copy Below\n```\n<@716390085896962058> c meowstic\n```",
+        )
+
     def test_zygarde_catch_embed_uses_ten_percent_form_sprite(self) -> None:
         embed = format_pc_catch_embed("Zygarde")
 

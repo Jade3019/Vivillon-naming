@@ -461,12 +461,18 @@ def is_missingno_name(name: str) -> bool:
     return name.strip().casefold().rstrip(".") in {"missingno", "???"}
 
 
+def display_pokemon_name(name: str) -> str:
+    if name.casefold() == "male meowstic":
+        return "Meowstic"
+    return name
+
+
 def format_guess(name: str, confidence: float) -> str:
-    return f"{name}: {confidence:.2f}%"
+    return f"{display_pokemon_name(name)}: {confidence:.2f}%"
 
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
-    return f"<@{poketwo_bot_id}> c {name.lower()}"
+    return f"<@{poketwo_bot_id}> c {display_pokemon_name(name).lower()}"
 
 
 def format_spawn_reply(
@@ -797,7 +803,7 @@ def sprite_url_for_pokemon(name: str) -> str | None:
 
 def format_pc_catch_embed(name: str) -> discord.Embed:
     embed = discord.Embed(
-        title=f"Catch {name}",
+        title=f"Catch {display_pokemon_name(name)}",
         description=(
             f"Copy Below\n"
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"

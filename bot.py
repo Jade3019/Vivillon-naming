@@ -19,6 +19,7 @@ import discord
 from aiohttp import web
 from image_match import ImageMatcher
 from org_api import OrgReserves, create_app
+import org_rpc
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
 
@@ -2271,6 +2272,8 @@ class NamingBot(discord.Client):
             maxlen=1000
         )
         self.org_runner: web.AppRunner | None = None
+        self.org_reserves: OrgReserves | None = None
+        self.org_rpc: org_rpc.OrgRpc | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
         self.shinyhunt_path = Path(
@@ -2325,6 +2328,40 @@ class NamingBot(discord.Client):
             self.reservations = updated
         return removed
 
+    def org_store(self, restrictions_path: Path | None = None) -> OrgReserves:
+        """The one shared org store, built once and reused by every transport.
+
+        org_api.create_app and the Discord transport both read and write this
+        same in-memory list, so org_reserves.json never drifts into two caches.
+        """
+        if self.org_reserves is None:
+            if restrictions_path is None:
+                restrictions_path = Path(
+                    os.environ.get(
+                        "ORG_RESTRICTIONS_FILE",
+                        str(Path(__file__).with_name("org_restrictions.json")),
+                    )
+                )
+            self.org_reserves = OrgReserves(
+                Path(os.environ.get("ORG_RESERVES_FILE", "org_reserves.json")),
+                restrictions_path,
+                load_known_pokemon_names(),
+            )
+        return self.org_reserves
+
+    async def start_org_rpc(self) -> None:
+        """Start the Discord org transport, or leave it off when unconfigured.
+
+        from_environment returns None when neither ORG_DISCORD_RPC_CHANNEL_ID
+        nor ORG_DISCORD_RPC_GUILD_ID is set, so the feature flag is the scope
+        itself: on_message stays exactly as it was and nothing is listened for.
+        """
+        self.org_rpc = org_rpc.from_environment(
+            self.org_store(),
+            self.org_add_reserve,
+            self.org_remove_reserve,
+        )
+
     async def start_org_api(self) -> None:
         api_key = os.environ.get("ORG_BOT_API_KEY", "").strip()
         if not api_key:
@@ -2346,11 +2383,7 @@ class NamingBot(discord.Client):
                 "Org restrictions file not found at %s; slots will have no restrictions",
                 restrictions_path.resolve(),
             )
-        org = OrgReserves(
-            Path(os.environ.get("ORG_RESERVES_FILE", "org_reserves.json")),
-            restrictions_path,
-            load_known_pokemon_names(),
-        )
+        org = self.org_store(restrictions_path)
         allowed_lists = [
             rule["allowed"]
             for rule in org.restrictions.values()
@@ -2382,6 +2415,7 @@ class NamingBot(discord.Client):
 
     async def setup_hook(self) -> None:
         await self.start_org_api()
+        await self.start_org_rpc()
         self.image_http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=20),
             connector=aiohttp.TCPConnector(limit=0),
@@ -2421,6 +2455,10 @@ class NamingBot(discord.Client):
             logger.warning("Could not change Pokétwo permissions: %s", error)
 
     async def on_message(self, message: discord.Message) -> None:
+        # The org transport runs first, before the bot-author guard below would
+        # drop the org bot's own JSON requests, and before channel filtering.
+        if self.org_rpc is not None and await self.org_rpc.handle_message(message):
+            return
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
         self.track_incense_command(message)

@@ -17,7 +17,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from image_match import ImageMatcher
+from image_match import ImageMatcher, base_pokemon_name
 from org_api import OrgReserves, create_app
 import org_rpc
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
@@ -811,12 +811,14 @@ def custom_thumbnail_path(name: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def catch_card_files(name: str) -> list[discord.File]:
-    path = custom_thumbnail_path(name)
+def catch_card_files(name: str, thumbnail_name: str | None = None) -> list[discord.File]:
+    path = custom_thumbnail_path(thumbnail_name or name)
     return [discord.File(path, filename=path.name)] if path else []
 
 
-def format_pc_catch_embed(name: str) -> discord.Embed:
+def format_pc_catch_embed(
+    name: str, thumbnail_name: str | None = None
+) -> discord.Embed:
     embed = discord.Embed(
         title=f"Catch {display_pokemon_name(name)}",
         description=(
@@ -824,7 +826,7 @@ def format_pc_catch_embed(name: str) -> discord.Embed:
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
         ),
     )
-    custom_path = custom_thumbnail_path(name)
+    custom_path = custom_thumbnail_path(thumbnail_name or name)
     sprite_url = sprite_url_for_pokemon(name)
     if custom_path:
         embed.set_thumbnail(url=f"attachment://{custom_path.name}")
@@ -3466,6 +3468,8 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        thumbnail_name = name
+        name = base_pokemon_name(name)
         if test_mode and not is_missingno_name(name):
             await message.reply(
                 f"Test image recognized as {name}; Missingno action was not triggered.",
@@ -3562,7 +3566,7 @@ class NamingBot(discord.Client):
             if assisted and companion_icon_filename:
                 await message.reply(
                     reply,
-                    embed=format_pc_catch_embed(name),
+                    embed=format_pc_catch_embed(name, thumbnail_name),
                     file=discord.File(
                         Path(__file__).with_name("assets") / companion_icon_filename,
                         filename=companion_icon_filename,
@@ -3570,10 +3574,10 @@ class NamingBot(discord.Client):
                     mention_author=False,
                 )
             else:
-                card_files = catch_card_files(name) if assisted else []
+                card_files = catch_card_files(name, thumbnail_name) if assisted else []
                 await message.reply(
                     reply,
-                    embed=format_pc_catch_embed(name) if assisted else None,
+                    embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
                     **({"files": card_files} if card_files else {}),
                     mention_author=False,
                 )
@@ -3601,8 +3605,8 @@ class NamingBot(discord.Client):
                 )
             ]
             if assisted:
-                embeds.append(format_pc_catch_embed(name))
-                files.extend(catch_card_files(name))
+                embeds.append(format_pc_catch_embed(name, thumbnail_name))
+                files.extend(catch_card_files(name, thumbnail_name))
             await message.reply(
                 content="\n".join(content_lines),
                 embeds=embeds,
@@ -3610,7 +3614,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
         else:
-            card_files = catch_card_files(name) if assisted else []
+            card_files = catch_card_files(name, thumbnail_name) if assisted else []
             await message.reply(
                 format_spawn_reply(
                     name,
@@ -3621,7 +3625,7 @@ class NamingBot(discord.Client):
                     collection_user_ids,
                     assisted=assisted,
                 ),
-                embed=format_pc_catch_embed(name) if assisted else None,
+                embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
                 **({"files": card_files} if card_files else {}),
                 mention_author=False,
             )

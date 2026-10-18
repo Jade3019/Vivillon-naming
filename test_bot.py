@@ -1,3 +1,4 @@
+import image_match
 import tempfile
 import time
 import unittest
@@ -784,6 +785,16 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 self.assertEqual(embed.thumbnail.url, f"attachment://{filename}")
                 self.assertEqual([file.filename for file in files], [filename])
         self.assertEqual(catch_card_files("Pikachu"), [])
+
+    def test_unown_variant_thumbnail_is_chosen_by_variant(self) -> None:
+        self.assertEqual(image_match.base_pokemon_name("Unown Variant 3"), "Unown")
+        self.assertEqual(image_match.base_pokemon_name("Tauros"), "Tauros")
+        embed = format_pc_catch_embed("Unown", "Unown Variant 3")
+        files = catch_card_files("Unown", "Unown Variant 3")
+
+        self.assertEqual(embed.thumbnail.url, "attachment://unownvariant3.png")
+        self.assertEqual([file.filename for file in files], ["unownvariant3.png"])
+        self.assertEqual(catch_card_files("Unown"), [])
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
         self.assertEqual(

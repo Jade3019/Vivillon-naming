@@ -30,6 +30,17 @@ DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {"Paldean Tauros": "Tauros"}
+# Folders like "Unown Variant 3" are learned separately (so each can have its own
+# thumbnail) but the Pokémon is still named after the base species.
+VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.IGNORECASE)
+
+
+NEIGHBOURS = 6
+
+
+def base_pokemon_name(name: str) -> str:
+    match = VARIANT_PATTERN.match(name)
+    return match.group("base") if match else name
 
 
 def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
@@ -135,7 +146,12 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
         if path.suffix.lower() not in IMAGE_SUFFIXES or path.name.startswith("."):
             continue
         raw_name = path.parent.name if path.parent != folder else pokemon_name_from_file(path)
-        name = canonical_name(raw_name)
+        variant = VARIANT_PATTERN.match(raw_name)
+        if variant:
+            base = canonical_name(variant.group("base"))
+            name = f"{base} Variant {int(variant.group('number'))}" if base else None
+        else:
+            name = canonical_name(raw_name)
         if name is None:
             skipped.add(raw_name)
             continue
@@ -194,6 +210,7 @@ class ImageMatcher:
                 descriptors = data["descriptors"].astype(np.float32)
                 self.names = [str(name) for name in data["names"]]
                 self.labels = data["labels"]
+                self.families = [base_pokemon_name(name) for name in self.names]
         except (OSError, ValueError, KeyError):
             logger.warning("Could not read %s; image matching disabled", bank_path)
             self.names = []
@@ -232,13 +249,27 @@ class ImageMatcher:
         if descriptors is None or len(descriptors) < 2:
             return None
         votes = np.zeros(len(self.names), int)
-        for pair in self.matcher.knnMatch(descriptors, k=2):
-            if len(pair) == 2 and pair[0].distance < RATIO * pair[1].distance:
-                votes[self.labels[pair[0].trainIdx]] += 1
+        for neighbours in self.matcher.knnMatch(descriptors, k=NEIGHBOURS):
+            if len(neighbours) < 2:
+                continue
+            best_label = int(self.labels[neighbours[0].trainIdx])
+            rival = neighbours[1]
+            if self.names[best_label] != self.families[best_label]:
+                # Variants of one species share features; only outside rivals count.
+                family = self.families[best_label]
+                rival = next(
+                    (n for n in neighbours[1:] if self.families[int(self.labels[n.trainIdx])] != family),
+                    neighbours[-1],
+                )
+            if neighbours[0].distance < RATIO * rival.distance:
+                votes[best_label] += 1
         order = np.argsort(votes)[::-1]
         best = int(votes[order[0]])
         second = int(votes[order[1]]) if len(order) > 1 else 0
-        if best >= MIN_VOTES and best - second >= max(MIN_MARGIN, 0.3 * best):
-            name = self.names[int(order[0])]
+        name = self.names[int(order[0])]
+        # Variant pictures (e.g. Unown letters) are plain shapes with few features.
+        is_variant = VARIANT_PATTERN.match(name) is not None
+        min_votes, min_margin = (2, 2) if is_variant else (MIN_VOTES, MIN_MARGIN)
+        if best >= min_votes and best - second >= max(min_margin, 0.3 * best):
             return DISPLAY_NAMES.get(name, name), best
         return None

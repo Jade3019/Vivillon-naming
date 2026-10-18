@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from image_match import (
+    base_pokemon_name,
     BANK_FILE,
     MAX_FEATURES_PER_POKEMON,
     SHARED_DISTANCE,
@@ -131,6 +132,7 @@ def assemble_bank(names: list[str], per_pokemon: dict):
     matcher = cv2.FlannBasedMatcher(dict(algorithm=1, trees=4), dict(checks=32))
     matcher.add([everything])
     matcher.train()
+    families = [base_pokemon_name(name) for name in names]
     kept_descriptors, kept_labels = [], []
     for index, name in enumerate(names):
         features = compact[name].astype(np.float32)
@@ -139,7 +141,10 @@ def assemble_bank(names: list[str], per_pokemon: dict):
         keep = np.ones(len(features), bool)
         for position, neighbours in enumerate(matcher.knnMatch(features, k=6)):
             for neighbour in neighbours:
-                if owner[neighbour.trainIdx] != index and neighbour.distance < SHARED_DISTANCE:
+                if (
+                    families[owner[neighbour.trainIdx]] != families[index]
+                    and neighbour.distance < SHARED_DISTANCE
+                ):
                     keep[position] = False
                     break
         features = features[keep]

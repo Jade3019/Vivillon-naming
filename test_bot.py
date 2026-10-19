@@ -909,7 +909,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
 
     def test_custom_pokemon_catch_card_uses_bundled_thumbnail(self) -> None:
-        for name in ("Mosslax", "Peakychu"):
+        for name in ("Koraidon", "Mosslax", "Peakychu"):
             with self.subTest(name=name):
                 filename = f"{name.lower()}.png"
                 embed = format_pc_catch_embed(name)

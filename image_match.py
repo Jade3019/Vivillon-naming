@@ -29,7 +29,13 @@ SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
 # Bank entries that are kept separate for recognition but reported under another name.
-DISPLAY_NAMES = {"Paldean Tauros": "Tauros"}
+DISPLAY_NAMES = {
+    "Busted Mimikyu": "Mimikyu",
+    "Disguised Mimikyu": "Mimikyu",
+    "Paldean Tauros": "Tauros",
+    "Totem-Busted Mimikyu": "Mimikyu",
+    "Totem-Disguised Mimikyu": "Mimikyu",
+}
 # Folders like "Unown Variant 3" are learned separately (so each can have its own
 # thumbnail) but the Pokémon is still named after the base species.
 VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.IGNORECASE)
@@ -90,11 +96,17 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
 
     species_by_key = {key(name): name for name in species}
     forms_by_key: dict[str, str] = {}
-    for forms in form_data.values():
+    for species_name, forms in form_data.items():
+        canonical_species = (
+            species_by_key.get(key(species_name), species_name.title())
+            if key(species_name) == key("pumpkaboo")
+            else None
+        )
         for form in forms:
             display = form["display_name"].title()
-            forms_by_key[key(form["identifier"])] = display
-            forms_by_key[key(form["display_name"])] = display
+            canonical = canonical_species or display
+            forms_by_key[key(form["identifier"])] = canonical
+            forms_by_key[key(form["display_name"])] = canonical
 
     regions = {
         "alola": "Alolan",

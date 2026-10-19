@@ -55,6 +55,21 @@ def base_pokemon_name(name: str) -> str:
 THUMBNAIL_FORM_SPECIES = {"Hangry Morpeko": "Morpeko"}
 
 
+# Forms that look alike share features, so they count as one family when
+# deciding which features are distinctive.
+FAMILY_OVERRIDES = {
+    "Finizen": "Palafin",
+    "Hero Palafin": "Palafin",
+}
+# Families whose members are near-identical pictures: the best-scoring member
+# is named even when members of the same family score closely.
+INDISTINGUISHABLE_FAMILIES = {"Palafin"}
+
+
+def family_name(name: str) -> str:
+    return FAMILY_OVERRIDES.get(name, base_pokemon_name(name))
+
+
 def species_display_name(name: str) -> str:
     return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))
 
@@ -220,6 +235,31 @@ def drop_duplicates(descriptors):
     return descriptors[chosen]
 
 
+def has_belly_patch(data: bytes) -> bool | None:
+    """Palafin has a red patch on its belly that Finizen lacks."""
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        return None
+    scale = 800 / max(image.shape[:2])
+    if scale > 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    red = ((hsv[..., 0] < 10) | (hsv[..., 0] > 165)) & (hsv[..., 1] > 60) & (hsv[..., 2] > 120)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(red.astype(np.uint8))
+    grey = (hsv[..., 1] < 50) & (hsv[..., 2] > 90) & (hsv[..., 2] < 220)
+    kernel = np.ones((5, 5), np.uint8)
+    for i in range(1, count):
+        x, y, w, h, area = stats[i]
+        if area < 40 or area > 400 or w < 1.5 * h:
+            continue
+        blob = (labels == i).astype(np.uint8)
+        ring = (cv2.dilate(blob, kernel, iterations=2) > 0) & (blob == 0)
+        # The patch sits on the grey belly, unlike reddish background details.
+        if grey[ring].mean() >= 0.5:
+            return True
+    return False
+
+
 class ImageMatcher:
     def __init__(self, bank_path: Path) -> None:
         self.names: list[str] = []
@@ -232,7 +272,7 @@ class ImageMatcher:
                 descriptors = data["descriptors"].astype(np.float32)
                 self.names = [str(name) for name in data["names"]]
                 self.labels = data["labels"]
-                self.families = [base_pokemon_name(name) for name in self.names]
+                self.families = [family_name(name) for name in self.names]
         except (OSError, ValueError, KeyError):
             logger.warning("Could not read %s; image matching disabled", bank_path)
             self.names = []
@@ -264,7 +304,14 @@ class ImageMatcher:
             for result in (self._match(data, False), self._match(data, True))
             if result is not None
         ]
-        return max(results, key=lambda result: result[1]) if results else None
+        if not results:
+            return None
+        name, votes = max(results, key=lambda result: result[1])
+        if name in ("Palafin", "Finizen"):
+            patch = has_belly_patch(data)
+            if patch is not None:
+                name = "Palafin" if patch else "Finizen"
+        return name, votes
 
     def _match(self, data: bytes, mirror: bool) -> tuple[str, int] | None:
         descriptors = compute_descriptors(data, mirror)
@@ -276,9 +323,9 @@ class ImageMatcher:
                 continue
             best_label = int(self.labels[neighbours[0].trainIdx])
             rival = neighbours[1]
-            if self.names[best_label] != self.families[best_label]:
+            family = self.families[best_label]
+            if self.names[best_label] != family or family in INDISTINGUISHABLE_FAMILIES:
                 # Variants of one species share features; only outside rivals count.
-                family = self.families[best_label]
                 rival = next(
                     (n for n in neighbours[1:] if self.families[int(self.labels[n.trainIdx])] != family),
                     neighbours[-1],
@@ -289,6 +336,13 @@ class ImageMatcher:
         best = int(votes[order[0]])
         second = int(votes[order[1]]) if len(order) > 1 else 0
         name = self.names[int(order[0])]
+        if self.families[int(order[0])] in INDISTINGUISHABLE_FAMILIES:
+            outside = [
+                int(votes[i])
+                for i in order
+                if self.families[int(i)] != self.families[int(order[0])]
+            ]
+            second = outside[0] if outside else 0
         # Variant pictures (e.g. Unown letters) are plain shapes with few features.
         is_variant = VARIANT_PATTERN.match(name) is not None
         min_votes, min_margin = (2, 2) if is_variant else (MIN_VOTES, MIN_MARGIN)

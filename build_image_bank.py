@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from image_match import (
-    base_pokemon_name,
+    family_name,
     BANK_FILE,
     MAX_FEATURES_PER_POKEMON,
     SHARED_DISTANCE,
@@ -132,7 +132,7 @@ def assemble_bank(names: list[str], per_pokemon: dict):
     matcher = cv2.FlannBasedMatcher(dict(algorithm=1, trees=4), dict(checks=32))
     matcher.add([everything])
     matcher.train()
-    families = [base_pokemon_name(name) for name in names]
+    families = [family_name(name) for name in names]
     kept_descriptors, kept_labels = [], []
     for index, name in enumerate(names):
         features = compact[name].astype(np.float32)

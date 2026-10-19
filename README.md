@@ -291,7 +291,7 @@ Build the feature file after adding images:
 python build_image_bank.py
 ```
 
-This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later runs (cached in `.bank_cache/`). The bot loads `image_bank.npz` at startup (or the file in `IMAGE_BANK_FILE`), so the pictures themselves don't need to be on the host. Upload `image_bank.npz`, `image_match.py` and `bot.py`, then restart.
+This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later runs (cached in `.bank_cache/`). The bot loads `image_bank.npz` next to `bot.py` at startup, or the path configured by `IMAGE_BANK_FILE`; it logs the exact loaded path. The pictures themselves don't need to be on the host. Upload `image_bank.npz`, `image_match.py` and `bot.py`, then restart.
 
 Reference-image matching checks both the original and horizontally flipped
 spawn image, so Pokémon can be recognized facing either direction without

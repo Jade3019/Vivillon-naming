@@ -309,7 +309,8 @@ class ImageMatcher:
         self.matcher.add([descriptors])
         self.matcher.train()
         logger.info(
-            "Loaded image bank: %d Pokémon, %d features",
+            "Loaded image bank from %s: %d Pokémon, %d features",
+            bank_path.resolve(),
             len(self.names),
             len(descriptors),
         )

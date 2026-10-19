@@ -2441,8 +2441,11 @@ class NamingBot(discord.Client):
             config.max_concurrent_vision_requests
         )
         self.image_http: aiohttp.ClientSession | None = None
+        image_bank_file = os.environ.get("IMAGE_BANK_FILE")
         self.image_matcher = ImageMatcher(
-            Path(os.environ.get("IMAGE_BANK_FILE", "image_bank.npz"))
+            Path(image_bank_file)
+            if image_bank_file
+            else Path(__file__).with_name("image_bank.npz")
         )
         self.handled_spawn_ids: dict[int, None] = {}
         self.muted_poketwo_channels: set[int] = set()

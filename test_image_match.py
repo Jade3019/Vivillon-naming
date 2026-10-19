@@ -126,7 +126,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertEqual(result[0], "Tauros")
 
-    def test_mimikyu_forms_are_reported_as_mimikyu(self) -> None:
+    def test_mimikyu_and_morpeko_forms_are_reported_by_species_name(self) -> None:
         cv2 = image_match.cv2
         np = image_match.np
         image = np.random.default_rng(6).integers(0, 256, (256, 256), dtype=np.uint8)
@@ -138,6 +138,8 @@ class ImageMatcherTests(unittest.TestCase):
             "Disguised Mimikyu",
             "Totem-Busted Mimikyu",
             "Totem-Disguised Mimikyu",
+            "Full-Belly Morpeko",
+            "Hangry Morpeko",
         ):
             with self.subTest(form_name=form_name), tempfile.TemporaryDirectory() as directory:
                 bank_path = Path(directory) / "image_bank.npz"
@@ -149,7 +151,7 @@ class ImageMatcherTests(unittest.TestCase):
                 )
                 result = ImageMatcher(bank_path).match(encoded)
 
-            self.assertEqual(result[0], "Mimikyu")
+            self.assertEqual(result[0], form_name.split()[-1])
 
     def test_matches_reference_when_spawn_image_is_flipped(self) -> None:
         cv2 = image_match.cv2

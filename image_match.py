@@ -32,6 +32,8 @@ BANK_FILE = "image_bank.npz"
 DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
     "Disguised Mimikyu": "Mimikyu",
+    "Full-Belly Morpeko": "Morpeko",
+    "Hangry Morpeko": "Morpeko",
     "Paldean Tauros": "Tauros",
     "Totem-Busted Mimikyu": "Mimikyu",
     "Totem-Disguised Mimikyu": "Mimikyu",

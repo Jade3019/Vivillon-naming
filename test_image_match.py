@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import image_match
 from image_match import ImageMatcher, compute_descriptors, reference_images
@@ -174,6 +175,32 @@ class ImageMatcherTests(unittest.TestCase):
             result = matcher.match(flipped)
             self.assertIsNotNone(result)
             self.assertEqual(result[0], "Pikachu")
+
+    def test_foreground_evidence_corrects_boldore_milcery_lookalike(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(23).random((8, 128), dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.zeros(len(descriptors), dtype=np.int32),
+                names=np.array(["Milcery", "Boldore"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch.object(
+                    matcher,
+                    "_match",
+                    side_effect=[("Milcery", 46), None, ("Boldore", 50), None],
+                ),
+                patch("image_match.foreground_mask", return_value=np.ones((1, 1))),
+            ):
+                result = matcher.match(b"spawn image")
+
+        self.assertEqual(result, ("Boldore", 50))
 
 
 if __name__ == "__main__":

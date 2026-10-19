@@ -2510,6 +2510,29 @@ class NamingBot(discord.Client):
             **self.afk_settings.get(f"{guild_id}:{user_id}", {}),
         }
 
+    def has_active_ping_targets(self, guild_id: int) -> bool:
+        guild_prefix = f"{guild_id}:"
+        if any(
+            key.startswith(guild_prefix) and user_ids
+            for key, user_ids in self.reservations.items()
+        ):
+            return True
+
+        for registrations, setting in (
+            (self.shinyhunters, "shinyhunt"),
+            (self.collections, "collection"),
+        ):
+            if any(
+                key.startswith(guild_prefix)
+                and any(
+                    self.afk_settings_for_user(guild_id, user_id)[setting]
+                    for user_id in user_ids
+                )
+                for key, user_ids in registrations.items()
+            ):
+                return True
+        return False
+
     def toggle_afk_setting(
         self, guild_id: int, user_id: int, setting: str
     ) -> dict[str, bool]:
@@ -3574,6 +3597,15 @@ class NamingBot(discord.Client):
     async def handle_spawn(
         self, message: discord.Message, *, test_mode: bool = False
     ) -> None:
+        if not test_mode and message.guild:
+            naming_settings = self.naming_settings_for_guild(message.guild.id)
+            if not naming_settings["enabled"]:
+                return
+            if naming_settings["pings"] and not self.has_active_ping_targets(
+                message.guild.id
+            ):
+                return
+
         url = image_url(message)
         if not url:
             logger.warning("Image test or spawn message %s had no image", message.id)

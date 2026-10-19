@@ -98,7 +98,9 @@ Use `v!settings` to configure naming separately for each server. Members with
 Manage Server permission can turn naming on or off, disable Assisted mode to
 remove catch-command copy messages while keeping Pokémon names, and enable
 Pings mode to name only Pokémon with a matching reserve, shinyhunt, or collection
-member. Settings are saved to `server_settings.json` by default; set
+member. With Pings mode on, Vivillon skips image analysis if the server has no
+active ping targets; when targets exist, it still has to identify each spawn to
+check for a match. Settings are saved to `server_settings.json` by default; set
 `SERVER_SETTINGS_FILE` to use another path.
 
 Use `v!api` in the configured server to view the number of Pokémon recognized
@@ -293,7 +295,8 @@ This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later 
 
 Reference-image matching checks both the original and horizontally flipped
 spawn image, so Pokémon can be recognized facing either direction without
-adding flipped copies to the image bank.
+adding flipped copies to the image bank. Milcery and Boldore also use
+foreground-only reference features to resolve lookalike matches.
 
 When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 

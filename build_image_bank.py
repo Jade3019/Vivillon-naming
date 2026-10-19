@@ -16,11 +16,13 @@ import numpy as np
 from image_match import (
     family_name,
     BANK_FILE,
+    FOREGROUND_MATCH_SPECIES,
     MAX_FEATURES_PER_POKEMON,
     SHARED_DISTANCE,
     compute_descriptors,
     consensus_descriptors,
     drop_duplicates,
+    foreground_mask,
     reference_images,
 )
 
@@ -54,30 +56,6 @@ def background_pool(folder: Path, exclude: set[str]):
     return np.vstack(sets).astype(np.float32)
 
 
-def foreground_mask(data: bytes):
-    """Mask of the Pokémon itself: the alpha channel, else a GrabCut cutout."""
-    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
-    if image is None:
-        return None
-    if image.ndim == 3 and image.shape[2] == 4:
-        return np.where(image[..., 3] > 128, 255, 0).astype(np.uint8)
-    if image.ndim != 3:
-        return None
-    height, width = image.shape[:2]
-    mask = np.zeros((height, width), np.uint8)
-    rect = (int(width * 0.12), int(height * 0.1), int(width * 0.76), int(height * 0.8))
-    cv2.grabCut(image, mask, rect, np.zeros((1, 65)), np.zeros((1, 65)), 5, cv2.GC_INIT_WITH_RECT)
-    cut = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
-    cut = cv2.morphologyEx(cut, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
-    # Keep only the biggest blob so stray background (glow, grass) is dropped.
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(cut)
-    if count > 1:
-        biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-        cut = np.where(labels == biggest, 255, 0).astype(np.uint8)
-    cut = cv2.dilate(cut, np.ones((5, 5), np.uint8))
-    return cut if cut.any() else None
-
-
 def remove_background(descriptors, pool):
     matcher = cv2.BFMatcher()
     keep = np.ones(len(descriptors), bool)
@@ -87,19 +65,39 @@ def remove_background(descriptors, pool):
     return descriptors[keep]
 
 
-def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
+def pokemon_features(
+    name: str,
+    paths: list[Path],
+    cache: Path,
+    pool=None,
+    *,
+    learn_foreground: bool = False,
+):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths) + "-fg2"
+    wanted = signature(paths) + ("-fg3" if learn_foreground else "-fg2")
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:
                 return data["descriptors"]
     sets = []
+    foreground_sets = []
     extra = []
     for path in paths:
         data = path.read_bytes()
-        found = compute_descriptors(data, mask=None if path.stem.isdigit() else foreground_mask(data))
+        mask = foreground_mask(data) if learn_foreground and path.stem.isdigit() else None
+        found = compute_descriptors(
+            data,
+            mask=None
+            if path.stem.isdigit()
+            else mask if mask is not None else foreground_mask(data),
+        )
         if found is None or len(found) < 2:
+            found = None
+        if mask is not None:
+            foreground = compute_descriptors(data, mask=mask)
+            if foreground is not None and len(foreground) >= 2:
+                foreground_sets.append(foreground)
+        if found is None:
             continue
         # Hand-added pictures (not the numbered scraped ones) are a different
         # render, so they can't pass the repeat check; keep all their features.
@@ -107,7 +105,10 @@ def pokemon_features(name: str, paths: list[Path], cache: Path, pool=None):
             sets.append(found)
         else:
             extra.append(remove_background(found, pool) if pool is not None else found)
-    parts = ([consensus_descriptors(sets)] if sets else []) + extra
+    parts = ([consensus_descriptors(sets)] if sets else [])
+    if foreground_sets:
+        parts.append(consensus_descriptors(foreground_sets))
+    parts.extend(extra)
     if not parts:
         return np.zeros((0, 128), np.float32)
     descriptors = drop_duplicates(np.vstack(parts))
@@ -137,6 +138,10 @@ def assemble_bank(names: list[str], per_pokemon: dict):
     for index, name in enumerate(names):
         features = compact[name].astype(np.float32)
         if len(features) == 0:
+            continue
+        if name in FOREGROUND_MATCH_SPECIES:
+            kept_descriptors.append(features)
+            kept_labels.append(np.full(len(features), index))
             continue
         keep = np.ones(len(features), bool)
         for position, neighbours in enumerate(matcher.knnMatch(features, k=6)):
@@ -177,7 +182,13 @@ def main() -> None:
     names = sorted(groups)
     per_pokemon = {}
     for number, name in enumerate(names, 1):
-        per_pokemon[name] = pokemon_features(name, groups[name], cache, pool)
+        per_pokemon[name] = pokemon_features(
+            name,
+            groups[name],
+            cache,
+            pool,
+            learn_foreground=name in FOREGROUND_MATCH_SPECIES,
+        )
         if number == 1 or number % 25 == 0 or number == len(names):
             print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)
 

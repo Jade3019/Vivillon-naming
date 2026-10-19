@@ -418,9 +418,10 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "bot.recognize_pokemon",
             new=AsyncMock(return_value=("Pikachu", 99.0)),
-        ):
+        ) as recognize:
             await self.bot.handle_spawn(disabled_message)
         disabled_message.reply.assert_not_awaited()
+        recognize.assert_not_awaited()
 
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
@@ -431,18 +432,20 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "bot.recognize_pokemon",
             new=AsyncMock(return_value=("Pikachu", 99.0)),
-        ):
+        ) as recognize:
             await self.bot.handle_spawn(unpinged_message)
         unpinged_message.reply.assert_not_awaited()
+        recognize.assert_not_awaited()
 
         self.bot.collections = {reservation_key(SERVER_ID, "Pikachu"): [123]}
         pinged_message = spawn_message(703)
         with patch(
             "bot.recognize_pokemon",
             new=AsyncMock(return_value=("Pikachu", 99.0)),
-        ):
+        ) as recognize:
             await self.bot.handle_spawn(pinged_message)
 
+        recognize.assert_awaited_once()
         pinged_message.reply.assert_awaited_once()
         content = pinged_message.reply.await_args.args[0]
         self.assertIn("<@123>", content)

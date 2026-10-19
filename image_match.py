@@ -25,6 +25,9 @@ CONSENSUS_COMPARISONS = 8
 RATIO = 0.8
 MIN_VOTES = 6
 MIN_MARGIN = 3
+FOREGROUND_MATCH_SPECIES = {"Boldore", "Milcery"}
+SPECIES_MIN_VOTES = {"Boldore": 8, "Milcery": 6}
+SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
@@ -93,6 +96,29 @@ def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
     sift = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE)
     _, descriptors = sift.detectAndCompute(image, mask)
     return descriptors
+
+
+def foreground_mask(data: bytes):
+    """Mask the Pokémon using its alpha channel or a GrabCut cutout."""
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+    if image is None:
+        return None
+    if image.ndim == 3 and image.shape[2] == 4:
+        return np.where(image[..., 3] > 128, 255, 0).astype(np.uint8)
+    if image.ndim != 3:
+        return None
+    height, width = image.shape[:2]
+    mask = np.zeros((height, width), np.uint8)
+    rect = (int(width * 0.12), int(height * 0.1), int(width * 0.76), int(height * 0.8))
+    cv2.grabCut(image, mask, rect, np.zeros((1, 65)), np.zeros((1, 65)), 5, cv2.GC_INIT_WITH_RECT)
+    cut = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
+    cut = cv2.morphologyEx(cut, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(cut)
+    if count > 1:
+        biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        cut = np.where(labels == biggest, 255, 0).astype(np.uint8)
+    cut = cv2.dilate(cut, np.ones((5, 5), np.uint8))
+    return cut if cut.any() else None
 
 
 def pokemon_name_from_file(path: Path) -> str:
@@ -307,14 +333,27 @@ class ImageMatcher:
         if not results:
             return None
         name, votes = max(results, key=lambda result: result[1])
+        if name in FOREGROUND_MATCH_SPECIES:
+            mask = foreground_mask(data)
+            if mask is not None:
+                foreground_results = [
+                    result
+                    for result in (
+                        self._match(data, False, mask),
+                        self._match(data, True, mask),
+                    )
+                    if result is not None and result[0] in FOREGROUND_MATCH_SPECIES
+                ]
+                if foreground_results:
+                    name, votes = max(foreground_results, key=lambda result: result[1])
         if name in ("Palafin", "Finizen"):
             patch = has_belly_patch(data)
             if patch is not None:
                 name = "Palafin" if patch else "Finizen"
         return name, votes
 
-    def _match(self, data: bytes, mirror: bool) -> tuple[str, int] | None:
-        descriptors = compute_descriptors(data, mirror)
+    def _match(self, data: bytes, mirror: bool, mask=None) -> tuple[str, int] | None:
+        descriptors = compute_descriptors(data, mirror, mask)
         if descriptors is None or len(descriptors) < 2:
             return None
         votes = np.zeros(len(self.names), int)
@@ -345,7 +384,10 @@ class ImageMatcher:
             second = outside[0] if outside else 0
         # Variant pictures (e.g. Unown letters) are plain shapes with few features.
         is_variant = VARIANT_PATTERN.match(name) is not None
-        min_votes, min_margin = (2, 2) if is_variant else (MIN_VOTES, MIN_MARGIN)
+        min_votes = SPECIES_MIN_VOTES.get(name, MIN_VOTES)
+        min_margin = SPECIES_MIN_MARGIN.get(name, MIN_MARGIN)
+        if is_variant:
+            min_votes, min_margin = 2, 2
         if best >= min_votes and best - second >= max(min_margin, 0.3 * best):
             return DISPLAY_NAMES.get(name, name), best
         return None

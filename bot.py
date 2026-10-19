@@ -17,7 +17,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from image_match import ImageMatcher, base_pokemon_name
+from image_match import ImageMatcher, species_display_name
 from org_api import OrgReserves, create_app
 import org_rpc
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
@@ -1056,12 +1056,26 @@ def add_collection_pokemon(
     }
     for pokemon_name in pokemon_names:
         user_ids = updated_collections.setdefault(
-            reservation_key(guild_id, pokemon_name),
+            reservation_key_for_command(guild_id, pokemon_name),
             [],
         )
         if user_id not in user_ids:
             user_ids.append(user_id)
     return updated_collections
+
+
+def migrate_legacy_all_keys(
+    collections: dict[str, list[int]],
+) -> dict[str, list[int]]:
+    """Convert old literal "all <pokemon>" collection keys to all-forms keys."""
+    migrated: dict[str, list[int]] = {}
+    for key, user_ids in collections.items():
+        guild_id, separator, name = key.partition(":")
+        if separator and name.casefold().startswith("all "):
+            key = f"{guild_id}:*:{name[4:].strip().casefold()}"
+        merged = migrated.setdefault(key, [])
+        merged.extend(user_id for user_id in user_ids if user_id not in merged)
+    return migrated
 
 
 def collection_pokemon_for_user(
@@ -1071,9 +1085,12 @@ def collection_pokemon_for_user(
 ) -> list[str]:
     guild_prefix = f"{guild_id}:"
     return sorted(
-        key.removeprefix(guild_prefix)
-        for key, user_ids in collections.items()
-        if key.startswith(guild_prefix) and user_id in user_ids
+        {
+            name
+            for key, user_ids in collections.items()
+            if key.startswith(guild_prefix) and user_id in user_ids
+            for name in format_reserved_pokemon_names(key.removeprefix(guild_prefix))
+        }
     )
 
 
@@ -1083,16 +1100,13 @@ def split_collection_add_names(
     pokemon_names: list[str],
     user_id: int,
 ) -> tuple[list[str], list[str]]:
-    existing_names = {
-        name.casefold()
-        for name in collection_pokemon_for_user(collections, guild_id, user_id)
-    }
-    already_added = [
-        name for name in pokemon_names if name.casefold() in existing_names
-    ]
-    new_names = [
-        name for name in pokemon_names if name.casefold() not in existing_names
-    ]
+    def is_added(name: str) -> bool:
+        return user_id in collections.get(
+            reservation_key_for_command(guild_id, name), []
+        )
+
+    already_added = [name for name in pokemon_names if is_added(name)]
+    new_names = [name for name in pokemon_names if not is_added(name)]
     return new_names, already_added
 
 
@@ -1100,16 +1114,17 @@ def format_collection_add_confirmation(
     added_names: list[str],
     already_added_names: list[str],
 ) -> str:
+    def display(name: str) -> str:
+        if name.casefold().startswith("all "):
+            return f"All forms of {name[4:].strip()}"
+        return name[0].upper() + name[1:]
+
     lines = []
     if added_names:
-        display_names = ", ".join(
-            name[0].upper() + name[1:] for name in added_names
-        )
+        display_names = ", ".join(display(name) for name in added_names)
         lines.append(f"Added {display_names} to your collection.")
     if already_added_names:
-        display_names = ", ".join(
-            name[0].upper() + name[1:] for name in already_added_names
-        )
+        display_names = ", ".join(display(name) for name in already_added_names)
         lines.append(f"{display_names} already added to your collection.")
     return " ".join(lines)
 
@@ -1119,7 +1134,7 @@ def collection_user_ids_for_pokemon(
     guild_id: int,
     pokemon_name: str,
 ) -> list[int]:
-    return sorted(set(collections.get(reservation_key(guild_id, pokemon_name), [])))
+    return reserved_user_ids_for_pokemon(collections, guild_id, pokemon_name)
 
 
 def remove_collection_pokemon(
@@ -1134,7 +1149,7 @@ def remove_collection_pokemon(
     removed_names: list[str] = []
     missing_names: list[str] = []
     for pokemon_name in pokemon_names:
-        key = reservation_key(guild_id, pokemon_name)
+        key = reservation_key_for_command(guild_id, pokemon_name)
         user_ids = updated_collections.get(key)
         if user_ids is None or user_id not in user_ids:
             missing_names.append(pokemon_name)
@@ -1553,6 +1568,8 @@ def all_forms_display_names(species_name: str) -> list[str]:
 
 
 def format_reserved_pokemon_names(stored_name: str) -> list[str]:
+    if stored_name.casefold().startswith("all "):
+        stored_name = "*:" + stored_name[4:].strip()
     if stored_name.startswith("*:"):
         species_name = stored_name.removeprefix("*:")
         return all_forms_display_names(species_name) or [
@@ -2452,7 +2469,9 @@ class NamingBot(discord.Client):
         self.collection_path = Path(
             os.environ.get("COLLECTIONS_FILE", "collections.json")
         )
-        self.collections = load_reservations(self.collection_path)
+        self.collections = migrate_legacy_all_keys(
+            load_reservations(self.collection_path)
+        )
         self.server_settings_path = Path(
             os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
         )
@@ -3655,7 +3674,7 @@ class NamingBot(discord.Client):
             )
             return
         thumbnail_name = name
-        name = base_pokemon_name(name)
+        name = species_display_name(name)
         if test_mode and not is_missingno_name(name):
             await message.reply(
                 f"Test image recognized as {name}; Missingno action was not triggered.",

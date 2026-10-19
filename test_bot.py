@@ -17,6 +17,7 @@ from bot import (
     exchange_reservations,
     parse_exchange_list,
     add_collection_pokemon,
+    migrate_legacy_all_keys,
     all_forms_reservation_key,
     clear_guild_reservations,
     clear_user_collection,
@@ -928,6 +929,51 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertEqual(embed.thumbnail.url, "attachment://unownvariant3.png")
         self.assertEqual([file.filename for file in files], ["unownvariant3.png"])
         self.assertEqual(catch_card_files("Unown"), [])
+
+    def test_hangry_morpeko_uses_own_thumbnail_but_is_named_morpeko(self) -> None:
+        self.assertEqual(image_match.species_display_name("Hangry Morpeko"), "Morpeko")
+        embed = format_pc_catch_embed("Morpeko", "Hangry Morpeko")
+        files = catch_card_files("Morpeko", "Hangry Morpeko")
+
+        self.assertEqual(embed.title, "Catch Morpeko")
+        self.assertEqual(embed.thumbnail.url, "attachment://hangrymorpeko.png")
+        self.assertEqual([file.filename for file in files], ["hangrymorpeko.png"])
+        self.assertEqual(catch_card_files("Morpeko"), [])
+
+    def test_collection_all_pokemon_lists_every_form_and_matches_spawns(self) -> None:
+        collections = add_collection_pokemon({}, 1, ["all deerling", "pikachu"], 5)
+
+        self.assertEqual(
+            collection_pokemon_for_user(collections, 1, 5),
+            [
+                "autumn deerling",
+                "pikachu",
+                "spring deerling",
+                "summer deerling",
+                "winter deerling",
+            ],
+        )
+        self.assertEqual(
+            collection_user_ids_for_pokemon(collections, 1, "Summer Deerling"), [5]
+        )
+        self.assertEqual(
+            split_collection_add_names(collections, 1, ["all deerling"], 5),
+            ([], ["all deerling"]),
+        )
+        self.assertEqual(
+            format_collection_add_confirmation(["all deerling"], []),
+            "Added All forms of deerling to your collection.",
+        )
+        updated, removed, missing = remove_collection_pokemon(
+            collections, 1, ["all deerling"], 5
+        )
+        self.assertEqual(removed, ["all deerling"])
+        self.assertEqual(collection_pokemon_for_user(updated, 1, 5), ["pikachu"])
+
+    def test_legacy_all_collection_keys_are_migrated(self) -> None:
+        migrated = migrate_legacy_all_keys({"1:all deerling": [5], "1:eevee": [5]})
+
+        self.assertEqual(migrated, {"1:*:deerling": [5], "1:eevee": [5]})
 
     def test_fire_spawns_use_inline_custom_emoji_without_embed(self) -> None:
         self.assertEqual(

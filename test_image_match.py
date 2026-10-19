@@ -139,7 +139,6 @@ class ImageMatcherTests(unittest.TestCase):
             "Totem-Busted Mimikyu",
             "Totem-Disguised Mimikyu",
             "Full-Belly Morpeko",
-            "Hangry Morpeko",
         ):
             with self.subTest(form_name=form_name), tempfile.TemporaryDirectory() as directory:
                 bank_path = Path(directory) / "image_bank.npz"

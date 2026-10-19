@@ -33,7 +33,6 @@ DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
     "Disguised Mimikyu": "Mimikyu",
     "Full-Belly Morpeko": "Morpeko",
-    "Hangry Morpeko": "Morpeko",
     "Paldean Tauros": "Tauros",
     "Totem-Busted Mimikyu": "Mimikyu",
     "Totem-Disguised Mimikyu": "Mimikyu",
@@ -49,6 +48,15 @@ NEIGHBOURS = 6
 def base_pokemon_name(name: str) -> str:
     match = VARIANT_PATTERN.match(name)
     return match.group("base") if match else name
+
+
+# Forms the matcher reports as-is so their own thumbnail can be chosen; the
+# Pokémon is still named after the species.
+THUMBNAIL_FORM_SPECIES = {"Hangry Morpeko": "Morpeko"}
+
+
+def species_display_name(name: str) -> str:
+    return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))
 
 
 def compute_descriptors(data: bytes, mirror: bool = False, mask=None):

@@ -16,7 +16,6 @@ import numpy as np
 from image_match import (
     family_name,
     BANK_FILE,
-    FOREGROUND_MATCH_SPECIES,
     MAX_FEATURES_PER_POKEMON,
     SHARED_DISTANCE,
     compute_descriptors,
@@ -70,33 +69,23 @@ def pokemon_features(
     paths: list[Path],
     cache: Path,
     pool=None,
-    *,
-    learn_foreground: bool = False,
 ):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths) + ("-fg3" if learn_foreground else "-fg2")
+    wanted = signature(paths) + "-fg2"
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:
                 return data["descriptors"]
     sets = []
-    foreground_sets = []
     extra = []
     for path in paths:
         data = path.read_bytes()
-        mask = foreground_mask(data) if learn_foreground and path.stem.isdigit() else None
         found = compute_descriptors(
             data,
-            mask=None
-            if path.stem.isdigit()
-            else mask if mask is not None else foreground_mask(data),
+            mask=None if path.stem.isdigit() else foreground_mask(data),
         )
         if found is None or len(found) < 2:
             found = None
-        if mask is not None:
-            foreground = compute_descriptors(data, mask=mask)
-            if foreground is not None and len(foreground) >= 2:
-                foreground_sets.append(foreground)
         if found is None:
             continue
         # Hand-added pictures (not the numbered scraped ones) are a different
@@ -106,8 +95,6 @@ def pokemon_features(
         else:
             extra.append(remove_background(found, pool) if pool is not None else found)
     parts = ([consensus_descriptors(sets)] if sets else [])
-    if foreground_sets:
-        parts.append(consensus_descriptors(foreground_sets))
     parts.extend(extra)
     if not parts:
         return np.zeros((0, 128), np.float32)
@@ -138,10 +125,6 @@ def assemble_bank(names: list[str], per_pokemon: dict):
     for index, name in enumerate(names):
         features = compact[name].astype(np.float32)
         if len(features) == 0:
-            continue
-        if name in FOREGROUND_MATCH_SPECIES:
-            kept_descriptors.append(features)
-            kept_labels.append(np.full(len(features), index))
             continue
         keep = np.ones(len(features), bool)
         for position, neighbours in enumerate(matcher.knnMatch(features, k=6)):
@@ -187,7 +170,6 @@ def main() -> None:
             groups[name],
             cache,
             pool,
-            learn_foreground=name in FOREGROUND_MATCH_SPECIES,
         )
         if number == 1 or number % 25 == 0 or number == len(names):
             print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)

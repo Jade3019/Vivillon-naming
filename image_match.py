@@ -25,7 +25,6 @@ CONSENSUS_COMPARISONS = 8
 RATIO = 0.8
 MIN_VOTES = 6
 MIN_MARGIN = 3
-FOREGROUND_MATCH_SPECIES = {"Boldore", "Milcery"}
 SPECIES_MIN_VOTES = {"Boldore": 8, "Milcery": 6}
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
 SHARED_DISTANCE = 150.0
@@ -334,19 +333,6 @@ class ImageMatcher:
         if not results:
             return None
         name, votes = max(results, key=lambda result: result[1])
-        if name in FOREGROUND_MATCH_SPECIES:
-            mask = foreground_mask(data)
-            if mask is not None:
-                foreground_results = [
-                    result
-                    for result in (
-                        self._match(data, False, mask),
-                        self._match(data, True, mask),
-                    )
-                    if result is not None and result[0] in FOREGROUND_MATCH_SPECIES
-                ]
-                if foreground_results:
-                    name, votes = max(foreground_results, key=lambda result: result[1])
         if name in ("Palafin", "Finizen"):
             patch = has_belly_patch(data)
             if patch is not None:

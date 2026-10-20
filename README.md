@@ -295,8 +295,7 @@ This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later 
 
 Reference-image matching checks both the original and horizontally flipped
 spawn image, so Pokémon can be recognized facing either direction without
-adding flipped copies to the image bank. Milcery and Boldore also use
-foreground-only reference features to resolve lookalike matches.
+adding flipped copies to the image bank.
 
 When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 

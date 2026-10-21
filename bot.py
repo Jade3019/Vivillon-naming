@@ -2157,9 +2157,7 @@ NAME_SUGGESTION_PREFIXES: Final[frozenset[str]] = frozenset(
     }
 )
 NAME_SUGGESTION_CUTOFF: Final[float] = 0.6
-NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 30
-YES_ANSWERS: Final[frozenset[str]] = frozenset({"yes", "y", "yeah", "yep", "ye"})
-NO_ANSWERS: Final[frozenset[str]] = frozenset({"no", "n", "nope", "nah"})
+NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 60
 
 
 @lru_cache(maxsize=1)
@@ -3140,29 +3138,20 @@ class NamingBot(discord.Client):
         suggestion = suggest_pokemon_name(name)
         if suggestion is None:
             return name
-        await message.reply(
-            f"Do you mean **{suggestion}**? (yes/no)",
+        view = NameSuggestionView(message.author.id)
+        prompt = await message.reply(
+            f"Do you mean **{suggestion}**?",
+            view=view,
             mention_author=False,
         )
-
-        def is_answer(reply: discord.Message) -> bool:
-            return (
-                reply.author.id == message.author.id
-                and reply.channel.id == message.channel.id
-                and reply.content.strip().casefold() in YES_ANSWERS | NO_ANSWERS
-            )
-
-        try:
-            reply = await self.wait_for(
-                "message",
-                check=is_answer,
-                timeout=NAME_SUGGESTION_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            return None
-        if reply.content.strip().casefold() in YES_ANSWERS:
-            return suggestion
-        return None
+        await view.wait()
+        confirmed = view.confirmed is True
+        if view.confirmed is None:
+            try:
+                await prompt.edit(content="Timed out, nothing was added.", view=None)
+            except discord.HTTPException:
+                pass
+        return suggestion if confirmed else None
 
     async def handle_shinyhunt_command(self, message: discord.Message) -> None:
         if message.guild is None:
@@ -4303,6 +4292,43 @@ class GrabListView(discord.ui.View):
         await interaction.response.send_message(chunks[0], ephemeral=True)
         for chunk in chunks[1:]:
             await interaction.followup.send(chunk, ephemeral=True)
+
+
+class NameSuggestionView(discord.ui.View):
+    def __init__(self, requester_id: int) -> None:
+        super().__init__(timeout=NAME_SUGGESTION_TIMEOUT_SECONDS)
+        self.requester_id = requester_id
+        self.confirmed: bool | None = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who ran the command can answer this.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def _finish(
+        self, interaction: discord.Interaction, confirmed: bool, text: str
+    ) -> None:
+        self.confirmed = confirmed
+        await interaction.response.edit_message(content=text, view=None)
+        self.stop()
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.success)
+    async def yes(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        await self._finish(interaction, True, "Confirmed.")
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.danger)
+    async def no(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        del button
+        await self._finish(interaction, False, "Cancelled, nothing was added.")
 
 
 class ClearReservesView(discord.ui.View):

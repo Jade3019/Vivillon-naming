@@ -2167,6 +2167,43 @@ def known_name_lookup() -> dict[str, str]:
     }
 
 
+def strip_name_prefixes(name: str) -> tuple[list[str], list[str]]:
+    words = normalize_pokemon_alias(name.replace("’", "'")).split(" ")
+    prefix_count = 0
+    while (
+        prefix_count < len(words) - 1
+        and words[prefix_count] in NAME_SUGGESTION_PREFIXES
+    ):
+        prefix_count += 1
+    return words[:prefix_count], words[prefix_count:]
+
+
+def is_known_pokemon_name(name: str) -> bool:
+    lookup = known_name_lookup()
+    if normalize_pokemon_alias(name.replace("’", "'")) in lookup:
+        return True
+    _, base = strip_name_prefixes(name)
+    base_name = " ".join(base)
+    return base_name in lookup or is_missingno_name(base_name)
+
+
+@lru_cache(maxsize=1)
+def known_name_word_sets() -> frozenset[tuple[str, ...]]:
+    return frozenset(tuple(sorted(name.split(" "))) for name in known_name_lookup())
+
+
+def is_known_pokemon_name(name: str) -> bool:
+    lookup = known_name_lookup()
+    words = normalize_pokemon_alias(name.replace("’", "'")).split(" ")
+    if " ".join(words) in lookup or tuple(sorted(words)) in known_name_word_sets():
+        return True
+    prefix_count = 0
+    while prefix_count < len(words) - 1 and words[prefix_count] in NAME_SUGGESTION_PREFIXES:
+        prefix_count += 1
+    base = " ".join(words[prefix_count:])
+    return base in lookup or is_missingno_name(base)
+
+
 def suggest_pokemon_name(name: str) -> str | None:
     """Return a corrected name when `name` looks like a misspelled Pokémon."""
     import difflib
@@ -3133,11 +3170,17 @@ class NamingBot(discord.Client):
     ) -> str | None:
         """Return the name to use, asking the user when it looks misspelled.
 
-        Returns None when the user declines or does not answer.
+        Returns None for unknown names or when the user declines or times out.
         """
+        if is_known_pokemon_name(name):
+            return name
         suggestion = suggest_pokemon_name(name)
         if suggestion is None:
-            return name
+            await message.reply(
+                f"**{name}** is not a valid Pokémon name.",
+                mention_author=False,
+            )
+            return None
         view = NameSuggestionView(message.author.id)
         prompt = await message.reply(
             f"Do you mean **{suggestion}**?",

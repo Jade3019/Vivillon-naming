@@ -38,6 +38,10 @@ def signature(paths: list[Path]) -> str:
 
 BACKGROUND_SAMPLE = 120
 
+# Scraped pictures whose scenery is shared between pictures and would be learned
+# as part of the Pokémon (Swinub's snow forest made it name every snowy spawn).
+EXCLUDED_REFERENCES = {"Swinub": {"7.png", "13.png"}}
+
 
 def background_pool(folder: Path, exclude: set[str]):
     """Raw features of many other Pokémon's pictures, mostly scenery."""
@@ -162,6 +166,9 @@ def main() -> None:
     if any(not path.stem.isdigit() for paths in groups.values() for path in paths):
         print("Building background pool for hand-added pictures...", flush=True)
         pool = background_pool(folder, set())
+    for name, excluded in EXCLUDED_REFERENCES.items():
+        if name in groups:
+            groups[name] = [p for p in groups[name] if p.name not in excluded]
     names = sorted(groups)
     per_pokemon = {}
     for number, name in enumerate(names, 1):

@@ -92,6 +92,9 @@ from bot import (
     NamingBot,
     AFKSettingsView,
     load_afk_settings,
+    count_qualifying_sentences,
+    ChatEventSession,
+    EventMenuView,
 )
 
 
@@ -572,6 +575,52 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(message)
 
         self.bot.handle_api_status.assert_awaited_once_with(message)
+
+    async def test_event_command_shows_event_menu(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!event"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        message.reply.assert_awaited_once()
+        self.assertIsInstance(
+            message.reply.await_args.kwargs["view"],
+            EventMenuView,
+        )
+
+    async def test_chat_event_counts_only_qualifying_messages_for_participants(self) -> None:
+        channel = Mock()
+        channel.id = 456
+        session = ChatEventSession(host_id=123, channel=channel)
+        session.participant_ids = {123}
+        session.sentence_counts = {123: 0}
+        session.collecting = True
+        self.bot.chat_events[channel.id] = session
+
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.id = channel.id
+        message.content = "This message has four words. Too short."
+
+        self.bot.track_chat_event_message(message)
+
+        self.assertEqual(session.sentence_counts[123], 1)
+
+    def test_chat_event_sentence_count_requires_four_words_per_sentence(self) -> None:
+        self.assertEqual(
+            count_qualifying_sentences(
+                "This has four words. Too short. Here are exactly four."
+            ),
+            2,
+        )
+        self.assertEqual(count_qualifying_sentences("one two three"), 0)
 
     async def test_settings_command_sends_server_settings_layout(self) -> None:
         message = Mock()

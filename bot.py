@@ -9,7 +9,7 @@ import threading
 import time
 from collections import OrderedDict, deque
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Final
@@ -73,6 +73,9 @@ COLLECTION_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
+CHAT_EVENT_EMOJI: Final[str] = "⏲️"
+CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
+CHAT_EVENT_DURATIONS_MINUTES: Final[tuple[int, int]] = (1, 15)
 
 
 def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -1821,6 +1824,100 @@ class ReservationPagesView(discord.ui.View):
         )
 
 
+@dataclass
+class ChatEventSession:
+    host_id: int
+    channel: discord.abc.Messageable
+    message: discord.Message | None = None
+    participant_ids: set[int] = field(default_factory=set)
+    sentence_counts: dict[int, int] = field(default_factory=dict)
+    duration_minutes: int | None = None
+    duration_selected: asyncio.Event = field(default_factory=asyncio.Event)
+    cancelled: bool = False
+    collecting: bool = False
+
+
+def count_qualifying_sentences(content: str) -> int:
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", content.strip())
+    return sum(
+        len(re.findall(r"\b[\w’'-]+\b", sentence)) >= 4
+        for sentence in sentences
+        if sentence
+    )
+
+
+class EventMenuView(discord.ui.View):
+    def __init__(self, bot: "NamingBot", host_id: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.host_id = host_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.host_id:
+            await interaction.response.send_message(
+                "Only the person who started `v!event` can choose an event.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(
+        label="Chat event",
+        style=discord.ButtonStyle.primary,
+        custom_id="event_menu:chat",
+    )
+    async def chat_event(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await self.bot.start_chat_event(interaction, self.host_id)
+
+
+class ChatEventDurationView(discord.ui.View):
+    def __init__(self, session: ChatEventSession) -> None:
+        super().__init__(timeout=300)
+        self.session = session
+        self.add_item(ChatEventDurationSelect(session))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.session.host_id:
+            await interaction.response.send_message(
+                "Only the event host can choose the duration.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def on_timeout(self) -> None:
+        self.session.cancelled = True
+        self.session.duration_selected.set()
+
+
+class ChatEventDurationSelect(discord.ui.Select):
+    def __init__(self, session: ChatEventSession) -> None:
+        super().__init__(
+            placeholder="Choose the chat event duration",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=f"{minutes} minute", value=str(minutes))
+                for minutes in CHAT_EVENT_DURATIONS_MINUTES
+            ],
+            custom_id="chat_event:duration",
+        )
+        self.session = session
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.session.duration_minutes = int(self.values[0])
+        self.session.duration_selected.set()
+        await interaction.response.edit_message(
+            content=f"Chat event duration set to {self.session.duration_minutes} minute(s).",
+            view=None,
+        )
+
+
 class InertSettingsButton(discord.ui.Button):
     def __init__(self, section: str) -> None:
         super().__init__(
@@ -2561,6 +2658,7 @@ class NamingBot(discord.Client):
             os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
         )
         self.afk_settings = load_afk_settings(self.afk_settings_path)
+        self.chat_events: dict[int, ChatEventSession] = {}
 
     def naming_settings_for_guild(self, guild_id: int) -> dict[str, bool]:
         return {
@@ -2834,9 +2932,13 @@ class NamingBot(discord.Client):
         if not self.is_allowed_channel(message.channel):
             return
         channel_id = getattr(message.channel, "id", None)
+        self.track_chat_event_message(message)
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
+                await self.handle_event_command(message)
+                return
             if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
                 was_paused = channel_id in self.muted_poketwo_channels
                 if was_paused:
@@ -3014,6 +3116,189 @@ class NamingBot(discord.Client):
                 str(record["channel"]).casefold(),
             ),
         )
+
+    async def handle_event_command(self, message: discord.Message) -> None:
+        embed = discord.Embed(
+            title="Choose an event",
+            description="Choose an event to start. More events may be added later.",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(
+            name="Chat event",
+            value=(
+                "Participants react to join, then compete to send the most "
+                "sentences with at least four words."
+            ),
+            inline=False,
+        )
+        await message.reply(
+            embed=embed,
+            view=EventMenuView(self, message.author.id),
+            mention_author=False,
+        )
+
+    async def start_chat_event(
+        self, interaction: discord.Interaction, host_id: int
+    ) -> None:
+        channel = interaction.channel
+        if channel is None:
+            await interaction.response.send_message(
+                "This event needs to be started in a server channel.",
+                ephemeral=True,
+            )
+            return
+        channel_id = channel.id
+        if channel_id in self.chat_events:
+            await interaction.response.send_message(
+                "A chat event is already running in this channel.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        session = ChatEventSession(host_id=host_id, channel=channel)
+        self.chat_events[channel_id] = session
+        embed = discord.Embed(
+            title="Chat event — sign up now!",
+            description=(
+                f"React with {CHAT_EVENT_EMOJI} to join. Sign-ups close in "
+                f"{CHAT_EVENT_SIGNUP_SECONDS} seconds. After sign-up closes, "
+                "send as many sentences with at least four words as you can."
+            ),
+            color=discord.Color.green(),
+        )
+        try:
+            session.message = await channel.send(embed=embed)
+            await session.message.add_reaction(CHAT_EVENT_EMOJI)
+        except discord.HTTPException as error:
+            self.chat_events.pop(channel_id, None)
+            logger.warning("Could not start chat event: %s", error)
+            await interaction.followup.send(
+                "I couldn't start the chat event. Check that I can send messages "
+                "and add reactions in this channel.",
+                ephemeral=True,
+            )
+            return
+
+        asyncio.create_task(self.run_chat_event(session))
+        await interaction.followup.send(
+            "Choose how long the chat event should last. The timer starts after "
+            "the one-minute sign-up period.",
+            view=ChatEventDurationView(session),
+            ephemeral=True,
+        )
+        try:
+            if interaction.message is not None:
+                await interaction.message.edit(
+                    embed=discord.Embed(
+                        title="Chat event selected",
+                        description="The sign-up message is now open below.",
+                        color=discord.Color.green(),
+                    ),
+                    view=None,
+                )
+        except discord.HTTPException as error:
+            logger.warning("Could not update the event menu: %s", error)
+
+    def track_chat_event_message(self, message: discord.Message) -> None:
+        if message.author.bot or message.content.casefold().startswith("v!"):
+            return
+        session = self.chat_events.get(message.channel.id)
+        if (
+            session is None
+            or not session.collecting
+            or message.author.id not in session.participant_ids
+        ):
+            return
+        session.sentence_counts[message.author.id] += count_qualifying_sentences(
+            message.content
+        )
+
+    async def run_chat_event(self, session: ChatEventSession) -> None:
+        channel_id = session.channel.id
+        try:
+            await asyncio.sleep(CHAT_EVENT_SIGNUP_SECONDS)
+            if session.message is None:
+                return
+            reaction = next(
+                (
+                    item
+                    for item in session.message.reactions
+                    if str(item.emoji) == CHAT_EVENT_EMOJI
+                ),
+                None,
+            )
+            if reaction is not None:
+                try:
+                    async for user in reaction.users():
+                        if not user.bot:
+                            session.participant_ids.add(user.id)
+                except discord.HTTPException as error:
+                    logger.warning("Could not read chat event sign-ups: %s", error)
+                    await session.channel.send(
+                        "I couldn't read the sign-ups, so the chat event was canceled."
+                    )
+                    return
+            try:
+                await session.message.clear_reactions()
+            except discord.HTTPException as error:
+                logger.warning("Could not clear chat event reactions: %s", error)
+
+            if not session.participant_ids:
+                await session.channel.send(
+                    "The chat event ended because nobody signed up."
+                )
+                return
+            session.sentence_counts = {
+                user_id: 0 for user_id in session.participant_ids
+            }
+            await session.duration_selected.wait()
+            if session.cancelled or session.duration_minutes is None:
+                await session.channel.send(
+                    "The chat event was canceled because no duration was chosen."
+                )
+                return
+
+            session.collecting = True
+            await session.channel.send(
+                f"Chat event started! You have {session.duration_minutes} "
+                f"minute(s). Only sentences with at least four words count."
+            )
+            await asyncio.sleep(session.duration_minutes * 60)
+            session.collecting = False
+            ordered_participants = sorted(
+                session.participant_ids,
+                key=lambda user_id: (
+                    -session.sentence_counts[user_id],
+                    user_id,
+                ),
+            )
+            pages = [
+                ordered_participants[index : index + 40]
+                for index in range(0, len(ordered_participants), 40)
+            ]
+            for page_number, participant_page in enumerate(pages, start=1):
+                description = "\n".join(
+                    f"<@{user_id}> — {session.sentence_counts[user_id]} "
+                    f"sentence(s)"
+                    for user_id in participant_page
+                )
+                result = discord.Embed(
+                    title="Chat event results"
+                    if len(pages) == 1
+                    else f"Chat event results ({page_number}/{len(pages)})",
+                    description=description,
+                    color=discord.Color.gold(),
+                )
+                await session.channel.send(
+                    embed=result,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+        except discord.HTTPException:
+            logger.exception("Could not complete chat event in channel %s", channel_id)
+        finally:
+            if self.chat_events.get(channel_id) is session:
+                del self.chat_events[channel_id]
 
     async def handle_settings_command(self, message: discord.Message) -> None:
         await message.reply(

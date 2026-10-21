@@ -114,6 +114,14 @@ a one-hour fallback timer. A previously running incense is detected when
 Pokétwo next reports its status. Incense tracking is saved in `incenses.json`
 (override with `INCENSE_TRACKING_FILE`).
 
+Use `v!event` to start an event. The organizer can choose **Chat event**, and
+members join by reacting with ⏲️ to the sign-up message during its one-minute
+sign-up window. The organizer privately chooses a one- or 15-minute round
+duration. Once sign-ups close, only joined members' messages count, and each
+sentence must contain at least four words. The bot posts the sentence totals
+for everyone who joined. The bot needs permission to add reactions and manage
+messages so it can remove the sign-up reaction when registration closes.
+
 ## Pokémon reservations
 
 Any server member can view reservations with `v!r list`, search who reserved a

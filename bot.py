@@ -2150,6 +2150,48 @@ def load_known_pokemon_names() -> list[str]:
     )
 
 
+NAME_SUGGESTION_PREFIXES: Final[frozenset[str]] = frozenset(
+    {
+        "all", "normal", "mega", "alolan", "galarian", "hisuian", "paldean",
+        "gmax", "gigantamax", "primal",
+    }
+)
+NAME_SUGGESTION_CUTOFF: Final[float] = 0.6
+NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 30
+YES_ANSWERS: Final[frozenset[str]] = frozenset({"yes", "y", "yeah", "yep", "ye"})
+NO_ANSWERS: Final[frozenset[str]] = frozenset({"no", "n", "nope", "nah"})
+
+
+@lru_cache(maxsize=1)
+def known_name_lookup() -> dict[str, str]:
+    return {
+        normalize_pokemon_alias(name): name for name in load_known_pokemon_names()
+    }
+
+
+def suggest_pokemon_name(name: str) -> str | None:
+    """Return a corrected name when `name` looks like a misspelled Pokémon."""
+    import difflib
+
+    lookup = known_name_lookup()
+    words = normalize_pokemon_alias(name.replace("’", "'")).split(" ")
+    prefix_count = 0
+    while prefix_count < len(words) - 1 and words[prefix_count] in NAME_SUGGESTION_PREFIXES:
+        prefix_count += 1
+    base = " ".join(words[prefix_count:])
+    if not base or base in lookup or is_missingno_name(base):
+        return None
+    matches = difflib.get_close_matches(
+        base, list(lookup), n=1, cutoff=NAME_SUGGESTION_CUTOFF
+    )
+    if not matches:
+        return None
+    suggestion = lookup[matches[0]]
+    prefix = " ".join(words[:prefix_count])
+    original_prefix = " ".join(name.split()[:prefix_count])
+    return f"{original_prefix} {suggestion}".strip() if prefix else suggestion
+
+
 def _org_api_port_from_environment() -> int:
     for variable in ("ORG_API_PORT", "SERVER_PORT", "PORT"):
         value = os.environ.get(variable)
@@ -3088,6 +3130,40 @@ class NamingBot(discord.Client):
         elapsed_ms = round((time.perf_counter() - started_at) * 1000)
         await response.edit(content=f"{elapsed_ms}ms")
 
+    async def confirm_pokemon_name(
+        self, message: discord.Message, name: str
+    ) -> str | None:
+        """Return the name to use, asking the user when it looks misspelled.
+
+        Returns None when the user declines or does not answer.
+        """
+        suggestion = suggest_pokemon_name(name)
+        if suggestion is None:
+            return name
+        await message.reply(
+            f"Do you mean **{suggestion}**? (yes/no)",
+            mention_author=False,
+        )
+
+        def is_answer(reply: discord.Message) -> bool:
+            return (
+                reply.author.id == message.author.id
+                and reply.channel.id == message.channel.id
+                and reply.content.strip().casefold() in YES_ANSWERS | NO_ANSWERS
+            )
+
+        try:
+            reply = await self.wait_for(
+                "message",
+                check=is_answer,
+                timeout=NAME_SUGGESTION_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return None
+        if reply.content.strip().casefold() in YES_ANSWERS:
+            return suggestion
+        return None
+
     async def handle_shinyhunt_command(self, message: discord.Message) -> None:
         if message.guild is None:
             await message.reply(
@@ -3159,6 +3235,10 @@ class NamingBot(discord.Client):
                 "(one Pokémon per command)",
                 mention_author=False,
             )
+            return
+
+        pokemon_name = await self.confirm_pokemon_name(message, pokemon_name)
+        if pokemon_name is None:
             return
 
         updated_shinyhunters = add_shinyhunter(
@@ -3282,6 +3362,17 @@ class NamingBot(discord.Client):
                 "`v!cl remove <pokemon>, <pokemon>`, `v!cl list`, or `v!cl clear`",
                 mention_author=False,
             )
+            return
+
+        confirmed_names: list[str] = []
+        for requested_name in pokemon_names:
+            confirmed_name = await self.confirm_pokemon_name(message, requested_name)
+            if confirmed_name is not None and confirmed_name.casefold() not in {
+                name.casefold() for name in confirmed_names
+            }:
+                confirmed_names.append(confirmed_name)
+        pokemon_names = confirmed_names
+        if not pokemon_names:
             return
 
         new_names, already_added_names = split_collection_add_names(

@@ -472,7 +472,8 @@ def format_guess(name: str, confidence: float) -> str:
 
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
-    return f"<@{poketwo_bot_id}> c {display_pokemon_name(name).lower()}"
+    del poketwo_bot_id
+    return f"@Pokétwo#8236 c {display_pokemon_name(name).lower()}"
 
 
 def format_spawn_reply(

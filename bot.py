@@ -75,7 +75,7 @@ COLLECTION_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 CHAT_EVENT_EMOJI: Final[str] = "⏲️"
 CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
-CHAT_EVENT_DURATIONS_MINUTES: Final[tuple[int, int]] = (1, 15)
+CHAT_EVENT_MIN_PARTICIPANTS: Final[int] = 2
 
 
 def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -1831,7 +1831,8 @@ class ChatEventSession:
     message: discord.Message | None = None
     participant_ids: set[int] = field(default_factory=set)
     sentence_counts: dict[int, int] = field(default_factory=dict)
-    duration_minutes: int | None = None
+    duration_seconds: float | None = None
+    duration_label: str | None = None
     duration_selected: asyncio.Event = field(default_factory=asyncio.Event)
     cancelled: bool = False
     collecting: bool = False
@@ -1844,6 +1845,27 @@ def count_qualifying_sentences(content: str) -> int:
         for sentence in sentences
         if sentence
     )
+
+
+def parse_chat_event_duration(value: str) -> tuple[float, str] | None:
+    match = re.fullmatch(
+        r"\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|m|hours?|hrs?|h)?\s*",
+        value,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    amount = float(match.group(1))
+    if not math.isfinite(amount) or amount <= 0:
+        return None
+    unit = (match.group(2) or "minutes").casefold()
+    is_hours = unit.startswith("h")
+    seconds = amount * (3600 if is_hours else 60)
+    if not math.isfinite(seconds):
+        return None
+    normalized_unit = "hour" if is_hours else "minute"
+    label = f"{amount:g} {normalized_unit}{'' if amount == 1 else 's'}"
+    return seconds, label
 
 
 class EventMenuView(discord.ui.View):
@@ -1879,7 +1901,6 @@ class ChatEventDurationView(discord.ui.View):
     def __init__(self, session: ChatEventSession) -> None:
         super().__init__(timeout=300)
         self.session = session
-        self.add_item(ChatEventDurationSelect(session))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.session.host_id:
@@ -1894,27 +1915,52 @@ class ChatEventDurationView(discord.ui.View):
         self.session.cancelled = True
         self.session.duration_selected.set()
 
+    @discord.ui.button(
+        label="Enter duration",
+        style=discord.ButtonStyle.primary,
+        custom_id="chat_event:enter_duration",
+    )
+    async def enter_duration(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await interaction.response.send_modal(ChatEventDurationModal(self.session))
 
-class ChatEventDurationSelect(discord.ui.Select):
+
+class ChatEventDurationModal(discord.ui.Modal):
     def __init__(self, session: ChatEventSession) -> None:
-        super().__init__(
-            placeholder="Choose the chat event duration",
-            min_values=1,
-            max_values=1,
-            options=[
-                discord.SelectOption(label=f"{minutes} minute", value=str(minutes))
-                for minutes in CHAT_EVENT_DURATIONS_MINUTES
-            ],
-            custom_id="chat_event:duration",
-        )
+        super().__init__(title="Chat event duration")
         self.session = session
+        self.duration_input = discord.ui.TextInput(
+            label="How long should the event last?",
+            placeholder="For example: 7 minutes or 2 hours",
+            required=True,
+            max_length=32,
+        )
+        self.add_item(self.duration_input)
 
-    async def callback(self, interaction: discord.Interaction) -> None:
-        self.session.duration_minutes = int(self.values[0])
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.session.host_id:
+            await interaction.response.send_message(
+                "Only the event host can choose the duration.",
+                ephemeral=True,
+            )
+            return
+        parsed_duration = parse_chat_event_duration(self.duration_input.value)
+        if parsed_duration is None:
+            await interaction.response.send_message(
+                "Enter a positive duration in minutes or hours, such as `7 minutes` "
+                "or `2 hours`. A number by itself is treated as minutes.",
+                ephemeral=True,
+            )
+            return
+        self.session.duration_seconds, self.session.duration_label = parsed_duration
         self.session.duration_selected.set()
-        await interaction.response.edit_message(
-            content=f"Chat event duration set to {self.session.duration_minutes} minute(s).",
-            view=None,
+        await interaction.response.send_message(
+            f"Chat event duration set to {self.session.duration_label}.",
+            ephemeral=True,
         )
 
 
@@ -3126,8 +3172,8 @@ class NamingBot(discord.Client):
         embed.add_field(
             name="Chat event",
             value=(
-                "Participants react to join, then compete to send the most "
-                "sentences with at least four words."
+                "At least two participants react to join, then compete to send "
+                "the most sentences with at least four words."
             ),
             inline=False,
         )
@@ -3162,8 +3208,9 @@ class NamingBot(discord.Client):
             title="Chat event — sign up now!",
             description=(
                 f"React with {CHAT_EVENT_EMOJI} to join. Sign-ups close in "
-                f"{CHAT_EVENT_SIGNUP_SECONDS} seconds. After sign-up closes, "
-                "send as many sentences with at least four words as you can."
+                f"{CHAT_EVENT_SIGNUP_SECONDS} seconds; at least "
+                f"{CHAT_EVENT_MIN_PARTICIPANTS} people must join. After sign-up "
+                "closes, send as many sentences with at least four words as you can."
             ),
             color=discord.Color.green(),
         )
@@ -3182,8 +3229,9 @@ class NamingBot(discord.Client):
 
         asyncio.create_task(self.run_chat_event(session))
         await interaction.followup.send(
-            "Choose how long the chat event should last. The timer starts after "
-            "the one-minute sign-up period.",
+            "Choose any positive duration in minutes or hours, such as "
+            "`7 minutes` or `2 hours`. A number by itself means minutes. "
+            "The timer starts after the one-minute sign-up period.",
             view=ChatEventDurationView(session),
             ephemeral=True,
         )
@@ -3230,7 +3278,7 @@ class NamingBot(discord.Client):
             )
             if reaction is not None:
                 try:
-                    async for user in reaction.users():
+                    async for user in reaction.users(limit=None):
                         if not user.bot:
                             session.participant_ids.add(user.id)
                 except discord.HTTPException as error:
@@ -3244,16 +3292,18 @@ class NamingBot(discord.Client):
             except discord.HTTPException as error:
                 logger.warning("Could not clear chat event reactions: %s", error)
 
-            if not session.participant_ids:
+            if len(session.participant_ids) < CHAT_EVENT_MIN_PARTICIPANTS:
                 await session.channel.send(
-                    "The chat event ended because nobody signed up."
+                    "The chat event needs at least "
+                    f"{CHAT_EVENT_MIN_PARTICIPANTS} participants; only "
+                    f"{len(session.participant_ids)} signed up."
                 )
                 return
             session.sentence_counts = {
                 user_id: 0 for user_id in session.participant_ids
             }
             await session.duration_selected.wait()
-            if session.cancelled or session.duration_minutes is None:
+            if session.cancelled or session.duration_seconds is None:
                 await session.channel.send(
                     "The chat event was canceled because no duration was chosen."
                 )
@@ -3261,10 +3311,10 @@ class NamingBot(discord.Client):
 
             session.collecting = True
             await session.channel.send(
-                f"Chat event started! You have {session.duration_minutes} "
-                f"minute(s). Only sentences with at least four words count."
+                f"Chat event started! You have {session.duration_label}. "
+                "Only sentences with at least four words count."
             )
-            await asyncio.sleep(session.duration_minutes * 60)
+            await asyncio.sleep(session.duration_seconds)
             session.collecting = False
             ordered_participants = sorted(
                 session.participant_ids,

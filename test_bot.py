@@ -95,6 +95,7 @@ from bot import (
     count_qualifying_sentences,
     ChatEventSession,
     EventMenuView,
+    parse_chat_event_duration,
 )
 
 
@@ -621,6 +622,33 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             2,
         )
         self.assertEqual(count_qualifying_sentences("one two three"), 0)
+
+    def test_chat_event_accepts_custom_minutes_and_hours(self) -> None:
+        self.assertEqual(parse_chat_event_duration("7 minutes"), (420, "7 minutes"))
+        self.assertEqual(parse_chat_event_duration("2 hours"), (7200, "2 hours"))
+        self.assertEqual(parse_chat_event_duration("1.5h"), (5400, "1.5 hours"))
+        self.assertEqual(parse_chat_event_duration("3"), (180, "3 minutes"))
+        for invalid in ("0 minutes", "-2 hours", "seven minutes", "2 days"):
+            with self.subTest(invalid=invalid):
+                self.assertIsNone(parse_chat_event_duration(invalid))
+
+    async def test_chat_event_requires_at_least_two_signups(self) -> None:
+        channel = Mock()
+        channel.id = 456
+        channel.send = AsyncMock()
+        session = ChatEventSession(host_id=123, channel=channel)
+        session.participant_ids = {123}
+        session.message = Mock()
+        session.message.reactions = []
+        session.message.clear_reactions = AsyncMock()
+        self.bot.chat_events[channel.id] = session
+
+        with patch("bot.asyncio.sleep", new=AsyncMock()):
+            await self.bot.run_chat_event(session)
+
+        channel.send.assert_awaited_once()
+        self.assertIn("at least 2 participants", channel.send.await_args.args[0])
+        self.assertNotIn(channel.id, self.bot.chat_events)
 
     async def test_settings_command_sends_server_settings_layout(self) -> None:
         message = Mock()

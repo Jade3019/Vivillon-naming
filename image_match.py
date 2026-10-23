@@ -54,7 +54,13 @@ def base_pokemon_name(name: str) -> str:
 
 # Forms the matcher reports as-is so their own thumbnail can be chosen; the
 # Pokémon is still named after the species.
-THUMBNAIL_FORM_SPECIES = {"Hangry Morpeko": "Morpeko"}
+THUMBNAIL_FORM_SPECIES = {
+    "Blue-Plumage Squawkabilly": "Squawkabilly",
+    "Green-Plumage Squawkabilly": "Squawkabilly",
+    "Hangry Morpeko": "Morpeko",
+    "White-Plumage Squawkabilly": "Squawkabilly",
+    "Yellow-Plumage Squawkabilly": "Squawkabilly",
+}
 
 
 # Forms that look alike share features, so they count as one family when

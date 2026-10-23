@@ -65,6 +65,7 @@ from bot import (
     load_server_settings,
     load_reservations,
     _org_api_port_from_environment,
+    is_known_pokemon_name,
     parse_reserve_add_command,
     parse_reserve_remove_command,
     parse_collection_add_command,
@@ -1399,6 +1400,21 @@ class GuessFormatTests(unittest.TestCase):
             "**Copy Here >** `@Pokétwo#8236 c pikachu`",
         )
 
+    def test_squawkabilly_color_forms_use_the_species_name(self) -> None:
+        for form_name in (
+            "Blue-Plumage Squawkabilly",
+            "Green-Plumage Squawkabilly",
+            "White-Plumage Squawkabilly",
+            "Yellow-Plumage Squawkabilly",
+        ):
+            with self.subTest(form_name=form_name):
+                species_name = image_match.species_display_name(form_name)
+                self.assertEqual(
+                    format_spawn_reply(species_name, 100, POKETWO_COMMAND_BOT_ID),
+                    "Squawkabilly: 100.00%\n"
+                    "**Copy Here >** `@Pokétwo#8236 c squawkabilly`",
+                )
+
     def test_formats_only_the_reserved_members_as_mentions(self) -> None:
         self.assertEqual(
             format_spawn_reply("Pikachu", 95, 716390085896962058, [123, 456]),
@@ -2377,6 +2393,24 @@ class PokemonNameValidationTests(unittest.TestCase):
         for name in ("Flabébé", "Nidoran♀", "Type: Null"):
             with self.subTest(name=name):
                 self.assertTrue(is_valid_pokemon_name(name))
+
+    def test_accepts_special_pokemon_names_in_user_commands(self) -> None:
+        for name in (
+            "Chef Dente",
+            "Prof Tangrowth",
+            "Peakychu",
+            "DJ Rotom",
+            "Smearguru",
+            "Mosslax",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(is_known_pokemon_name(name))
+                self.assertEqual(parse_shinyhunt_command(f"v!sh {name}"), name)
+                self.assertEqual(parse_collection_add_command(f"v!cl add {name}"), [name])
+                self.assertEqual(
+                    parse_reserve_add_command(f"v!r add {name} <@319>"),
+                    ([name], 319),
+                )
 
     def test_rejects_multiple_candidates_and_unexpected_symbols(self) -> None:
         self.assertFalse(is_valid_pokemon_name("Gothorita / Gothita"))

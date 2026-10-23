@@ -22,6 +22,7 @@ from bot import (
     all_forms_reservation_key,
     clear_guild_reservations,
     clear_guild_collection,
+    clear_guild_shinyhunts,
     clear_user_collection,
     collection_pokemon_for_user,
     collection_user_ids_for_pokemon,
@@ -830,6 +831,70 @@ class ShinyhuntCommandTests(unittest.IsolatedAsyncioTestCase):
             ),
             [],
         )
+
+    async def test_clear_all_requires_server_administrator(self) -> None:
+        self.bot.shinyhunters = {reservation_key(SERVER_ID, "Pikachu"): [123]}
+        message = Mock()
+        message.content = "v!sh clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = False
+        message.reply = AsyncMock()
+
+        await self.bot.handle_shinyhunt_command(message)
+
+        message.reply.assert_awaited_once_with(
+            "Only server administrators can clear everyone's shinyhunts.",
+            mention_author=False,
+        )
+        self.assertEqual(
+            self.bot.shinyhunters,
+            {reservation_key(SERVER_ID, "Pikachu"): [123]},
+        )
+
+    async def test_admin_clear_all_confirms_then_clears_only_current_guild(
+        self,
+    ) -> None:
+        self.bot.shinyhunters = {
+            reservation_key(SERVER_ID, "Pikachu"): [123, 456],
+            reservation_key(SERVER_ID, "Eevee"): [789],
+            reservation_key(999, "Pikachu"): [123],
+        }
+        message = Mock()
+        message.content = "v!sh clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = True
+        message.reply = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.shinyhunt_path = Path(directory) / "shinyhunts.json"
+
+            await self.bot.handle_shinyhunt_command(message)
+
+            message.reply.assert_awaited_once()
+            view = message.reply.await_args.kwargs["view"]
+            interaction = Mock()
+            interaction.user.id = 123
+            interaction.user.guild_permissions.administrator = True
+            interaction.guild_id = SERVER_ID
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+            confirm_button = next(
+                button for button in view.children if button.label == "Yes"
+            )
+            await confirm_button.callback(interaction)
+
+            expected = {reservation_key(999, "Pikachu"): [123]}
+            self.assertEqual(self.bot.shinyhunters, expected)
+            self.assertEqual(
+                load_reservations(self.bot.shinyhunt_path),
+                expected,
+            )
+            interaction.response.edit_message.assert_awaited_once_with(
+                content="Everyone's shinyhunts in this server have been cleared.",
+                view=None,
+            )
 
 
 class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -1972,6 +2037,21 @@ class ReservationPersistenceTests(unittest.TestCase):
 
         self.assertFalse(cleared)
         self.assertEqual(updated, shinyhunters)
+
+    def test_clear_guild_shinyhunts_preserves_other_guilds(self) -> None:
+        shinyhunters = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [789],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated = clear_guild_shinyhunts(shinyhunters, 1)
+
+        self.assertEqual(updated, {reservation_key(2, "Pikachu"): [123]})
+        self.assertEqual(
+            shinyhunters[reservation_key(1, "Pikachu")],
+            [123, 456],
+        )
 
     def test_shinyhunt_removal_supports_all_forms(self) -> None:
         shinyhunters = {

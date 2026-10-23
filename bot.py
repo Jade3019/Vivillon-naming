@@ -1000,6 +1000,18 @@ def clear_shinyhunter(
     return updated_shinyhunters, cleared
 
 
+def clear_guild_shinyhunts(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+) -> dict[str, list[int]]:
+    guild_prefix = f"{guild_id}:"
+    return {
+        key: list(user_ids)
+        for key, user_ids in shinyhunters.items()
+        if not key.startswith(guild_prefix)
+    }
+
+
 def format_shinyhunt_status(pokemon_name: str) -> str:
     return f"You are currently shinyhunting {format_shinyhunt_name(pokemon_name)}"
 
@@ -3588,6 +3600,24 @@ class NamingBot(discord.Client):
             await message.reply(response, mention_author=False)
             return
 
+        if re.fullmatch(r"v!sh\s+clear\s+all\s*", message.content, re.IGNORECASE):
+            if not message.author.guild_permissions.administrator:
+                await message.reply(
+                    "Only server administrators can clear everyone's shinyhunts.",
+                    mention_author=False,
+                )
+                return
+            await message.reply(
+                "Are you sure you want to clear everyone's shinyhunts in this server?",
+                view=ClearShinyhuntsView(
+                    self,
+                    message.guild.id,
+                    message.author.id,
+                ),
+                mention_author=False,
+            )
+            return
+
         if re.fullmatch(r"v!sh\s+clear\s*", message.content, re.IGNORECASE):
             updated_shinyhunters, cleared = clear_shinyhunter(
                 self.shinyhunters,
@@ -3658,7 +3688,7 @@ class NamingBot(discord.Client):
         if pokemon_name is None:
             await message.reply(
                 "Usage: `v!sh <pokemon>`, `v!sh remove <pokemon>`, or "
-                "`v!sh clear` (one Pokémon per command)",
+                "`v!sh clear` or `v!sh clear all` (one Pokémon per command)",
                 mention_author=False,
             )
             return
@@ -4907,6 +4937,72 @@ class ClearCollectionView(discord.ui.View):
         self.bot.collections = updated_collections
         await interaction.response.edit_message(
             content="Everyone's Pokémon collection in this server has been cleared.",
+            view=None,
+        )
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.secondary)
+    async def cancel_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await interaction.response.edit_message(
+            content="Command cancelled",
+            view=None,
+        )
+
+
+class ClearShinyhuntsView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            interaction.user.id != self.requester_id
+            or interaction.guild_id != self.guild_id
+            or not isinstance(interaction.user, discord.Member)
+            or not interaction.user.guild_permissions.administrator
+        ):
+            await interaction.response.send_message(
+                "Only the administrator who ran this command can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.danger)
+    async def confirm_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        updated_shinyhunters = clear_guild_shinyhunts(
+            self.bot.shinyhunters,
+            self.guild_id,
+        )
+        try:
+            save_reservations(self.bot.shinyhunt_path, updated_shinyhunters)
+        except ValueError:
+            logger.exception("Could not clear server shinyhunts")
+            await interaction.response.send_message(
+                "I couldn't clear the shinyhunts. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.shinyhunters = updated_shinyhunters
+        await interaction.response.edit_message(
+            content="Everyone's shinyhunts in this server have been cleared.",
             view=None,
         )
 

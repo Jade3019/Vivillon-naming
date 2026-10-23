@@ -1204,6 +1204,18 @@ def clear_user_collection(
     return updated_collections
 
 
+def clear_guild_collection(
+    collections: dict[str, list[int]],
+    guild_id: int,
+) -> dict[str, list[int]]:
+    guild_prefix = f"{guild_id}:"
+    return {
+        key: list(user_ids)
+        for key, user_ids in collections.items()
+        if not key.startswith(guild_prefix)
+    }
+
+
 def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
     match = RESERVE_COMMAND_PATTERN.fullmatch(content)
     if match is None:
@@ -3699,6 +3711,24 @@ class NamingBot(discord.Client):
             await message.reply("Usage: `v!cl list`", mention_author=False)
             return
 
+        if re.fullmatch(r"v!cl\s+clear\s+all\s*", message.content, re.IGNORECASE):
+            if not message.author.guild_permissions.administrator:
+                await message.reply(
+                    "Only server administrators can clear everyone's collection.",
+                    mention_author=False,
+                )
+                return
+            await message.reply(
+                "Are you sure you want to clear everyone's collection in this server?",
+                view=ClearCollectionView(
+                    self,
+                    message.guild.id,
+                    message.author.id,
+                ),
+                mention_author=False,
+            )
+            return
+
         if re.fullmatch(r"v!cl\s+clear\s*", message.content, re.IGNORECASE):
             updated_collections = clear_user_collection(
                 self.collections,
@@ -3721,7 +3751,10 @@ class NamingBot(discord.Client):
             )
             return
         if re.match(r"^v!cl\s+clear(?:\s|$)", message.content, re.IGNORECASE):
-            await message.reply("Usage: `v!cl clear`", mention_author=False)
+            await message.reply(
+                "Usage: `v!cl clear` or `v!cl clear all`",
+                mention_author=False,
+            )
             return
 
         if re.match(r"^v!cl\s+remove(?:\s|$)", message.content, re.IGNORECASE):
@@ -4808,6 +4841,72 @@ class ClearReservesView(discord.ui.View):
         self.bot.reservations = updated_reservations
         await interaction.response.edit_message(
             content="All reserves have been cleared.",
+            view=None,
+        )
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.secondary)
+    async def cancel_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await interaction.response.edit_message(
+            content="Command cancelled",
+            view=None,
+        )
+
+
+class ClearCollectionView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            interaction.user.id != self.requester_id
+            or interaction.guild_id != self.guild_id
+            or not isinstance(interaction.user, discord.Member)
+            or not interaction.user.guild_permissions.administrator
+        ):
+            await interaction.response.send_message(
+                "Only the administrator who ran this command can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.danger)
+    async def confirm_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        updated_collections = clear_guild_collection(
+            self.bot.collections,
+            self.guild_id,
+        )
+        try:
+            save_reservations(self.bot.collection_path, updated_collections)
+        except ValueError:
+            logger.exception("Could not clear server Pokémon collections")
+            await interaction.response.send_message(
+                "I couldn't clear the collections. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.collections = updated_collections
+        await interaction.response.edit_message(
+            content="Everyone's Pokémon collection in this server has been cleared.",
             view=None,
         )
 

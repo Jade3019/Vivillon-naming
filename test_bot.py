@@ -21,6 +21,7 @@ from bot import (
     migrate_legacy_all_keys,
     all_forms_reservation_key,
     clear_guild_reservations,
+    clear_guild_collection,
     clear_user_collection,
     collection_pokemon_for_user,
     collection_user_ids_for_pokemon,
@@ -829,6 +830,89 @@ class ShinyhuntCommandTests(unittest.IsolatedAsyncioTestCase):
             ),
             [],
         )
+
+
+class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.bot = NamingBot(ConfigTests().load_config())
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    async def test_clear_all_requires_server_administrator(self) -> None:
+        self.bot.collections = {reservation_key(SERVER_ID, "Pikachu"): [123]}
+        message = Mock()
+        message.content = "v!cl clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = False
+        message.reply = AsyncMock()
+
+        await self.bot.handle_collection_command(message)
+
+        message.reply.assert_awaited_once_with(
+            "Only server administrators can clear everyone's collection.",
+            mention_author=False,
+        )
+        self.assertEqual(
+            self.bot.collections,
+            {reservation_key(SERVER_ID, "Pikachu"): [123]},
+        )
+
+    async def test_admin_clear_all_confirms_then_clears_only_current_guild(self) -> None:
+        self.bot.collections = {
+            reservation_key(SERVER_ID, "Pikachu"): [123, 456],
+            reservation_key(SERVER_ID, "Eevee"): [789],
+            reservation_key(999, "Pikachu"): [123],
+        }
+        message = Mock()
+        message.content = "v!cl clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = True
+        message.reply = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.collection_path = Path(directory) / "collections.json"
+
+            await self.bot.handle_collection_command(message)
+
+            message.reply.assert_awaited_once()
+            self.assertIn("view", message.reply.await_args.kwargs)
+            self.assertEqual(
+                self.bot.collections,
+                {
+                    reservation_key(SERVER_ID, "Pikachu"): [123, 456],
+                    reservation_key(SERVER_ID, "Eevee"): [789],
+                    reservation_key(999, "Pikachu"): [123],
+                },
+            )
+
+            view = message.reply.await_args.kwargs["view"]
+            interaction = Mock()
+            interaction.user.id = 123
+            interaction.user.guild_permissions.administrator = True
+            interaction.guild_id = SERVER_ID
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+
+            confirm_button = next(
+                button for button in view.children if button.label == "Yes"
+            )
+            await confirm_button.callback(interaction)
+
+            self.assertEqual(
+                load_reservations(self.bot.collection_path),
+                {reservation_key(999, "Pikachu"): [123]},
+            )
+            self.assertEqual(
+                self.bot.collections,
+                {reservation_key(999, "Pikachu"): [123]},
+            )
+            interaction.response.edit_message.assert_awaited_once_with(
+                content="Everyone's Pokémon collection in this server has been cleared.",
+                view=None,
+            )
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -1712,6 +1796,18 @@ class ReservationPersistenceTests(unittest.TestCase):
                 reservation_key(2, "Pikachu"): [123],
             },
         )
+
+    def test_clear_guild_collection_preserves_other_guilds(self) -> None:
+        collections = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [789],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated = clear_guild_collection(collections, 1)
+
+        self.assertEqual(updated, {reservation_key(2, "Pikachu"): [123]})
+        self.assertEqual(collections[reservation_key(1, "Pikachu")], [123, 456])
 
     def test_formats_collection_embed_and_paginates_at_twenty(self) -> None:
         embeds = format_collection_embeds(["eevee", "pikachu"])

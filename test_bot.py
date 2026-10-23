@@ -9,6 +9,7 @@ import discord
 
 from bot import (
     add_shinyhunter,
+    clear_shinyhunter,
     add_reservations_bulk,
     build_grab_lines,
     grab_display_name,
@@ -773,6 +774,60 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 if isinstance(child, discord.ui.Section)
             ]
             self.assertEqual(updated_sections[1].accessory.label, "Off")
+
+
+class ShinyhuntCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.bot = NamingBot(ConfigTests().load_config())
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    async def test_clear_removes_and_persists_all_of_the_users_hunts(self) -> None:
+        self.bot.shinyhunters = {
+            reservation_key(SERVER_ID, "Pikachu"): [123, 456],
+            reservation_key(SERVER_ID, "Eevee"): [123],
+            reservation_key(999, "Pikachu"): [123],
+        }
+        message = Mock()
+        message.content = "v!sh clear"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.reply = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.shinyhunt_path = Path(directory) / "shinyhunts.json"
+
+            await self.bot.handle_shinyhunt_command(message)
+
+            self.assertEqual(
+                load_reservations(self.bot.shinyhunt_path),
+                {
+                    reservation_key(SERVER_ID, "Pikachu"): [456],
+                    reservation_key(999, "Pikachu"): [123],
+                },
+            )
+
+        message.reply.assert_awaited_once_with(
+            "Your shinyhunt has been cleared.",
+            mention_author=False,
+        )
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(
+                self.bot.shinyhunters,
+                SERVER_ID,
+                "Pikachu",
+            ),
+            [456],
+        )
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(
+                self.bot.shinyhunters,
+                SERVER_ID,
+                "Eevee",
+            ),
+            [],
+        )
 
 
 class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -1778,6 +1833,33 @@ class ReservationPersistenceTests(unittest.TestCase):
 
         self.assertFalse(removed)
         self.assertEqual(updated, {reservation_key(1, "Pikachu"): [456]})
+
+    def test_clears_only_the_requesting_users_hunts_in_one_guild(self) -> None:
+        shinyhunters = {
+            reservation_key(1, "Pikachu"): [123, 456],
+            reservation_key(1, "Eevee"): [123],
+            reservation_key(2, "Pikachu"): [123],
+        }
+
+        updated, cleared = clear_shinyhunter(shinyhunters, 1, 123)
+
+        self.assertTrue(cleared)
+        self.assertEqual(
+            updated,
+            {
+                reservation_key(1, "Pikachu"): [456],
+                reservation_key(2, "Pikachu"): [123],
+            },
+        )
+        self.assertEqual(shinyhunters[reservation_key(1, "Pikachu")], [123, 456])
+
+    def test_shinyhunt_clear_reports_when_no_hunt_was_found(self) -> None:
+        shinyhunters = {reservation_key(1, "Pikachu"): [456]}
+
+        updated, cleared = clear_shinyhunter(shinyhunters, 1, 123)
+
+        self.assertFalse(cleared)
+        self.assertEqual(updated, shinyhunters)
 
     def test_shinyhunt_removal_supports_all_forms(self) -> None:
         shinyhunters = {

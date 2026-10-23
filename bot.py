@@ -977,6 +977,29 @@ def remove_shinyhunter(
     return updated_shinyhunters, True
 
 
+def clear_shinyhunter(
+    shinyhunters: dict[str, list[int]],
+    guild_id: int,
+    user_id: int,
+) -> tuple[dict[str, list[int]], bool]:
+    updated_shinyhunters = {
+        key: list(user_ids) for key, user_ids in shinyhunters.items()
+    }
+    guild_prefix = f"{guild_id}:"
+    cleared = False
+    for key in list(updated_shinyhunters):
+        if not key.startswith(guild_prefix):
+            continue
+        user_ids = updated_shinyhunters[key]
+        if user_id not in user_ids:
+            continue
+        user_ids.remove(user_id)
+        cleared = True
+        if not user_ids:
+            del updated_shinyhunters[key]
+    return updated_shinyhunters, cleared
+
+
 def format_shinyhunt_status(pokemon_name: str) -> str:
     return f"You are currently shinyhunting {format_shinyhunt_name(pokemon_name)}"
 
@@ -3553,6 +3576,29 @@ class NamingBot(discord.Client):
             await message.reply(response, mention_author=False)
             return
 
+        if re.fullmatch(r"v!sh\s+clear\s*", message.content, re.IGNORECASE):
+            updated_shinyhunters, cleared = clear_shinyhunter(
+                self.shinyhunters,
+                message.guild.id,
+                message.author.id,
+            )
+            if cleared:
+                try:
+                    save_reservations(self.shinyhunt_path, updated_shinyhunters)
+                except ValueError:
+                    logger.exception("Could not save shiny-hunt clearing")
+                    await message.reply(
+                        "I couldn't clear that shiny hunt. Check the bot logs.",
+                        mention_author=False,
+                    )
+                    return
+                self.shinyhunters = updated_shinyhunters
+            await message.reply(
+                "Your shinyhunt has been cleared.",
+                mention_author=False,
+            )
+            return
+
         remove_match = re.match(
             r"^v!sh\s+remove(?:\s|$)",
             message.content,
@@ -3599,8 +3645,8 @@ class NamingBot(discord.Client):
         pokemon_name = parse_shinyhunt_command(message.content)
         if pokemon_name is None:
             await message.reply(
-                "Usage: `v!sh <pokemon>` or `v!sh remove <pokemon>` "
-                "(one Pokémon per command)",
+                "Usage: `v!sh <pokemon>`, `v!sh remove <pokemon>`, or "
+                "`v!sh clear` (one Pokémon per command)",
                 mention_author=False,
             )
             return

@@ -177,9 +177,11 @@ track every non-regional form with `v!sh all arceus`. A new selection replaces
 their previous shinyhunt in that server. Running `v!sh` without a Pokémon name
 reports their current selection. Use `v!sh remove absol` to remove your own
 shinyhunt for that Pokémon, or `v!sh remove all arceus` to remove your all-forms
-shinyhunt; this does not affect other members. When a matching Pokémon spawns, registered
-hunters are mentioned in a `Shinyhunt:` line. If the Pokémon has a reservation,
-the existing `Reserved:` mentions take precedence over shiny-hunt mentions.
+shinyhunt; use `v!sh clear` to stop hunting and remove all your shinyhunts in
+that server. These commands do not affect other members. When a matching Pokémon
+spawns, registered hunters are mentioned in a `Shinyhunt:` line. If the Pokémon
+has a reservation, the existing `Reserved:` mentions take precedence over
+shiny-hunt mentions.
 Shiny-hunt registrations are stored in `shinyhunts.json` by default; set
 `SHINYHUNTS_FILE` to use a different path.
 

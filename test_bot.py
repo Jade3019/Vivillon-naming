@@ -445,7 +445,11 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         unpinged_message.reply.assert_not_awaited()
         recognize.assert_not_awaited()
 
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.bot.collection_path = Path(directory.name) / "collections.json"
         self.bot.collections = {reservation_key(SERVER_ID, "Pikachu"): [123]}
+        save_reservations(self.bot.collection_path, self.bot.collections)
         pinged_message = spawn_message(703)
         with patch(
             "bot.recognize_pokemon",
@@ -484,6 +488,12 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         }
         self.bot.shinyhunters = {reservation_key(SERVER_ID, "Absol"): [123]}
         self.bot.collections = {reservation_key(SERVER_ID, "Absol"): [456]}
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.bot.shinyhunt_path = Path(directory.name) / "shinyhunts.json"
+        self.bot.collection_path = Path(directory.name) / "collections.json"
+        save_reservations(self.bot.shinyhunt_path, self.bot.shinyhunters)
+        save_reservations(self.bot.collection_path, self.bot.collections)
         self.bot.afk_settings = {
             f"{SERVER_ID}:123": {"shinyhunt": False, "collection": True},
             f"{SERVER_ID}:456": {"shinyhunt": True, "collection": True},
@@ -528,6 +538,40 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_spawn(muted_message)
 
         muted_message.reply.assert_not_awaited()
+
+    async def test_spawns_reload_saved_collection_and_shinyhunt_clear_state(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.collections = {reservation_key(SERVER_ID, "Absol"): [123]}
+        self.bot.shinyhunters = {reservation_key(SERVER_ID, "Absol"): [456]}
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.bot.collection_path = Path(directory.name) / "collections.json"
+        self.bot.shinyhunt_path = Path(directory.name) / "shinyhunts.json"
+        save_reservations(self.bot.collection_path, {})
+        save_reservations(self.bot.shinyhunt_path, {})
+
+        message = Mock()
+        message.id = 707
+        message.guild.id = SERVER_ID
+        message.channel.id = 1207
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Absol", 99.0)),
+        ):
+            await self.bot.handle_spawn(message)
+
+        message.reply.assert_awaited_once()
+        content = message.reply.await_args.args[0]
+        self.assertNotIn("Collection:", content)
+        self.assertNotIn("Shinyhunt:", content)
+        self.assertEqual(self.bot.collections, {})
+        self.assertEqual(self.bot.shinyhunters, {})
 
     async def test_api_status_reports_response_metrics_and_load(self) -> None:
         self.bot.pokemon_named_count = 12

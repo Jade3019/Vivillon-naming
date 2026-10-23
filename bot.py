@@ -4172,6 +4172,19 @@ class NamingBot(discord.Client):
             naming_settings = self.naming_settings_for_guild(message.guild.id)
             if not naming_settings["enabled"]:
                 return
+            try:
+                self.shinyhunters = load_reservations(self.shinyhunt_path)
+                self.collections = migrate_legacy_all_keys(
+                    load_reservations(self.collection_path)
+                )
+            except ValueError:
+                logger.exception("Could not refresh spawn ping registrations")
+                await message.reply(
+                    "I couldn't load the current ping registrations. "
+                    "Check the bot logs.",
+                    mention_author=False,
+                )
+                return
             if naming_settings["pings"] and not self.has_active_ping_targets(
                 message.guild.id
             ):

@@ -17,7 +17,13 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from image_match import SILVALLY_FORMS, ImageMatcher, species_display_name
+from image_match import (
+    FORM_DISPLAY_NAMES,
+    SILVALLY_FORMS,
+    VIVILLON_FORM_SET,
+    ImageMatcher,
+    species_display_name,
+)
 from org_api import OrgReserves, create_app
 import org_rpc
 from daycare import DaycareFeature
@@ -469,7 +475,7 @@ def is_missingno_name(name: str) -> bool:
 def display_pokemon_name(name: str) -> str:
     if name.casefold() == "male meowstic":
         return "Meowstic"
-    return name
+    return FORM_DISPLAY_NAMES.get(name, name)
 
 
 def format_guess(
@@ -479,8 +485,10 @@ def format_guess(
 
 
 def shown_form_name(name: str, form_name: str | None) -> str:
-    """Silvally types are shown by type, but caught and reserved as Silvally."""
-    return form_name if form_name in SILVALLY_FORMS else name
+    """Silvally types and Vivillon patterns are shown by form, but caught and reserved as the species."""
+    if form_name in SILVALLY_FORMS or form_name in VIVILLON_FORM_SET:
+        return form_name
+    return name
 
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
@@ -712,7 +720,7 @@ def format_custom_type_spawn_reply(
         for type_name in type_order
         if type_name in included_types
     ]
-    lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence, guess_name)}")
+    lines.append(f"{' '.join(type_emojis)} {format_guess(name, confidence, guess_name)}")
     if assisted:
         lines.append(
             f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"

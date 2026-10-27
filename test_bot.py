@@ -1310,7 +1310,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 "Vulpix", 87.5, 789, [123], include_fire=True
             ),
             "Reserved: <@123>\n"
-            "## <:fire:1560301436074729532> Vulpix: 87.50%\n"
+            "<:fire:1560301436074729532> Vulpix: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c vulpix`",
         )
         self.assertTrue(is_fire_icon_pokemon("Vulpix"))
@@ -1339,14 +1339,14 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Eevee", 87.5, 789, include_normal=True
             ),
-            "## <:Normal:1560305235279482930> Eevee: 87.50%\n"
+            "<:Normal:1560305235279482930> Eevee: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c eevee`",
         )
         self.assertEqual(
             format_custom_type_spawn_reply(
                 "Volcanion", 87.5, 789, include_fire=True, include_water=True
             ),
-            "## <:water:1560303864094130357> "
+            "<:water:1560303864094130357> "
             "<:fire:1560301436074729532> Volcanion: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c volcanion`",
         )
@@ -1354,7 +1354,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Litleo", 87.5, 789, include_fire=True, include_normal=True
             ),
-            "## <:fire:1560301436074729532> "
+            "<:fire:1560301436074729532> "
             "<:Normal:1560305235279482930> Litleo: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c litleo`",
         )
@@ -1362,7 +1362,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Bibarel", 87.5, 789, include_water=True, include_normal=True
             ),
-            "## <:Normal:1560305235279482930> "
+            "<:Normal:1560305235279482930> "
             "<:water:1560303864094130357> Bibarel: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c bibarel`",
         )
@@ -1370,7 +1370,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Heliolisk", 87.5, 789, include_electric=True, include_normal=True
             ),
-            "## <:Electric:1560306053164572732> "
+            "<:Electric:1560306053164572732> "
             "<:Normal:1560305235279482930> Heliolisk: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c heliolisk`",
         )
@@ -1378,7 +1378,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Rotom Heat", 87.5, 789, include_fire=True, include_electric=True
             ),
-            "## <:fire:1560301436074729532> "
+            "<:fire:1560301436074729532> "
             "<:Electric:1560306053164572732> Rotom Heat: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c rotom heat`",
         )
@@ -1386,7 +1386,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Scovillain", 87.5, 789, include_grass=True, include_fire=True
             ),
-            "## <:grass:1560307079896502282> "
+            "<:grass:1560307079896502282> "
             "<:fire:1560301436074729532> Scovillain: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c scovillain`",
         )
@@ -1394,7 +1394,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Lotad", 87.5, 789, include_grass=True, include_water=True
             ),
-            "## <:grass:1560307079896502282> "
+            "<:grass:1560307079896502282> "
             "<:water:1560303864094130357> Lotad: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c lotad`",
         )
@@ -1402,7 +1402,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Smoliv", 87.5, 789, include_grass=True, include_normal=True
             ),
-            "## <:grass:1560307079896502282> "
+            "<:grass:1560307079896502282> "
             "<:Normal:1560305235279482930> Smoliv: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c smoliv`",
         )
@@ -1410,7 +1410,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Rotom Mow", 87.5, 789, include_grass=True, include_electric=True
             ),
-            "## <:grass:1560307079896502282> "
+            "<:grass:1560307079896502282> "
             "<:Electric:1560306053164572732> Rotom Mow: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c rotom mow`",
         )
@@ -1418,7 +1418,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Glaceon", 87.5, 789, include_ice=True
             ),
-            "## <:Ice:1560307867200782386> Glaceon: 87.50%\n"
+            "<:Ice:1560307867200782386> Glaceon: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c glaceon`",
         )
         self.assertEqual(
@@ -1429,7 +1429,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 include_fire=True,
                 include_ice=True,
             ),
-            "## <:Ice:1560307867200782386> "
+            "<:Ice:1560307867200782386> "
             "<:fire:1560301436074729532> Darmanitan-Galar-Zen: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c darmanitan-galar-zen`",
         )
@@ -1437,7 +1437,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Lapras", 87.5, 789, include_water=True, include_ice=True
             ),
-            "## <:Ice:1560307867200782386> "
+            "<:Ice:1560307867200782386> "
             "<:water:1560303864094130357> Lapras: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c lapras`",
         )
@@ -1445,7 +1445,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Arctozolt", 87.5, 789, include_electric=True, include_ice=True
             ),
-            "## <:Ice:1560307867200782386> "
+            "<:Ice:1560307867200782386> "
             "<:Electric:1560306053164572732> Arctozolt: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c arctozolt`",
         )
@@ -1459,7 +1459,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                     include_normal=True,
                     include_ice=True,
                 ),
-                "## <:Normal:1560305235279482930> "
+                "<:Normal:1560305235279482930> "
                 "<:Ice:1560307867200782386> Test Pokemon: 87.50%\n"
                 "**Copy Here >** `@Pokétwo#8236 c test pokemon`",
             )

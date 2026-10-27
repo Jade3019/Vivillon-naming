@@ -204,5 +204,24 @@ class ImageMatcherTests(unittest.TestCase):
         mask.assert_not_called()
 
 
+@unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
+class SilvallyTests(unittest.TestCase):
+    def test_folders_keep_their_type_names(self) -> None:
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        for form in image_match.SILVALLY_FORMS:
+            self.assertIn(form, groups)
+
+    def test_type_forms_are_reported_as_silvally(self) -> None:
+        self.assertEqual(image_match.species_display_name("Bug Silvally"), "Silvally")
+        self.assertEqual(image_match.family_name("Fairy Silvally"), "Silvally")
+
+    def test_type_is_chosen_by_colour(self) -> None:
+        for form in ("Silvally", "Bug Silvally", "Fire Silvally", "Water Silvally"):
+            path = image_match.silvally_thumbnail_path(form)
+            self.assertEqual(
+                image_match.silvally_form_by_color(path.read_bytes()), form
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

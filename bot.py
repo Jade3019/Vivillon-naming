@@ -17,7 +17,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from image_match import ImageMatcher, species_display_name
+from image_match import SILVALLY_FORMS, ImageMatcher, species_display_name
 from org_api import OrgReserves, create_app
 import org_rpc
 from daycare import DaycareFeature
@@ -471,8 +471,15 @@ def display_pokemon_name(name: str) -> str:
     return name
 
 
-def format_guess(name: str, confidence: float) -> str:
-    return f"{display_pokemon_name(name)}: {confidence:.2f}%"
+def format_guess(
+    name: str, confidence: float, guess_name: str | None = None
+) -> str:
+    return f"{display_pokemon_name(guess_name or name)}: {confidence:.2f}%"
+
+
+def shown_form_name(name: str, form_name: str | None) -> str:
+    """Silvally types are shown by type, but caught and reserved as Silvally."""
+    return form_name if form_name in SILVALLY_FORMS else name
 
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
@@ -489,9 +496,10 @@ def format_spawn_reply(
     collection_user_ids: list[int] | None = None,
     *,
     assisted: bool = True,
+    guess_name: str | None = None,
 ) -> str:
     command = format_catch_command(poketwo_bot_id, name)
-    lines = [format_guess(name, confidence)]
+    lines = [format_guess(name, confidence, guess_name)]
     lines.extend(
         format_spawn_mention_lines(
             reserved_user_ids,
@@ -640,6 +648,7 @@ def format_custom_type_spawn_reply(
     include_grass: bool = False,
     include_ice: bool = False,
     assisted: bool = True,
+    guess_name: str | None = None,
 ) -> str:
     lines = format_spawn_mention_lines(
         reserved_user_ids,
@@ -702,7 +711,7 @@ def format_custom_type_spawn_reply(
         for type_name in type_order
         if type_name in included_types
     ]
-    lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence)}")
+    lines.append(f"## {' '.join(type_emojis)} {format_guess(name, confidence, guess_name)}")
     if assisted:
         lines.append(
             f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"
@@ -773,6 +782,7 @@ def format_type_spawn_embed(
     icon_filename: str,
     *,
     assisted: bool = True,
+    guess_name: str | None = None,
 ) -> discord.Embed:
     embed = discord.Embed(
         description=(
@@ -780,7 +790,7 @@ def format_type_spawn_embed(
         )
     )
     embed.set_author(
-        name=format_guess(name, confidence),
+        name=format_guess(name, confidence, guess_name),
         icon_url=f"attachment://{icon_filename}",
     )
     return embed
@@ -825,7 +835,7 @@ def format_pc_catch_embed(
     name: str, thumbnail_name: str | None = None
 ) -> discord.Embed:
     embed = discord.Embed(
-        title=f"Catch {display_pokemon_name(name)}",
+        title=f"Catch {display_pokemon_name(shown_form_name(name, thumbnail_name))}",
         description=(
             f"Copy Below\n"
             f"```\n{format_catch_command(POKETWO_COMMAND_BOT_ID, name)}\n```"
@@ -4303,6 +4313,7 @@ class NamingBot(discord.Client):
             return
         thumbnail_name = name
         name = species_display_name(name)
+        guess_name = shown_form_name(name, thumbnail_name)
         if test_mode and not is_missingno_name(name):
             await message.reply(
                 f"Test image recognized as {name}; Missingno action was not triggered.",
@@ -4404,6 +4415,7 @@ class NamingBot(discord.Client):
                 include_grass=is_grass_spawn,
                 include_ice=is_ice_spawn,
                 assisted=assisted,
+                guess_name=guess_name,
             )
             companion_icon_filename = (
                 fire_companion_icon_filename_for_pokemon(name)
@@ -4439,6 +4451,7 @@ class NamingBot(discord.Client):
                 POKETWO_COMMAND_BOT_ID,
                 icon_filename,
                 assisted=assisted,
+                guess_name=guess_name,
             )
             content_lines = format_spawn_mention_lines(
                 reserved_user_ids,
@@ -4472,6 +4485,7 @@ class NamingBot(discord.Client):
                     shinyhunter_user_ids,
                     collection_user_ids,
                     assisted=assisted,
+                    guess_name=guess_name,
                 ),
                 embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
                 **({"files": card_files} if card_files else {}),

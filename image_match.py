@@ -6,6 +6,7 @@ feature file (image_bank.npz). The bot only loads that file.
 
 import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -52,6 +53,14 @@ def base_pokemon_name(name: str) -> str:
     return match.group("base") if match else name
 
 
+SILVALLY_TYPES = (
+    "Bug", "Dark", "Dragon", "Electric", "Fighting", "Fire", "Flying", "Ghost",
+    "Grass", "Ground", "Ice", "Poison", "Psychic", "Rock", "Steel", "Water", "Fairy",
+)
+SILVALLY_FORMS = frozenset({"Silvally", *(f"{kind} Silvally" for kind in SILVALLY_TYPES)})
+THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
+
+
 # Forms the matcher reports as-is so their own thumbnail can be chosen; the
 # Pokémon is still named after the species.
 THUMBNAIL_FORM_SPECIES = {
@@ -60,6 +69,7 @@ THUMBNAIL_FORM_SPECIES = {
     "Hangry Morpeko": "Morpeko",
     "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
+    **{form: "Silvally" for form in SILVALLY_FORMS},
 }
 
 
@@ -68,10 +78,11 @@ THUMBNAIL_FORM_SPECIES = {
 FAMILY_OVERRIDES = {
     "Finizen": "Palafin",
     "Hero Palafin": "Palafin",
+    **{form: "Silvally" for form in SILVALLY_FORMS},
 }
 # Families whose members are near-identical pictures: the best-scoring member
 # is named even when members of the same family score closely.
-INDISTINGUISHABLE_FAMILIES = {"Palafin"}
+INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally"}
 
 
 def family_name(name: str) -> str:
@@ -291,6 +302,82 @@ def has_belly_patch(data: bytes) -> bool | None:
     return False
 
 
+def silvally_thumbnail_path(form: str) -> Path:
+    return THUMBNAIL_DIR / (re.sub(r"[^a-z0-9]", "", form.casefold()) + ".png")
+
+
+@lru_cache(maxsize=1)
+def _silvally_references():
+    """Normal Silvally's features plus each type's colour in the plume/fin area."""
+    if cv2 is None:
+        return None
+    images = {}
+    for form in SILVALLY_FORMS:
+        image = cv2.imread(str(silvally_thumbnail_path(form)), cv2.IMREAD_UNCHANGED)
+        if image is None or image.ndim != 3 or image.shape[2] != 4:
+            return None
+        images[form] = image
+    base = images["Silvally"]
+    solid = base[..., 3] > 128
+    differs = np.zeros(solid.shape, bool)
+    for image in images.values():
+        if image.shape != base.shape:
+            return None
+        differs |= np.abs(image[..., :3].astype(int) - base[..., :3].astype(int)).max(2) > 40
+    area = cv2.erode((differs & solid).astype(np.uint8), np.ones((3, 3), np.uint8))
+    if int(area.sum()) < 200:
+        return None
+    colours = {
+        form: np.median(cv2.cvtColor(image[..., :3], cv2.COLOR_BGR2LAB)[area > 0], axis=0)
+        for form, image in images.items()
+    }
+    keypoints, descriptors = cv2.SIFT_create().detectAndCompute(
+        cv2.cvtColor(base[..., :3], cv2.COLOR_BGR2GRAY), solid.astype(np.uint8) * 255
+    )
+    if descriptors is None or len(keypoints) < 10:
+        return None
+    points = np.float32([keypoint.pt for keypoint in keypoints])
+    return area, colours, points, descriptors
+
+
+def silvally_form_by_color(data: bytes) -> str | None:
+    """Tell Silvally's type forms apart; they only differ in colour."""
+    references = _silvally_references()
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if cv2 else None
+    if references is None or image is None:
+        return None
+    area, colours, ref_points, ref_descriptors = references
+    scale = MAX_SIDE / max(image.shape[:2])
+    if scale < 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    best: tuple[int, str] | None = None
+    for mirror in (False, True):
+        candidate = cv2.flip(image, 1) if mirror else image
+        keypoints, descriptors = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE).detectAndCompute(
+            cv2.cvtColor(candidate, cv2.COLOR_BGR2GRAY), None
+        )
+        if descriptors is None or len(keypoints) < 10:
+            continue
+        pairs = cv2.BFMatcher().knnMatch(ref_descriptors, descriptors, k=2)
+        good = [p[0] for p in pairs if len(p) == 2 and p[0].distance < 0.75 * p[1].distance]
+        if len(good) < 8:
+            continue
+        source = np.float32([ref_points[m.queryIdx] for m in good])
+        target = np.float32([keypoints[m.trainIdx].pt for m in good])
+        matrix, inliers = cv2.findHomography(source, target, cv2.RANSAC, 5.0)
+        if matrix is None or int(inliers.sum()) < 8:
+            continue
+        height, width = candidate.shape[:2]
+        region = cv2.warpPerspective(area, matrix, (width, height), flags=cv2.INTER_NEAREST) > 0
+        if int(region.sum()) < 100:
+            continue
+        observed = np.median(cv2.cvtColor(candidate, cv2.COLOR_BGR2LAB)[region], axis=0)
+        form = min(colours, key=lambda f: float(np.linalg.norm(colours[f] - observed)))
+        if best is None or int(inliers.sum()) > best[0]:
+            best = (int(inliers.sum()), form)
+    return best[1] if best else None
+
+
 class ImageMatcher:
     def __init__(self, bank_path: Path) -> None:
         self.names: list[str] = []
@@ -343,6 +430,8 @@ class ImageMatcher:
             patch = has_belly_patch(data)
             if patch is not None:
                 name = "Palafin" if patch else "Finizen"
+        if name in SILVALLY_FORMS:
+            name = silvally_form_by_color(data) or name
         return name, votes
 
     def _match(self, data: bytes, mirror: bool, mask=None) -> tuple[str, int] | None:

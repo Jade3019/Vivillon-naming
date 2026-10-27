@@ -310,5 +310,34 @@ class DeoxysTests(unittest.TestCase):
                 self.assertEqual(matcher.match(buf.tobytes())[0], form, name)
 
 
+class PichuTests(unittest.TestCase):
+    FORMS = ("Pichu", "Spiky-Eared Pichu")
+
+    def test_every_form_has_a_folder_and_thumbnail(self) -> None:
+        import bot
+
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        for form in self.FORMS:
+            self.assertIn(form, groups)
+            self.assertIsNotNone(bot.custom_thumbnail_path(form), form)
+
+    def test_each_form_is_recognised_normal_and_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        for form in self.FORMS:
+            folder = Path(__file__).with_name("pokemon_images") / form
+            for name in ("image.png", "image_mirrored.png"):
+                img = cv2.imread(str(folder / name), cv2.IMREAD_UNCHANGED)
+                bg = cv2.resize(img[..., :3], (500, 400)) // 2 + 60
+                x, y = 60, 20
+                roi = bg[y:y + 360, x:x + 360]
+                small = cv2.resize(img, (360, 360))
+                al = small[..., 3:4] / 255.0
+                bg[y:y + 360, x:x + 360] = (small[..., :3] * al + roi * (1 - al)).astype(bg.dtype)
+                ok, buf = cv2.imencode(".png", bg)
+                self.assertEqual(matcher.match(buf.tobytes())[0], form, name)
+
+
 if __name__ == "__main__":
     unittest.main()

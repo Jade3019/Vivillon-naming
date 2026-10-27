@@ -317,6 +317,29 @@ def image_url(message: discord.Message) -> str | None:
     return None
 
 
+LOW_ACCURACY_THRESHOLD = 90
+
+
+def load_low_accuracy_channels(path: Path) -> dict[str, int]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        str(key): value
+        for key, value in data.items()
+        if isinstance(value, int) and not isinstance(value, bool)
+    }
+
+
+def save_low_accuracy_channels(path: Path, channels: dict[str, int]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(channels), encoding="utf-8")
+    temporary.replace(path)
+
+
 def is_image_test_command(content: str) -> bool:
     return re.fullmatch(r"v!test\s*", content, re.IGNORECASE) is not None
 
@@ -3054,6 +3077,12 @@ class NamingBot(discord.Client):
             os.environ.get("APPEARANCE_FILE", "appearance.json")
         )
         self.appearance = load_appearance(self.appearance_path)
+        self.low_accuracy_path = Path(
+            os.environ.get("LOW_ACCURACY_FILE", "low_accuracy.json")
+        )
+        self.low_accuracy_channels = load_low_accuracy_channels(
+            self.low_accuracy_path
+        )
         self.chat_events: dict[int, ChatEventSession] = {}
         self.daycare = DaycareFeature(
             Path(os.environ.get("BOXES_FILE", "boxes.json")),
@@ -3479,6 +3508,9 @@ class NamingBot(discord.Client):
             if re.fullmatch(r"v!settings\s*", message.content, re.IGNORECASE):
                 await self.handle_settings_command(message)
                 return
+            if re.match(r"^v!lowaccuracy(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_low_accuracy_command(message)
+                return
             if re.fullmatch(r"v!afk\s*", message.content, re.IGNORECASE):
                 await self.handle_afk_command(message)
                 return
@@ -3807,6 +3839,59 @@ class NamingBot(discord.Client):
     async def handle_settings_command(self, message: discord.Message) -> None:
         await message.reply(
             view=ServerSettingsView(self, message.guild.id),
+            mention_author=False,
+        )
+
+    async def report_low_accuracy(
+        self, message: discord.Message, name: str, confidence: float
+    ) -> None:
+        guild = message.guild
+        channel_id = self.low_accuracy_channels.get(str(guild.id)) if guild else None
+        if channel_id is None:
+            return
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            return
+        try:
+            await channel.send(
+                f"⚠️ Low accuracy: **{display_pokemon_name(name)}** at "
+                f"{confidence:.2f}% (below {LOW_ACCURACY_THRESHOLD}%)\n"
+                f"{message.jump_url}",
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except discord.HTTPException:
+            logger.warning("Could not send low accuracy report", exc_info=True)
+
+    async def handle_low_accuracy_command(self, message: discord.Message) -> None:
+        permissions = getattr(message.author, "guild_permissions", None)
+        if message.guild is None or permissions is None or not permissions.manage_guild:
+            await message.reply(
+                "You need the Manage Server permission to use this.",
+                mention_author=False,
+            )
+            return
+        argument = message.content.split(maxsplit=1)[1].strip() if " " in message.content.strip() else ""
+        key = str(message.guild.id)
+        if argument.lower() in ("off", "reset", "clear"):
+            self.low_accuracy_channels.pop(key, None)
+            save_low_accuracy_channels(self.low_accuracy_path, self.low_accuracy_channels)
+            await message.reply("Low accuracy recorder turned off.", mention_author=False)
+            return
+        if message.channel_mentions:
+            target = message.channel_mentions[0]
+            self.low_accuracy_channels[key] = target.id
+            save_low_accuracy_channels(self.low_accuracy_path, self.low_accuracy_channels)
+            await message.reply(
+                f"Low accuracy recorder on. Spawns scoring under {LOW_ACCURACY_THRESHOLD}% "
+                f"will be linked in {target.mention}.",
+                mention_author=False,
+            )
+            return
+        current = self.low_accuracy_channels.get(key)
+        state = f"<#{current}>" if current else "off"
+        await message.reply(
+            f"Low accuracy recorder: {state}\n"
+            "Use `v!lowaccuracy #channel` to set it or `v!lowaccuracy off` to disable.",
             mention_author=False,
         )
 
@@ -4701,6 +4786,8 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        if confidence < LOW_ACCURACY_THRESHOLD:
+            await self.report_low_accuracy(message, name, confidence)
         thumbnail_name = name
         name = species_display_name(name)
         guess_name = shown_form_name(name, thumbnail_name)

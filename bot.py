@@ -2273,7 +2273,6 @@ class ServerSettingsView(discord.ui.LayoutView):
 
 
 DEFAULT_EMBED_COLOR: Final[int] = 0x5865F2
-APPEARANCE_UPLOAD_SECONDS: Final[int] = 90
 APPEARANCE_MAX_BYTES: Final[int] = 10 * 1024 * 1024
 APPEARANCE_IMAGE_TYPES: Final[tuple[str, ...]] = (
     "image/png",
@@ -2379,8 +2378,8 @@ class AppearanceActionButton(discord.ui.Button):
                 AppearanceTextModal(self.bot, self.guild_id, "name")
             )
         elif self.action in ("avatar", "banner"):
-            await self.bot.start_appearance_upload(
-                interaction, self.guild_id, self.action
+            await interaction.response.send_modal(
+                AppearanceUploadModal(self.bot, self.guild_id, self.action)
             )
         else:
             await self.bot.reset_appearance(
@@ -2428,6 +2427,35 @@ class AppearanceTextModal(discord.ui.Modal):
             self.bot.update_appearance(self.guild_id, name=text or None)
         await interaction.response.edit_message(
             view=AppearanceSettingsView(self.bot, self.guild_id)
+        )
+
+
+class AppearanceUploadModal(discord.ui.Modal):
+    def __init__(self, bot: "NamingBot", guild_id: int, field: str) -> None:
+        label = "Bot Profile Image" if field == "avatar" else "Bot Server Banner"
+        super().__init__(title=f"Upload {label}")
+        self.bot = bot
+        self.guild_id = guild_id
+        self.field = field
+        self.upload = discord.ui.FileUpload(min_values=1, max_values=1)
+        self.add_item(
+            discord.ui.Label(
+                text="Profile Image" if field == "avatar" else "Server Banner",
+                description="PNG, JPEG, GIF, or WEBP; maximum 10 MB.",
+                component=self.upload,
+            )
+        )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if not await appearance_guard(interaction, self.guild_id):
+            return
+        if not self.upload.values:
+            await interaction.response.send_message(
+                "No file was uploaded.", ephemeral=True
+            )
+            return
+        await self.bot.apply_appearance_image(
+            interaction, self.guild_id, self.field, self.upload.values[0]
         )
 
 
@@ -3051,41 +3079,24 @@ class NamingBot(discord.Client):
             view=AppearanceSettingsView(self, guild_id)
         )
 
-    async def start_appearance_upload(
-        self, interaction: discord.Interaction, guild_id: int, field: str
+    async def apply_appearance_image(
+        self,
+        interaction: discord.Interaction,
+        guild_id: int,
+        field: str,
+        attachment: discord.Attachment,
     ) -> None:
-        label = "profile image" if field == "avatar" else "server banner"
-        await interaction.response.send_message(
-            f"Send the new {label} as an attachment in this channel within "
-            f"{APPEARANCE_UPLOAD_SECONDS} seconds (PNG, JPEG, GIF or WEBP, max 10 MB).",
-            ephemeral=True,
-        )
-
-        def check(message: discord.Message) -> bool:
-            return (
-                message.author.id == interaction.user.id
-                and message.channel.id == interaction.channel_id
-                and bool(message.attachments)
-            )
-
-        try:
-            message = await self.wait_for(
-                "message", check=check, timeout=APPEARANCE_UPLOAD_SECONDS
-            )
-        except asyncio.TimeoutError:
-            await interaction.followup.send("Upload timed out.", ephemeral=True)
-            return
-        attachment = message.attachments[0]
+        content_type = (attachment.content_type or "").split(";")[0]
         if (
-            attachment.content_type is None
-            or attachment.content_type.split(";")[0] not in APPEARANCE_IMAGE_TYPES
+            content_type not in APPEARANCE_IMAGE_TYPES
             or attachment.size > APPEARANCE_MAX_BYTES
         ):
-            await interaction.followup.send(
+            await interaction.response.send_message(
                 "That file must be a PNG, JPEG, GIF or WEBP image up to 10 MB.",
                 ephemeral=True,
             )
             return
+        await interaction.response.defer(ephemeral=True)
         try:
             image = await attachment.read()
             await interaction.guild.me.edit(**{field: image})
@@ -3095,6 +3106,7 @@ class NamingBot(discord.Client):
                 f"Discord rejected the image: {error}", ephemeral=True
             )
             return
+        label = "profile image" if field == "avatar" else "server banner"
         await interaction.followup.send(
             f"Updated the {label}. Reopen Appearance to see it.", ephemeral=True
         )

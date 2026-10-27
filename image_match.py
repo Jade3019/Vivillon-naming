@@ -557,6 +557,16 @@ class ImageMatcher:
             if result is not None
         ]
         if not results:
+            # Busy scenery can hide features; accept a slightly weaker clear winner.
+            results = [
+                result
+                for result in (
+                    self._match(data, False, relaxed=True),
+                    self._match(data, True, relaxed=True),
+                )
+                if result is not None
+            ]
+        if not results:
             return None
         name, votes = max(results, key=lambda result: result[1])
         if name in ("Palafin", "Finizen"):
@@ -571,7 +581,7 @@ class ImageMatcher:
             name = arceus_form_by_color(data) or name
         return name, votes
 
-    def _match(self, data: bytes, mirror: bool, mask=None) -> tuple[str, int] | None:
+    def _match(self, data: bytes, mirror: bool, mask=None, relaxed: bool = False) -> tuple[str, int] | None:
         descriptors = compute_descriptors(data, mirror, mask)
         if descriptors is None or len(descriptors) < 2:
             return None
@@ -607,6 +617,8 @@ class ImageMatcher:
         min_margin = SPECIES_MIN_MARGIN.get(name, MIN_MARGIN)
         if is_variant:
             min_votes, min_margin = 2, 2
+        elif relaxed:
+            min_votes, min_margin = (4, 3) if name != "Pumpkaboo" else (99, 99)
         if best >= min_votes and best - second >= max(min_margin, 0.3 * best):
             return DISPLAY_NAMES.get(name, name), best
         return None

@@ -21,6 +21,7 @@ from image_match import SILVALLY_FORMS, ImageMatcher, species_display_name
 from org_api import OrgReserves, create_app
 import org_rpc
 from daycare import DaycareFeature
+from help_menu import HELP_COMMAND_PATTERN, build_help_menu_embed
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
 
@@ -3071,6 +3072,9 @@ class NamingBot(discord.Client):
                     )
                     return
                 await self.handle_spawn(message, test_mode=True)
+                return
+            if re.fullmatch(HELP_COMMAND_PATTERN, message.content, re.IGNORECASE):
+                await message.reply(embed=build_help_menu_embed(), mention_author=False)
                 return
             if await self.daycare.handle_message(message):
                 return

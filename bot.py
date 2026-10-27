@@ -3099,14 +3099,27 @@ class NamingBot(discord.Client):
         await interaction.response.defer(ephemeral=True)
         try:
             image = await attachment.read()
-            await interaction.guild.me.edit(**{field: image})
-            self.update_appearance(guild_id, **{field: True})
+            member = await interaction.guild.me.edit(**{field: image})
         except (discord.HTTPException, ValueError) as error:
             await interaction.followup.send(
                 f"Discord rejected the image: {error}", ephemeral=True
             )
             return
         label = "profile image" if field == "avatar" else "server banner"
+        applied = member is not None and (
+            member.guild_avatar if field == "avatar" else member.guild_banner
+        )
+        logger.info(
+            "Appearance %s edit in guild %s applied=%s", field, guild_id, bool(applied)
+        )
+        if not applied:
+            await interaction.followup.send(
+                f"Discord accepted the request but did not apply the {label}. "
+                "Make sure the bot is on the latest code and try a different image.",
+                ephemeral=True,
+            )
+            return
+        self.update_appearance(guild_id, **{field: True})
         await interaction.followup.send(
             f"Updated the {label}. Reopen Appearance to see it.", ephemeral=True
         )

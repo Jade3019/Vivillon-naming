@@ -3101,9 +3101,14 @@ class NamingBot(discord.Client):
             image = await attachment.read()
             member = await interaction.guild.me.edit(**{field: image})
         except (discord.HTTPException, ValueError) as error:
-            await interaction.followup.send(
-                f"Discord rejected the image: {error}", ephemeral=True
-            )
+            if "too fast" in str(error):
+                message = (
+                    "Discord limits how often an avatar or banner can change. "
+                    "Wait 10-15 minutes, then upload once more."
+                )
+            else:
+                message = f"Discord rejected the image: {error}"
+            await interaction.followup.send(message, ephemeral=True)
             return
         label = "profile image" if field == "avatar" else "server banner"
         applied = member is not None and (

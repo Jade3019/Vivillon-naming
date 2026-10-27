@@ -46,6 +46,8 @@ VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.
 
 
 NEIGHBOURS = 6
+REFERENCE_PATCH = 64
+GOOD_ALIGNMENT = 25
 
 
 def base_pokemon_name(name: str) -> str:
@@ -58,6 +60,21 @@ SILVALLY_TYPES = (
     "Grass", "Ground", "Ice", "Poison", "Psychic", "Rock", "Steel", "Water", "Fairy",
 )
 SILVALLY_FORMS = frozenset({"Silvally", *(f"{kind} Silvally" for kind in SILVALLY_TYPES)})
+VIVILLON_FORMS = (
+    "Vivillon", "Icy-Snow Vivillon", "Polar Vivillon", "Tundra Vivillon",
+    "Continental Vivillon", "Garden Vivillon", "Elegant Vivillon", "Modern Vivillon",
+    "Marine Vivillon", "Archipelago Vivillon", "High-Plains Vivillon",
+    "Sandstorm Vivillon", "River Vivillon", "Monsoon Vivillon", "Savanna Vivillon",
+    "Sun Vivillon", "Ocean Vivillon", "Jungle Vivillon", "Fancy Vivillon",
+    "Poke-Ball Vivillon",
+)
+VIVILLON_FORM_SET = frozenset(VIVILLON_FORMS)
+# Names shown to users for the bank entries above.
+FORM_DISPLAY_NAMES = {
+    "Icy-Snow Vivillon": "Icy Snow Vivillon",
+    "High-Plains Vivillon": "High Plains Vivillon",
+    "Poke-Ball Vivillon": "Poké Ball Vivillon",
+}
 THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
 
 
@@ -70,6 +87,7 @@ THUMBNAIL_FORM_SPECIES = {
     "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
     **{form: "Silvally" for form in SILVALLY_FORMS},
+    **{form: "Vivillon" for form in VIVILLON_FORMS},
 }
 
 
@@ -79,10 +97,11 @@ FAMILY_OVERRIDES = {
     "Finizen": "Palafin",
     "Hero Palafin": "Palafin",
     **{form: "Silvally" for form in SILVALLY_FORMS},
+    **{form: "Vivillon" for form in VIVILLON_FORMS},
 }
 # Families whose members are near-identical pictures: the best-scoring member
 # is named even when members of the same family score closely.
-INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally"}
+INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon"}
 
 
 def family_name(name: str) -> str:
@@ -351,9 +370,13 @@ def silvally_form_by_color(data: bytes) -> str | None:
     if scale < 1:
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     best: tuple[int, str] | None = None
-    for mirror in (False, True):
+    for mirror, upscale in ((False, 1), (True, 1), (False, 2), (True, 2)):
+        if best is not None and best[0] >= GOOD_ALIGNMENT and upscale > 1:
+            break
         candidate = cv2.flip(image, 1) if mirror else image
-        keypoints, descriptors = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE).detectAndCompute(
+        if upscale > 1:
+            candidate = cv2.resize(candidate, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+        keypoints, descriptors = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE * upscale).detectAndCompute(
             cv2.cvtColor(candidate, cv2.COLOR_BGR2GRAY), None
         )
         if descriptors is None or len(keypoints) < 10:
@@ -373,6 +396,96 @@ def silvally_form_by_color(data: bytes) -> str | None:
             continue
         observed = np.median(cv2.cvtColor(candidate, cv2.COLOR_BGR2LAB)[region], axis=0)
         form = min(colours, key=lambda f: float(np.linalg.norm(colours[f] - observed)))
+        if best is None or int(inliers.sum()) > best[0]:
+            best = (int(inliers.sum()), form)
+    return best[1] if best else None
+
+
+def form_thumbnail_path(form: str) -> Path:
+    return THUMBNAIL_DIR / (re.sub(r"[^a-z0-9]", "", form.casefold()) + ".png")
+
+
+@lru_cache(maxsize=1)
+def _vivillon_references():
+    """Each pattern's picture plus the base picture's features for alignment."""
+    if cv2 is None:
+        return None
+    images = {}
+    for form in VIVILLON_FORMS:
+        image = cv2.imread(str(form_thumbnail_path(form)), cv2.IMREAD_UNCHANGED)
+        if image is None or image.ndim != 3 or image.shape[2] != 4:
+            return None
+        images[form] = image
+    base = images["Vivillon"]
+    if any(image.shape != base.shape for image in images.values()):
+        return None
+    solid = (base[..., 3] > 128).astype(np.uint8)
+    wings = cv2.erode(solid, np.ones((9, 9), np.uint8)) > 0
+    small = (REFERENCE_PATCH, REFERENCE_PATCH)
+    lab = {
+        form: cv2.GaussianBlur(
+            cv2.resize(cv2.cvtColor(image[..., :3], cv2.COLOR_BGR2LAB), small, interpolation=cv2.INTER_AREA),
+            (0, 0),
+            1.0,
+        ).astype(np.float32)
+        for form, image in images.items()
+    }
+    mask = cv2.resize(wings.astype(np.uint8), small, interpolation=cv2.INTER_NEAREST) > 0
+    keypoints, descriptors = cv2.SIFT_create().detectAndCompute(
+        cv2.cvtColor(base[..., :3], cv2.COLOR_BGR2GRAY), solid * 255
+    )
+    if descriptors is None or len(keypoints) < 10 or int(mask.sum()) < 200:
+        return None
+    points = np.float32([keypoint.pt for keypoint in keypoints])
+    return lab, mask, points, descriptors, base.shape[:2]
+
+
+def vivillon_form_by_pattern(data: bytes) -> str | None:
+    """Tell Vivillon's patterns apart by lining the spawn up with the reference."""
+    references = _vivillon_references()
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if cv2 else None
+    if references is None or image is None:
+        return None
+    lab, mask, ref_points, ref_descriptors, (ref_height, ref_width) = references
+    scale = MAX_SIDE / max(image.shape[:2])
+    if scale < 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    best: tuple[int, str] | None = None
+    for mirror, upscale in ((False, 1), (True, 1), (False, 2), (True, 2)):
+        if best is not None and upscale > 1:
+            break
+        candidate = cv2.flip(image, 1) if mirror else image
+        if upscale > 1:
+            candidate = cv2.resize(candidate, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+        keypoints, descriptors = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE * upscale).detectAndCompute(
+            cv2.cvtColor(candidate, cv2.COLOR_BGR2GRAY), None
+        )
+        if descriptors is None or len(keypoints) < 10:
+            continue
+        pairs = cv2.BFMatcher().knnMatch(ref_descriptors, descriptors, k=2)
+        good = [p[0] for p in pairs if len(p) == 2 and p[0].distance < 0.75 * p[1].distance]
+        if len(good) < 8:
+            continue
+        source = np.float32([ref_points[m.queryIdx] for m in good])
+        target = np.float32([keypoints[m.trainIdx].pt for m in good])
+        # A spawn is the reference scaled and moved, so a similarity fit is steadier.
+        matrix, inliers = cv2.estimateAffinePartial2D(
+            target, source, method=cv2.RANSAC, ransacReprojThreshold=5.0
+        )
+        if matrix is None or int(inliers.sum()) < 8:
+            continue
+        aligned = cv2.warpAffine(
+            candidate, matrix, (ref_width, ref_height), flags=cv2.INTER_AREA
+        )
+        observed = cv2.GaussianBlur(
+            cv2.resize(cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB), (REFERENCE_PATCH, REFERENCE_PATCH), interpolation=cv2.INTER_AREA),
+            (0, 0),
+            1.0,
+        ).astype(np.float32)
+        form = min(
+            lab,
+            key=lambda f: float(np.linalg.norm(lab[f][mask] - observed[mask], axis=1).mean()),
+        )
         if best is None or int(inliers.sum()) > best[0]:
             best = (int(inliers.sum()), form)
     return best[1] if best else None
@@ -432,6 +545,8 @@ class ImageMatcher:
                 name = "Palafin" if patch else "Finizen"
         if name in SILVALLY_FORMS:
             name = silvally_form_by_color(data) or name
+        if name in VIVILLON_FORM_SET:
+            name = vivillon_form_by_pattern(data) or name
         return name, votes
 
     def _match(self, data: bytes, mirror: bool, mask=None) -> tuple[str, int] | None:

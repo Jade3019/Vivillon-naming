@@ -223,5 +223,27 @@ class SilvallyTests(unittest.TestCase):
             )
 
 
+class VivillonTests(unittest.TestCase):
+    def test_every_pattern_has_a_folder_and_thumbnail(self) -> None:
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        for form in image_match.VIVILLON_FORMS:
+            self.assertIn(form, groups)
+            self.assertTrue(image_match.form_thumbnail_path(form).is_file(), form)
+
+    def test_patterns_are_reported_as_vivillon(self) -> None:
+        self.assertEqual(image_match.species_display_name("Polar Vivillon"), "Vivillon")
+        self.assertEqual(image_match.family_name("Fancy Vivillon"), "Vivillon")
+
+    def test_pattern_is_chosen_by_appearance_even_mirrored(self) -> None:
+        import cv2
+
+        for form in image_match.VIVILLON_FORMS:
+            data = image_match.form_thumbnail_path(form).read_bytes()
+            self.assertEqual(image_match.vivillon_form_by_pattern(data), form)
+            image = cv2.flip(cv2.imread(str(image_match.form_thumbnail_path(form))), 1)
+            mirrored = cv2.imencode(".png", image)[1].tobytes()
+            self.assertEqual(image_match.vivillon_form_by_pattern(mirrored), form)
+
+
 if __name__ == "__main__":
     unittest.main()

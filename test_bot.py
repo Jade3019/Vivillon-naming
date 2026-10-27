@@ -1076,38 +1076,6 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_image_test_command("v!test now"))
         self.assertFalse(is_image_test_command("test"))
 
-    async def test_missingno_image_test_only_sends_staff_warning(self) -> None:
-        self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
-        self.bot.image_http = Mock(close=AsyncMock())
-        message = Mock()
-        message.id = 123
-        message.channel.id = 456
-        message.channel.set_permissions = AsyncMock()
-        message.attachments = [
-            Mock(content_type="image/png", url="https://example.test/missingno.png")
-        ]
-        message.embeds = []
-        message.reply = AsyncMock()
-
-        with (
-            patch(
-                "bot.recognize_pokemon",
-                new=AsyncMock(return_value=("Missingno", 100.0)),
-            ),
-        ):
-            await self.bot.handle_spawn(message, test_mode=True)
-
-        self.assertEqual(
-            message.reply.await_args_list,
-            [
-                call(
-                    "Ping a staff member. Dont catch the pokemon.",
-                    mention_author=False,
-                ),
-            ],
-        )
-        self.assertIn(456, self.bot.muted_poketwo_channels)
-
     async def test_real_missingno_blocks_poketwo_until_vr_command(self) -> None:
         self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
         self.bot.image_http = Mock(close=AsyncMock())

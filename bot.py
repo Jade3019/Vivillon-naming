@@ -4791,13 +4791,7 @@ class NamingBot(discord.Client):
         thumbnail_name = name
         name = species_display_name(name)
         guess_name = shown_form_name(name, thumbnail_name)
-        if test_mode and not is_missingno_name(name):
-            await message.reply(
-                f"Test image recognized as {name}; Missingno action was not triggered.",
-                mention_author=False,
-            )
-            return
-        if is_missingno_name(name):
+        if is_missingno_name(name) and not test_mode:
             channel_id = getattr(message.channel, "id", None)
             if channel_id is not None:
                 self.muted_poketwo_channels.add(channel_id)
@@ -4856,13 +4850,18 @@ class NamingBot(discord.Client):
             if message.guild
             else SERVER_NAMING_DEFAULTS
         )
-        if not naming_settings["enabled"]:
-            return
-        if naming_settings["pings"] and not (
-            reserved_user_ids or shinyhunter_user_ids or collection_user_ids
-        ):
-            return
-        assisted = naming_settings["assisted"]
+        if test_mode:
+            # Show the full spawn message, without pinging anyone.
+            reserved_user_ids, shinyhunter_user_ids, collection_user_ids = [], [], []
+            assisted = True
+        else:
+            if not naming_settings["enabled"]:
+                return
+            if naming_settings["pings"] and not (
+                reserved_user_ids or shinyhunter_user_ids or collection_user_ids
+            ):
+                return
+            assisted = naming_settings["assisted"]
 
         is_fire_spawn = is_fire_icon_pokemon(name)
         is_water_spawn = is_water_icon_pokemon(name)

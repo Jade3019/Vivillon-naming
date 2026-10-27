@@ -774,6 +774,95 @@ def format_spawn_mention_lines(
     return lines
 
 
+TYPE_EMOJIS: Final[dict[str, str]] = {
+    "normal": "<:Normal:1560305235279482930>",
+    "fire": "<:fire:1560301436074729532>",
+    "water": "<:water:1560303864094130357>",
+    "electric": "<:Electric:1560306053164572732>",
+    "grass": "<:grass:1560307079896502282>",
+    "ice": "<:Ice:1560307867200782386>",
+    "bug": "<:bug:1564785932496797757>",
+    "dark": "<:dark:1564786204699005129>",
+    "dragon": "<:Dragon:1564786673840160818>",
+    "fairy": "<:Fairy:1564786928631677068>",
+    "fighting": "<:Fighting:1564787413547483156>",
+    "flying": "<:Flying:1564787610143162489>",
+    "ghost": "<:Ghost:1564787837306540213>",
+    "ground": "<:Ground:1564789353648230441>",
+    "poison": "<:Poison:1564788700687114310>",
+    "psychic": "<:Psychic:1564788957437366342>",
+    "rock": "<:rock:1564789532384174100>",
+    "steel": "<:Steel:1564789710440898610>",
+}
+
+
+def _type_key(name: str) -> str:
+    folded = unicodedata.normalize("NFKD", name.casefold())
+    return re.sub(
+        r"[^a-z0-9]", "", "".join(c for c in folded if not unicodedata.combining(c))
+    )
+
+
+def load_pokemon_types(path: Path) -> dict[str, list[str]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Could not load Pokémon types from %s", path)
+        return {}
+    return {
+        _type_key(name): [t for t in types if t in TYPE_EMOJIS]
+        for name, types in data.items()
+        if isinstance(name, str) and isinstance(types, list)
+    }
+
+
+POKEMON_TYPES: Final[dict[str, list[str]]] = load_pokemon_types(
+    Path(__file__).with_name("pokemon_types.json")
+)
+
+
+def pokemon_types_for(*names: str | None) -> list[str]:
+    """Types of a Pokémon, trying the most specific name first."""
+    for name in names:
+        if not name:
+            continue
+        for kind in ("Silvally", "Arceus"):
+            prefix = name.removesuffix(f" {kind}")
+            if prefix != name and _type_key(prefix) in TYPE_EMOJIS:
+                return [_type_key(prefix)]
+        if name in VIVILLON_FORM_SET:
+            return ["bug", "flying"]
+        types = POKEMON_TYPES.get(_type_key(name))
+        if types:
+            return types
+    return []
+
+
+def type_emoji_text(*names: str | None) -> str:
+    return " ".join(TYPE_EMOJIS[t] for t in pokemon_types_for(*names))
+
+
+def format_typed_spawn_reply(
+    name: str,
+    confidence: float,
+    poketwo_bot_id: int,
+    type_emojis: str,
+    reserved_user_ids: list[int] | None = None,
+    shinyhunter_user_ids: list[int] | None = None,
+    collection_user_ids: list[int] | None = None,
+    *,
+    assisted: bool = True,
+    guess_name: str | None = None,
+) -> str:
+    lines = format_spawn_mention_lines(
+        reserved_user_ids, shinyhunter_user_ids, collection_user_ids
+    )
+    lines.append(f"{type_emojis} {format_guess(name, confidence, guess_name)}")
+    if assisted:
+        lines.append(f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`")
+    return "\n".join(lines)
+
+
 def is_single_type_pokemon(name: str, type_aliases: frozenset[str]) -> bool:
     return normalize_pokemon_alias(name) in type_aliases
 
@@ -4862,6 +4951,27 @@ class NamingBot(discord.Client):
             ):
                 return
             assisted = naming_settings["assisted"]
+
+        type_emojis = type_emoji_text(thumbnail_name, name)
+        if type_emojis:
+            card_files = catch_card_files(name, thumbnail_name) if assisted else []
+            await message.reply(
+                format_typed_spawn_reply(
+                    name,
+                    confidence,
+                    POKETWO_COMMAND_BOT_ID,
+                    type_emojis,
+                    reserved_user_ids,
+                    shinyhunter_user_ids,
+                    collection_user_ids,
+                    assisted=assisted,
+                    guess_name=guess_name,
+                ),
+                embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
+                **({"files": card_files} if card_files else {}),
+                mention_author=False,
+            )
+            return
 
         is_fire_spawn = is_fire_icon_pokemon(name)
         is_water_spawn = is_water_icon_pokemon(name)

@@ -2708,5 +2708,32 @@ class OrgApiValidationTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(await response.json(), expected)
 
 
+class TypeEmojiTests(unittest.TestCase):
+    def test_dual_type_pokemon_get_both_emojis_in_order(self) -> None:
+        import bot
+
+        self.assertEqual(
+            bot.type_emoji_text("Charizard"),
+            f"{bot.TYPE_EMOJIS['fire']} {bot.TYPE_EMOJIS['flying']}",
+        )
+
+    def test_forms_use_their_own_types(self) -> None:
+        import bot
+
+        self.assertEqual(bot.pokemon_types_for("Heat Rotom"), ["electric", "fire"])
+        self.assertEqual(bot.pokemon_types_for("Bug Silvally", "Silvally"), ["bug"])
+        self.assertEqual(bot.pokemon_types_for("Icy-Snow Vivillon"), ["bug", "flying"])
+
+    def test_every_type_has_an_emoji_and_reply_leads_with_it(self) -> None:
+        import bot
+
+        self.assertEqual(len(bot.TYPE_EMOJIS), 18)
+        reply = bot.format_typed_spawn_reply(
+            "Gengar", 100.0, 1, bot.type_emoji_text("Gengar")
+        )
+        self.assertTrue(reply.startswith(bot.TYPE_EMOJIS["ghost"]))
+        self.assertIn("Gengar: 100.00%", reply.splitlines()[0])
+
+
 if __name__ == "__main__":
     unittest.main()

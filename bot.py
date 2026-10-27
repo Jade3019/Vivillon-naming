@@ -19,6 +19,7 @@ import discord
 from aiohttp import web
 from image_match import (
     FORM_DISPLAY_NAMES,
+    ARCEUS_FORM_SET,
     SILVALLY_FORMS,
     VIVILLON_FORM_SET,
     ImageMatcher,
@@ -485,8 +486,12 @@ def format_guess(
 
 
 def shown_form_name(name: str, form_name: str | None) -> str:
-    """Silvally types and Vivillon patterns are shown by form, but caught and reserved as the species."""
-    if form_name in SILVALLY_FORMS or form_name in VIVILLON_FORM_SET:
+    """Silvally types, Vivillon patterns and Arceus types are shown by form, but caught and reserved as the species."""
+    if (
+        form_name in SILVALLY_FORMS
+        or form_name in VIVILLON_FORM_SET
+        or form_name in ARCEUS_FORM_SET
+    ):
         return form_name
     return name
 

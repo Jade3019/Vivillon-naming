@@ -245,5 +245,26 @@ class VivillonTests(unittest.TestCase):
             self.assertEqual(image_match.vivillon_form_by_pattern(mirrored), form)
 
 
+class ArceusTests(unittest.TestCase):
+    def test_every_type_has_a_folder_and_thumbnail(self) -> None:
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        for form in image_match.ARCEUS_FORMS:
+            self.assertIn(form, groups)
+            self.assertTrue(image_match.form_thumbnail_path(form).is_file(), form)
+
+    def test_types_are_reported_as_arceus(self) -> None:
+        self.assertEqual(image_match.species_display_name("Fire Arceus"), "Arceus")
+        self.assertEqual(image_match.family_name("Fairy Arceus"), "Arceus")
+
+    def test_type_is_chosen_by_colour_even_mirrored(self) -> None:
+        import cv2
+
+        for form in image_match.ARCEUS_FORMS:
+            path = image_match.form_thumbnail_path(form)
+            self.assertEqual(image_match.arceus_form_by_color(path.read_bytes()), form)
+            mirrored = cv2.imencode(".png", cv2.flip(cv2.imread(str(path)), 1))[1].tobytes()
+            self.assertEqual(image_match.arceus_form_by_color(mirrored), form)
+
+
 if __name__ == "__main__":
     unittest.main()

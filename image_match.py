@@ -46,7 +46,7 @@ VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.
 
 
 NEIGHBOURS = 6
-REFERENCE_PATCH = 64
+REFERENCE_PATCH = 192
 GOOD_ALIGNMENT = 25
 
 
@@ -69,6 +69,10 @@ VIVILLON_FORMS = (
     "Poke-Ball Vivillon",
 )
 VIVILLON_FORM_SET = frozenset(VIVILLON_FORMS)
+ARCEUS_FORMS = (
+    "Arceus", *(f"{kind} Arceus" for kind in SILVALLY_TYPES),
+)
+ARCEUS_FORM_SET = frozenset(ARCEUS_FORMS)
 # Names shown to users for the bank entries above.
 FORM_DISPLAY_NAMES = {
     "Icy-Snow Vivillon": "Icy Snow Vivillon",
@@ -88,6 +92,7 @@ THUMBNAIL_FORM_SPECIES = {
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
+    **{form: "Arceus" for form in ARCEUS_FORMS},
 }
 
 
@@ -98,10 +103,11 @@ FAMILY_OVERRIDES = {
     "Hero Palafin": "Palafin",
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
+    **{form: "Arceus" for form in ARCEUS_FORMS},
 }
 # Families whose members are near-identical pictures: the best-scoring member
 # is named even when members of the same family score closely.
-INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon"}
+INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon", "Arceus"}
 
 
 def family_name(name: str) -> str:
@@ -405,44 +411,50 @@ def form_thumbnail_path(form: str) -> Path:
     return THUMBNAIL_DIR / (re.sub(r"[^a-z0-9]", "", form.casefold()) + ".png")
 
 
-@lru_cache(maxsize=1)
-def _vivillon_references():
-    """Each pattern's picture plus the base picture's features for alignment."""
+@lru_cache(maxsize=None)
+def _pattern_references(forms: tuple[str, ...]):
+    """Each form's picture, the area where the forms differ, and alignment features."""
     if cv2 is None:
         return None
     images = {}
-    for form in VIVILLON_FORMS:
+    for form in forms:
         image = cv2.imread(str(form_thumbnail_path(form)), cv2.IMREAD_UNCHANGED)
         if image is None or image.ndim != 3 or image.shape[2] != 4:
             return None
         images[form] = image
-    base = images["Vivillon"]
+    base = images[forms[0]]
     if any(image.shape != base.shape for image in images.values()):
         return None
     solid = (base[..., 3] > 128).astype(np.uint8)
-    wings = cv2.erode(solid, np.ones((9, 9), np.uint8)) > 0
     small = (REFERENCE_PATCH, REFERENCE_PATCH)
     lab = {
-        form: cv2.GaussianBlur(
-            cv2.resize(cv2.cvtColor(image[..., :3], cv2.COLOR_BGR2LAB), small, interpolation=cv2.INTER_AREA),
-            (0, 0),
-            1.0,
+        form: cv2.resize(
+            cv2.cvtColor(image[..., :3], cv2.COLOR_BGR2LAB), small, interpolation=cv2.INTER_AREA
         ).astype(np.float32)
         for form, image in images.items()
     }
-    mask = cv2.resize(wings.astype(np.uint8), small, interpolation=cv2.INTER_NEAREST) > 0
+    # Only the pixels deep inside the Pokémon are compared, so thin parts blending
+    # into the scenery don't count.
+    inside = cv2.erode(
+        cv2.resize(solid, small, interpolation=cv2.INTER_NEAREST), np.ones((7, 7), np.uint8)
+    ) > 0
+    stack = np.stack(list(lab.values()))
+    spread = np.linalg.norm(stack - np.median(stack, axis=0), axis=3).max(0)
+    mask = inside & (spread > 12)
+    if int(mask.sum()) < 60:
+        mask = inside
     keypoints, descriptors = cv2.SIFT_create().detectAndCompute(
         cv2.cvtColor(base[..., :3], cv2.COLOR_BGR2GRAY), solid * 255
     )
-    if descriptors is None or len(keypoints) < 10 or int(mask.sum()) < 200:
+    if descriptors is None or len(keypoints) < 10 or int(mask.sum()) < 60:
         return None
     points = np.float32([keypoint.pt for keypoint in keypoints])
     return lab, mask, points, descriptors, base.shape[:2]
 
 
-def vivillon_form_by_pattern(data: bytes) -> str | None:
-    """Tell Vivillon's patterns apart by lining the spawn up with the reference."""
-    references = _vivillon_references()
+def form_by_pattern(data: bytes, forms: tuple[str, ...]) -> str | None:
+    """Tell forms that differ only in colouring apart by lining the spawn up with the reference."""
+    references = _pattern_references(forms)
     image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if cv2 else None
     if references is None or image is None:
         return None
@@ -452,7 +464,7 @@ def vivillon_form_by_pattern(data: bytes) -> str | None:
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     best: tuple[int, str] | None = None
     for mirror, upscale in ((False, 1), (True, 1), (False, 2), (True, 2)):
-        if best is not None and upscale > 1:
+        if best is not None and best[0] >= GOOD_ALIGNMENT and upscale > 1:
             break
         candidate = cv2.flip(image, 1) if mirror else image
         if upscale > 1:
@@ -477,18 +489,26 @@ def vivillon_form_by_pattern(data: bytes) -> str | None:
         aligned = cv2.warpAffine(
             candidate, matrix, (ref_width, ref_height), flags=cv2.INTER_AREA
         )
-        observed = cv2.GaussianBlur(
-            cv2.resize(cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB), (REFERENCE_PATCH, REFERENCE_PATCH), interpolation=cv2.INTER_AREA),
-            (0, 0),
-            1.0,
+        observed = cv2.resize(
+            cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB),
+            (REFERENCE_PATCH, REFERENCE_PATCH),
+            interpolation=cv2.INTER_AREA,
         ).astype(np.float32)
         form = min(
             lab,
-            key=lambda f: float(np.linalg.norm(lab[f][mask] - observed[mask], axis=1).mean()),
+            key=lambda f: float(np.median(np.linalg.norm(lab[f][mask] - observed[mask], axis=1))),
         )
         if best is None or int(inliers.sum()) > best[0]:
             best = (int(inliers.sum()), form)
     return best[1] if best else None
+
+
+def vivillon_form_by_pattern(data: bytes) -> str | None:
+    return form_by_pattern(data, VIVILLON_FORMS)
+
+
+def arceus_form_by_color(data: bytes) -> str | None:
+    return form_by_pattern(data, ARCEUS_FORMS)
 
 
 class ImageMatcher:
@@ -547,6 +567,8 @@ class ImageMatcher:
             name = silvally_form_by_color(data) or name
         if name in VIVILLON_FORM_SET:
             name = vivillon_form_by_pattern(data) or name
+        if name in ARCEUS_FORM_SET:
+            name = arceus_form_by_color(data) or name
         return name, votes
 
     def _match(self, data: bytes, mirror: bool, mask=None) -> tuple[str, int] | None:

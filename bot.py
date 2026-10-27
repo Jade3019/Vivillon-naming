@@ -20,6 +20,7 @@ from aiohttp import web
 from image_match import ImageMatcher, species_display_name
 from org_api import OrgReserves, create_app
 import org_rpc
+from daycare import DaycareFeature
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
 
 
@@ -2752,6 +2753,10 @@ class NamingBot(discord.Client):
         )
         self.afk_settings = load_afk_settings(self.afk_settings_path)
         self.chat_events: dict[int, ChatEventSession] = {}
+        self.daycare = DaycareFeature(
+            Path(os.environ.get("BOXES_FILE", "boxes.json")),
+            config.poketwo_bot_id,
+        )
 
     def naming_settings_for_guild(self, guild_id: int) -> dict[str, bool]:
         return {
@@ -3056,6 +3061,8 @@ class NamingBot(discord.Client):
                     )
                     return
                 await self.handle_spawn(message, test_mode=True)
+                return
+            if await self.daycare.handle_message(message):
                 return
             if re.match(r"^v!settime(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_settime_command(message)
@@ -3494,6 +3501,11 @@ class NamingBot(discord.Client):
             )
         )
         await message.reply(embed=embed, mention_author=False)
+
+    async def on_raw_message_edit(
+        self, payload: discord.RawMessageUpdateEvent
+    ) -> None:
+        await self.daycare.handle_raw_edit(payload)
 
     async def on_message_edit(
         self, before: discord.Message, after: discord.Message

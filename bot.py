@@ -2259,7 +2259,7 @@ class ServerSettingsView(discord.ui.LayoutView):
                     "### 🎨 Appearance\n"
                     "Server profile, banner and embed color."
                 ),
-                accessory=InertSettingsButton("appearance"),
+                accessory=AppearanceSectionButton(bot, guild_id),
             ),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
@@ -2268,6 +2268,252 @@ class ServerSettingsView(discord.ui.LayoutView):
                 "-# https://discord.gg/5XurUaW8"
             ),
             accent_color=discord.Color(0x9B59F5),
+        )
+        self.add_item(container)
+
+
+DEFAULT_EMBED_COLOR: Final[int] = 0x5865F2
+APPEARANCE_UPLOAD_SECONDS: Final[int] = 90
+APPEARANCE_MAX_BYTES: Final[int] = 10 * 1024 * 1024
+APPEARANCE_IMAGE_TYPES: Final[tuple[str, ...]] = (
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+)
+
+
+def load_appearance(path: Path) -> dict[str, dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_appearance(path: Path, data: dict[str, dict]) -> None:
+    temporary_path = path.with_name(path.name + ".tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save appearance to {path}") from error
+
+
+def parse_hex_color(text: str) -> int | None:
+    match = re.fullmatch(r"#?([0-9a-fA-F]{6})", text.strip())
+    return int(match.group(1), 16) if match else None
+
+
+async def appearance_guard(
+    interaction: discord.Interaction, guild_id: int
+) -> bool:
+    if interaction.guild_id != guild_id:
+        await interaction.response.send_message(
+            "These settings can only be used in their original server.",
+            ephemeral=True,
+        )
+        return False
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    if permissions is None or not permissions.manage_guild:
+        await interaction.response.send_message(
+            "You need the Manage Server permission to change appearance.",
+            ephemeral=True,
+        )
+        return False
+    return True
+
+
+class AppearanceSectionButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Open",
+            style=discord.ButtonStyle.primary,
+            custom_id="server_settings:open:appearance",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=AppearanceSettingsView(self.bot, self.guild_id)
+        )
+
+
+class AppearanceActionButton(discord.ui.Button):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        action: str,
+        label: str,
+        style: discord.ButtonStyle,
+    ) -> None:
+        super().__init__(
+            label=label,
+            style=style,
+            custom_id=f"server_settings:appearance:{action}",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.action = action
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not await appearance_guard(interaction, self.guild_id):
+            return
+        if self.action == "color":
+            await interaction.response.send_modal(
+                AppearanceTextModal(self.bot, self.guild_id, "color")
+            )
+        elif self.action == "name":
+            await interaction.response.send_modal(
+                AppearanceTextModal(self.bot, self.guild_id, "name")
+            )
+        elif self.action in ("avatar", "banner"):
+            await self.bot.start_appearance_upload(
+                interaction, self.guild_id, self.action
+            )
+        else:
+            await self.bot.reset_appearance(
+                interaction, self.guild_id, self.action
+            )
+
+
+class AppearanceTextModal(discord.ui.Modal):
+    def __init__(self, bot: "NamingBot", guild_id: int, field: str) -> None:
+        super().__init__(
+            title="Set Embed Color" if field == "color" else "Set Bot Name"
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.field = field
+        self.value = discord.ui.TextInput(
+            label="Hex color (e.g. #FCE5E7)" if field == "color" else "Bot name",
+            placeholder="#FCE5E7" if field == "color" else "Leave empty to reset",
+            required=field == "color",
+            max_length=7 if field == "color" else 32,
+        )
+        self.add_item(self.value)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if not await appearance_guard(interaction, self.guild_id):
+            return
+        text = self.value.value.strip()
+        if self.field == "color":
+            color = parse_hex_color(text)
+            if color is None:
+                await interaction.response.send_message(
+                    "That isn't a valid hex color. Use six digits like `#FCE5E7`.",
+                    ephemeral=True,
+                )
+                return
+            self.bot.update_appearance(self.guild_id, color=color)
+        else:
+            try:
+                await interaction.guild.me.edit(nick=text or None)
+            except discord.HTTPException as error:
+                await interaction.response.send_message(
+                    f"I couldn't change my name: {error}", ephemeral=True
+                )
+                return
+            self.bot.update_appearance(self.guild_id, name=text or None)
+        await interaction.response.edit_message(
+            view=AppearanceSettingsView(self.bot, self.guild_id)
+        )
+
+
+class AppearanceBackButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Back",
+            style=discord.ButtonStyle.secondary,
+            custom_id="server_settings:appearance:back",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=ServerSettingsView(self.bot, self.guild_id)
+        )
+
+
+class AppearanceSettingsView(discord.ui.LayoutView):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(timeout=None)
+        data = bot.appearance.get(str(guild_id), {})
+        color = data.get("color")
+        primary = discord.ButtonStyle.primary
+        danger = discord.ButtonStyle.danger
+
+        def action(name: str, label: str, style: discord.ButtonStyle):
+            return AppearanceActionButton(bot, guild_id, name, label, style)
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                "# Server Settings · Appearance\n"
+                "-# Configure this section, then use Back to choose another."
+            ),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Profile Image**\n"
+                    f"`{'Custom' if data.get('avatar') else 'Default'}`\n"
+                    "Upload a PNG, JPEG, GIF, or WEBP image up to 10 MB."
+                ),
+                accessory=action("avatar", "Upload", primary),
+            ),
+            discord.ui.ActionRow(action("avatar_reset", "Reset Profile Image", danger)),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Server Banner**\n"
+                    f"`{'Custom' if data.get('banner') else 'Default'}`\n"
+                    "The banner appears only on Vivillon's profile in this server."
+                ),
+                accessory=action("banner", "Upload", primary),
+            ),
+            discord.ui.ActionRow(action("banner_reset", "Reset Server Banner", danger)),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Embed Color**\n"
+                    f"`#{(color if color is not None else DEFAULT_EMBED_COLOR):06X}`"
+                    f" · {'Custom' if color is not None else 'Default'}\n"
+                    "Replaces Vivillon's default blue on embeds in this server."
+                ),
+                accessory=action("color", "Set Color", primary),
+            ),
+            discord.ui.ActionRow(action("color_reset", "Reset Embed Color", danger)),
+            discord.ui.Separator(),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "**Bot Name**\n"
+                    f"`{data.get('name') or 'Default'}`\n"
+                    "Changes Vivillon's nickname in this server."
+                ),
+                accessory=action("name", "Set Name", primary),
+            ),
+            discord.ui.ActionRow(action("name_reset", "Reset Bot Name", danger)),
+            discord.ui.Separator(),
+            discord.ui.ActionRow(AppearanceBackButton(bot, guild_id)),
+            accent_color=discord.Color(
+                color if color is not None else DEFAULT_EMBED_COLOR
+            ),
         )
         self.add_item(container)
 
@@ -2763,11 +3009,108 @@ class NamingBot(discord.Client):
             os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
         )
         self.afk_settings = load_afk_settings(self.afk_settings_path)
+        self.appearance_path = Path(
+            os.environ.get("APPEARANCE_FILE", "appearance.json")
+        )
+        self.appearance = load_appearance(self.appearance_path)
         self.chat_events: dict[int, ChatEventSession] = {}
         self.daycare = DaycareFeature(
             Path(os.environ.get("BOXES_FILE", "boxes.json")),
             config.poketwo_bot_id,
         )
+
+    def update_appearance(self, guild_id: int, **changes) -> None:
+        updated = {key: dict(value) for key, value in self.appearance.items()}
+        guild = updated.setdefault(str(guild_id), {})
+        for key, value in changes.items():
+            if value is None:
+                guild.pop(key, None)
+            else:
+                guild[key] = value
+        save_appearance(self.appearance_path, updated)
+        self.appearance = updated
+
+    async def reset_appearance(
+        self, interaction: discord.Interaction, guild_id: int, action: str
+    ) -> None:
+        field = action.removesuffix("_reset")
+        try:
+            if field == "avatar":
+                await interaction.guild.me.edit(avatar=None)
+            elif field == "banner":
+                await interaction.guild.me.edit(banner=None)
+            elif field == "name":
+                await interaction.guild.me.edit(nick=None)
+            self.update_appearance(guild_id, **{field: None})
+        except (discord.HTTPException, ValueError) as error:
+            await interaction.response.send_message(
+                f"I couldn't reset that: {error}", ephemeral=True
+            )
+            return
+        await interaction.response.edit_message(
+            view=AppearanceSettingsView(self, guild_id)
+        )
+
+    async def start_appearance_upload(
+        self, interaction: discord.Interaction, guild_id: int, field: str
+    ) -> None:
+        label = "profile image" if field == "avatar" else "server banner"
+        await interaction.response.send_message(
+            f"Send the new {label} as an attachment in this channel within "
+            f"{APPEARANCE_UPLOAD_SECONDS} seconds (PNG, JPEG, GIF or WEBP, max 10 MB).",
+            ephemeral=True,
+        )
+
+        def check(message: discord.Message) -> bool:
+            return (
+                message.author.id == interaction.user.id
+                and message.channel.id == interaction.channel_id
+                and bool(message.attachments)
+            )
+
+        try:
+            message = await self.wait_for(
+                "message", check=check, timeout=APPEARANCE_UPLOAD_SECONDS
+            )
+        except asyncio.TimeoutError:
+            await interaction.followup.send("Upload timed out.", ephemeral=True)
+            return
+        attachment = message.attachments[0]
+        if (
+            attachment.content_type is None
+            or attachment.content_type.split(";")[0] not in APPEARANCE_IMAGE_TYPES
+            or attachment.size > APPEARANCE_MAX_BYTES
+        ):
+            await interaction.followup.send(
+                "That file must be a PNG, JPEG, GIF or WEBP image up to 10 MB.",
+                ephemeral=True,
+            )
+            return
+        try:
+            image = await attachment.read()
+            await interaction.guild.me.edit(**{field: image})
+            self.update_appearance(guild_id, **{field: True})
+        except (discord.HTTPException, ValueError) as error:
+            await interaction.followup.send(
+                f"Discord rejected the image: {error}", ephemeral=True
+            )
+            return
+        await interaction.followup.send(
+            f"Updated the {label}. Reopen Appearance to see it.", ephemeral=True
+        )
+
+    def tint_embeds(self, guild: discord.Guild | None, kwargs: dict) -> None:
+        if guild is None:
+            return
+        color = self.appearance.get(str(guild.id), {}).get("color")
+        if color is None:
+            return
+        embeds = list(kwargs.get("embeds") or [])
+        if kwargs.get("embed") is not None:
+            embeds.append(kwargs["embed"])
+        for embed in embeds:
+            if embed.color is None or embed.color.value == DEFAULT_EMBED_COLOR:
+                embed.color = discord.Color(color)
 
     def naming_settings_for_guild(self, guild_id: int) -> dict[str, bool]:
         return {
@@ -5062,9 +5405,26 @@ class ClearShinyhuntsView(discord.ui.View):
         )
 
 
+def install_embed_tinting(bot: NamingBot) -> None:
+    original_send = discord.abc.Messageable.send
+    original_reply = discord.Message.reply
+
+    async def send(self, *args, **kwargs):
+        bot.tint_embeds(getattr(self, "guild", None), kwargs)
+        return await original_send(self, *args, **kwargs)
+
+    async def reply(self, *args, **kwargs):
+        bot.tint_embeds(self.guild, kwargs)
+        return await original_reply(self, *args, **kwargs)
+
+    discord.abc.Messageable.send = send
+    discord.Message.reply = reply
+
+
 def main() -> None:
     config = Config.from_environment()
     bot = NamingBot(config)
+    install_embed_tinting(bot)
     bot.run(config.discord_token, log_handler=None)
 
 

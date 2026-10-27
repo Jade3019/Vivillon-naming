@@ -10,7 +10,6 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
     (
         "🔍 Spawn Naming",
         [
-            ("v!test", "Attach a spawn image to test recognition without pinging anyone."),
             ("v!grab", "Reply to a Pokémon list to turn it into a clean grab list."),
         ],
     ),

@@ -1455,12 +1455,20 @@ def catch_starboard_destinations(
         posts[normal_channel_id] = category
     if details.shiny and shiny_channel_id is not None:
         posts.setdefault(shiny_channel_id, "shiny")
-    if normal_pokemon_catch and normal_pokemon_channel_id is not None:
+    if (
+        normal_pokemon_catch
+        and not details.shiny
+        and normal_pokemon_channel_id is not None
+    ):
         posts.setdefault(normal_pokemon_channel_id, "normal_pokemon")
     return posts
 
 
-def starboard_art_url(details: CatchDetails) -> str | None:
+def starboard_art_url(
+    details: CatchDetails,
+    *,
+    use_3d_shiny_model: bool = False,
+) -> str | None:
     pokemon_name = details.pokemon
     base_name = re.sub(
         r"^(?:gigantamax|gmax)\s+",
@@ -1471,30 +1479,35 @@ def starboard_art_url(details: CatchDetails) -> str | None:
     sprite_name = f"Gmax {base_name}" if details.gigantamax else base_name
     sprite_id = load_sprite_ids().get(sprite_name)
     base_sprite_id = load_sprite_ids().get(base_name)
-    slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(base_name)).strip("-")
 
-    form_model_slug = SWSH_FORM_MODEL_SLUGS.get(base_name)
-    if form_model_slug is not None:
-        sprite_directory = (
-            "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
-        )
-        return (
-            "https://projectpokemon.org/images/sprites-models/"
-            f"{sprite_directory}/{form_model_slug}.gif"
-        )
-    if (
-        details.gigantamax
-        and sprite_id is not None
-        and base_sprite_id is not None
-        and 810 <= base_sprite_id <= 905
-    ):
-        slug = f"{slug}-gigantamax"
-        sprite_directory = "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
-        return f"https://projectpokemon.org/images/sprites-models/{sprite_directory}/{slug}.gif"
-    if sprite_id is not None and 810 <= sprite_id <= 905:
-        slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(sprite_name)).strip("-")
-        sprite_directory = "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
-        return f"https://projectpokemon.org/images/sprites-models/{sprite_directory}/{slug}.gif"
+    if use_3d_shiny_model and details.shiny:
+        form_model_slug = SWSH_FORM_MODEL_SLUGS.get(base_name)
+        if form_model_slug is not None:
+            return (
+                "https://projectpokemon.org/images/sprites-models/"
+                f"swsh-shiny-sprites/{form_model_slug}.gif"
+            )
+        if (
+            details.gigantamax
+            and sprite_id is not None
+            and base_sprite_id is not None
+            and 810 <= base_sprite_id <= 905
+        ):
+            slug = re.sub(
+                r"[^a-z0-9]+", "-", normalize_pokemon_alias(base_name)
+            ).strip("-")
+            return (
+                "https://projectpokemon.org/images/sprites-models/"
+                f"swsh-shiny-sprites/{slug}-gigantamax.gif"
+            )
+        if sprite_id is not None and 810 <= sprite_id <= 905:
+            slug = re.sub(
+                r"[^a-z0-9]+", "-", normalize_pokemon_alias(sprite_name)
+            ).strip("-")
+            return (
+                "https://projectpokemon.org/images/sprites-models/"
+                f"swsh-shiny-sprites/{slug}.gif"
+            )
     return sprite_url_for_pokemon(sprite_name, shiny=details.shiny)
 
 
@@ -1504,6 +1517,7 @@ def format_starboard_embed(
     caught_at: datetime,
     *,
     jump_url: str,
+    use_3d_shiny_model: bool = False,
     test_preview: bool = False,
 ) -> discord.Embed:
     titles = {
@@ -1543,7 +1557,10 @@ def format_starboard_embed(
             embed.add_field(name="Gender", value=details.gender, inline=True)
         if details.chain is not None:
             embed.add_field(name="Shiny chain", value=str(details.chain), inline=True)
-    image_url = starboard_art_url(details)
+    image_url = starboard_art_url(
+        details,
+        use_3d_shiny_model=use_3d_shiny_model,
+    )
     footer_text = (
         "Test preview — not an actual catch" if test_preview else "Caught at"
     )
@@ -5788,6 +5805,9 @@ class NamingBot(discord.Client):
                     f"https://discord.com/channels/{message.guild.id}/"
                     f"{message.channel.id}/{message.id}"
                 ),
+                use_3d_shiny_model=(
+                    details.shiny and channel_id == settings["shiny_channel"]
+                ),
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
@@ -5914,6 +5934,9 @@ class NamingBot(discord.Client):
                 jump_url=(
                     f"https://discord.com/channels/{message.guild.id}/"
                     f"{message.channel.id}/{message.id}"
+                ),
+                use_3d_shiny_model=(
+                    is_shiny and channel_id == settings["shiny_channel"]
                 ),
                 test_preview=True,
             )

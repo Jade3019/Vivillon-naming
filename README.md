@@ -65,12 +65,12 @@ Other test matches never send a catch command. A listed Pokémon recognized by
 Starboard; its level and IV are shown as unknown.
 Use `v!test shiny` with an image to post shiny test previews to the same
 configured destinations as a real shiny catch: Vivillon Starboard and
-Shinyboard, plus Normal Starboard when the Pokémon is featured. Preview level
-and IV are unknown. Each starboard embed includes a `Jump to message` link to
+Shinyboard, never Normal Starboard. Preview level and IV are unknown. Each
+starboard embed includes a `Jump to message` link to
 its source catch (or to the test command for a preview). Shiny embeds use a
-small shiny 3D-model thumbnail when available from Project Pokémon's Gen 8
-sprite index, with PKParaiso credited in the footer; other Pokémon use shiny
-official artwork.
+small thumbnail. Only Shinyboard embeds use the moving shiny 3D model from
+Project Pokémon's Gen 8 sprite index, with PKParaiso credited in the footer.
+Other starboards use static artwork in the shiny form.
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. `v!r` in that channel restores

@@ -1185,19 +1185,21 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(embed.timestamp, caught_at)
         self.assertEqual(
             embed.image.url,
-            "https://projectpokemon.org/images/sprites-models/"
-            "swsh-normal-sprites/pincurchin.gif",
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/official-artwork/871.png",
         )
-        self.assertEqual(
-            embed.footer.text,
-            "Caught at · 3D animation by PKParaiso via Project Pokémon",
-        )
+        self.assertEqual(embed.footer.text, "Caught at")
         shiny_details = parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Grookey! "
             "(50.54%)! These colors seem unusual... ✨"
         )
         self.assertEqual(
             starboard_art_url(shiny_details),
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/official-artwork/shiny/810.png",
+        )
+        self.assertEqual(
+            starboard_art_url(shiny_details, use_3d_shiny_model=True),
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-shiny-sprites/grookey.gif",
         )
@@ -1206,6 +1208,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "shiny",
             caught_at,
             jump_url="https://discord.com/channels/1/2/3",
+            use_3d_shiny_model=True,
             test_preview=True,
         )
         self.assertEqual(
@@ -1221,7 +1224,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "These colors seem unusual... ✨"
         )
         self.assertEqual(
-            starboard_art_url(galarian_articuno),
+            starboard_art_url(
+                galarian_articuno,
+                use_3d_shiny_model=True,
+            ),
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-shiny-sprites/articuno-galar.gif",
         )
@@ -1330,8 +1336,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(
                 embed.thumbnail.url,
-                "https://projectpokemon.org/images/sprites-models/"
-                "swsh-normal-sprites/obstagoon.gif",
+                "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+                "sprites/pokemon/other/official-artwork/862.png",
             )
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)
@@ -1469,7 +1475,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             )
             message.reply.assert_awaited_once()
 
-    async def test_vtest_shiny_posts_unknown_preview_to_all_catch_destinations(
+    async def test_vtest_shiny_posts_preview_to_shinyboard_and_vivillon_only(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1509,41 +1515,81 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             with patch(
                 "bot.recognize_pokemon",
-                new=AsyncMock(return_value=("Xurkitree", 100.0)),
+                new=AsyncMock(return_value=("Galarian Articuno", 100.0)),
             ):
                 await self.bot.on_message(message)
 
             shiny_channel.send.assert_awaited_once()
             vivillon_channel.send.assert_awaited_once()
-            normal_pokemon_channel.send.assert_awaited_once()
+            normal_pokemon_channel.send.assert_not_awaited()
             for channel in (shiny_channel, vivillon_channel):
                 embed = channel.send.await_args.kwargs["embed"]
                 self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
                 self.assertEqual(embed.fields[0].value, "<@123>")
-                self.assertEqual(embed.fields[1].value, "Xurkitree")
+                self.assertEqual(embed.fields[1].value, "Galarian Articuno")
                 self.assertEqual(embed.fields[2].value, "Unknown")
                 self.assertEqual(embed.fields[3].value, "Unknown")
-                self.assertEqual(
-                    embed.footer.text,
-                    "Test preview — not an actual catch",
+                self.assertTrue(
+                    embed.footer.text.startswith(
+                        "Test preview — not an actual catch"
+                    )
                 )
                 self.assertEqual(
                     embed.description,
                     f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
                 )
-            normal_embed = normal_pokemon_channel.send.await_args.kwargs["embed"]
+                self.assertIsNone(embed.image.url)
+            shiny_embed = shiny_channel.send.await_args.kwargs["embed"]
             self.assertEqual(
-                normal_embed.title,
-                "🧪 TEST — ⭐ Pokémon Spotlight",
+                shiny_embed.thumbnail.url,
+                "https://projectpokemon.org/images/sprites-models/"
+                "swsh-shiny-sprites/articuno-galar.gif",
             )
-            self.assertEqual(normal_embed.fields[1].value, "Xurkitree")
-            self.assertTrue(
-                all(
-                    field.value == "Unknown"
-                    for field in normal_embed.fields
-                    if field.name in {"Level", "IV"}
-                )
+            self.assertIn("PKParaiso", shiny_embed.footer.text)
+            vivillon_embed = vivillon_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(
+                vivillon_embed.thumbnail.url,
+                "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+                "sprites/pokemon/other/official-artwork/shiny/10169.png",
             )
+            self.assertNotIn("PKParaiso", vivillon_embed.footer.text)
+
+    async def test_real_shiny_featured_catch_skips_normal_starboard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            guild_id = SERVER_ID + 100
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(guild_id, "normal", 101)
+            self.bot.set_starboard_channel(guild_id, "shiny", 202, "shiny-board")
+            self.bot.set_starboard_channel(guild_id, "normal_pokemon", 303)
+            vivillon_channel = Mock(send=AsyncMock())
+            shiny_channel = Mock(send=AsyncMock())
+            shiny_channel.name = "shiny-board"
+            shiny_channel.edit = AsyncMock()
+            normal_pokemon_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(
+                side_effect={
+                    101: vivillon_channel,
+                    202: shiny_channel,
+                    303: normal_pokemon_channel,
+                }.get
+            )
+            message = Mock()
+            message.id = 476
+            message.guild.id = guild_id
+            message.channel.id = 304
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "
+                "These colors seem unusual... ✨"
+            )
+            message.embeds = []
+
+            await self.bot.handle_catch_starboard(message)
+
+            vivillon_channel.send.assert_awaited_once()
+            shiny_channel.send.assert_awaited_once()
+            normal_pokemon_channel.send.assert_not_awaited()
 
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
         self,

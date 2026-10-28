@@ -840,7 +840,7 @@ def pokemon_types_for(*names: str | None) -> list[str]:
 
 
 def type_emoji_text(*names: str | None) -> str:
-    return " ".join(TYPE_EMOJIS[t] for t in pokemon_types_for(*names))
+    return "".join(TYPE_EMOJIS[t] for t in pokemon_types_for(*names))
 
 
 def format_typed_spawn_reply(

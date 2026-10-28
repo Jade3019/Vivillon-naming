@@ -3339,7 +3339,7 @@ class TypeEmojiTests(unittest.TestCase):
 
         self.assertEqual(
             bot.type_emoji_text("Charizard"),
-            f"{bot.TYPE_EMOJIS['fire']} {bot.TYPE_EMOJIS['flying']}",
+            f"{bot.TYPE_EMOJIS['fire']}{bot.TYPE_EMOJIS['flying']}",
         )
 
     def test_forms_use_their_own_types(self) -> None:

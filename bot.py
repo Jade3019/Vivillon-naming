@@ -342,7 +342,10 @@ def save_low_accuracy_channels(path: Path, channels: dict[str, int]) -> None:
 
 
 def is_image_test_command(content: str) -> bool:
-    return re.fullmatch(r"v!test\s*", content, re.IGNORECASE) is not None
+    return (
+        re.fullmatch(r"v!test(?:\s+shiny)?\s*", content, re.IGNORECASE)
+        is not None
+    )
 
 
 class NoMatchError(Exception):
@@ -4478,11 +4481,24 @@ class NamingBot(discord.Client):
             if is_image_test_command(message.content):
                 if image_url(message) is None:
                     await message.reply(
-                        "Attach an image to `v!test` to test spawn recognition.",
+                        "Attach an image to `v!test` or `v!test shiny` "
+                        "to test spawn recognition.",
                         mention_author=False,
                     )
                     return
-                await self.handle_spawn(message, test_mode=True)
+                shiny_test_mode = (
+                    re.fullmatch(
+                        r"v!test\s+shiny\s*",
+                        message.content,
+                        re.IGNORECASE,
+                    )
+                    is not None
+                )
+                await self.handle_spawn(
+                    message,
+                    test_mode=True,
+                    shiny_test_mode=shiny_test_mode,
+                )
                 return
             if re.fullmatch(HELP_COMMAND_PATTERN, message.content, re.IGNORECASE):
                 await message.reply(embed=build_help_menu_embed(), mention_author=False)
@@ -5783,25 +5799,31 @@ class NamingBot(discord.Client):
                         exc_info=True,
                     )
 
-    async def post_test_normal_starboard(
+    async def post_test_starboard(
         self,
         message: discord.Message,
         pokemon_name: str,
+        *,
+        category: str,
     ) -> None:
         if message.guild is None:
             return
-        channel_id = self.starboard_settings_for_guild(
-            message.guild.id
-        )["normal_pokemon_channel"]
+        is_shiny = category == "shiny"
+        board_name = "Shinyboard" if is_shiny else "Normal Starboard"
+        settings_key = "shiny_channel" if is_shiny else "normal_pokemon_channel"
+        channel_id = self.starboard_settings_for_guild(message.guild.id)[
+            settings_key
+        ]
         if channel_id is None:
             logger.warning(
-                "Cannot post v!test preview for message %s: Normal Starboard "
-                "is not configured in guild %s",
+                "Cannot post v!test preview for message %s: %s is not configured "
+                "in guild %s",
                 message.id,
+                board_name,
                 message.guild.id,
             )
             await message.reply(
-                "Normal Starboard is not configured. Choose a channel in `v!settings`.",
+                f"{board_name} is not configured. Choose a channel in `v!settings`.",
                 mention_author=False,
             )
             return
@@ -5812,13 +5834,13 @@ class NamingBot(discord.Client):
                 channel = await self.fetch_channel(channel_id)
             except discord.HTTPException:
                 logger.exception(
-                    "Could not load Normal Starboard channel %s in guild %s "
-                    "for v!test",
+                    "Could not load %s channel %s in guild %s for v!test",
+                    board_name,
                     channel_id,
                     message.guild.id,
                 )
                 await message.reply(
-                    "I couldn't load the Normal Starboard channel. Check the bot logs.",
+                    f"I couldn't load the {board_name} channel. Check the bot logs.",
                     mention_author=False,
                 )
                 return
@@ -5830,14 +5852,14 @@ class NamingBot(discord.Client):
             iv="Unknown",
             iv_value=None,
             gender=None,
-            shiny=False,
+            shiny=is_shiny,
             chain=None,
             gigantamax=False,
             missingno=False,
         )
         embed = format_starboard_embed(
             details,
-            "normal_pokemon",
+            category,
             message.created_at,
             test_preview=True,
         )
@@ -5848,24 +5870,30 @@ class NamingBot(discord.Client):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             logger.info(
-                "Posted v!test preview for %s to Normal Starboard channel %s",
+                "Posted v!test preview for %s to %s channel %s",
                 pokemon_name,
+                board_name,
                 channel_id,
             )
         except discord.HTTPException:
             logger.exception(
-                "Could not post v!test preview for %s to Normal Starboard channel %s",
+                "Could not post v!test preview for %s to %s channel %s",
                 pokemon_name,
+                board_name,
                 channel_id,
             )
             await message.reply(
-                "I couldn't post the Normal Starboard test preview. "
+                f"I couldn't post the {board_name} test preview. "
                 "Check the bot logs and channel permissions.",
                 mention_author=False,
             )
 
     async def handle_spawn(
-        self, message: discord.Message, *, test_mode: bool = False
+        self,
+        message: discord.Message,
+        *,
+        test_mode: bool = False,
+        shiny_test_mode: bool = False,
     ) -> None:
         if not test_mode and message.guild:
             naming_settings = self.naming_settings_for_guild(message.guild.id)
@@ -6065,8 +6093,15 @@ class NamingBot(discord.Client):
                 return
             assisted = naming_settings["assisted"]
 
-        if test_mode and is_normal_starboard_pokemon(name):
-            await self.post_test_normal_starboard(message, name)
+        if test_mode:
+            if shiny_test_mode:
+                await self.post_test_starboard(message, name, category="shiny")
+            elif is_normal_starboard_pokemon(name):
+                await self.post_test_starboard(
+                    message,
+                    name,
+                    category="normal_pokemon",
+                )
 
         type_emojis = type_emoji_text(thumbnail_name, name)
         if type_emojis:

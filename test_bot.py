@@ -1414,6 +1414,52 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
             message.reply.assert_awaited_once()
 
+    async def test_vtest_shiny_posts_unknown_preview_to_shinyboard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
+            self.bot.set_starboard_channel(SERVER_ID, "shiny", 202, "shiny-board")
+            shiny_channel = Mock(send=AsyncMock())
+            vivillon_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(
+                side_effect={202: shiny_channel, 101: vivillon_channel}.get
+            )
+            self.bot.image_http = Mock(close=AsyncMock())
+            message = Mock()
+            message.id = 475
+            message.content = "v!test shiny"
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.id = 123
+            message.author.bot = False
+            message.created_at = discord.utils.utcnow()
+            message.attachments = [
+                Mock(
+                    content_type="image/png",
+                    url="https://example.test/pikachu.png",
+                )
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Pikachu", 100.0)),
+            ):
+                await self.bot.on_message(message)
+
+            shiny_channel.send.assert_awaited_once()
+            vivillon_channel.send.assert_not_awaited()
+            embed = shiny_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
+            self.assertEqual(embed.fields[0].value, "<@123>")
+            self.assertEqual(embed.fields[1].value, "Pikachu")
+            self.assertEqual(embed.fields[2].value, "Unknown")
+            self.assertEqual(embed.fields[3].value, "Unknown")
+            self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
+
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
         self,
     ) -> None:
@@ -1708,7 +1754,11 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.on_message(message)
 
-        self.bot.handle_spawn.assert_awaited_once_with(message, test_mode=True)
+        self.bot.handle_spawn.assert_awaited_once_with(
+            message,
+            test_mode=True,
+            shiny_test_mode=False,
+        )
         message.reply.assert_not_awaited()
 
     async def test_test_command_without_image_explains_usage(self) -> None:
@@ -1726,14 +1776,18 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
 
         self.bot.handle_spawn.assert_not_awaited()
         message.reply.assert_awaited_once_with(
-            "Attach an image to `v!test` to test spawn recognition.",
+            "Attach an image to `v!test` or `v!test shiny` "
+            "to test spawn recognition.",
             mention_author=False,
         )
 
     def test_only_exact_test_command_matches(self) -> None:
         self.assertTrue(is_image_test_command("v!test"))
+        self.assertTrue(is_image_test_command("v!test shiny"))
+        self.assertTrue(is_image_test_command("V!TEST SHINY  "))
         self.assertTrue(is_image_test_command("V!TEST  "))
         self.assertFalse(is_image_test_command("v!test now"))
+        self.assertFalse(is_image_test_command("v!test shiny now"))
         self.assertFalse(is_image_test_command("test"))
 
     async def test_real_missingno_blocks_poketwo_until_vr_command(self) -> None:

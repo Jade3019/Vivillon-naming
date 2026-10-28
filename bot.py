@@ -4206,7 +4206,7 @@ def save_profile_data(
 
 
 def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
-    width, height = 1400, 600
+    width, height = 1400, 825
     background_key = str(settings["background"])
     middle_key = str(settings["middle_background"])
     text_color_key = str(settings["text_color"])
@@ -4217,9 +4217,9 @@ def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
     image = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(image)
     draw.rectangle((430, 0, 949, height - 1), fill=middle_background)
-    label_font = ImageFont.load_default(size=24)
+    label_font = ImageFont.load_default(size=36)
     draw.text(
-        (64, 220),
+        (64, 380),
         f"Total: {int(settings['catches']):,}",
         font=label_font,
         fill=text_color,
@@ -4229,14 +4229,6 @@ def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
     image.save(output, format="PNG")
     output.seek(0)
     return output
-
-
-def profile_embed(settings: dict[str, int | str]) -> discord.Embed:
-    background = PROFILE_BACKGROUNDS[str(settings["background"])][1]
-    color = discord.Color(int(background.removeprefix("#"), 16))
-    embed = discord.Embed(color=color)
-    embed.set_image(url="attachment://profile.png")
-    return embed
 
 
 class ProfileEditSelect(discord.ui.Select):
@@ -4335,7 +4327,7 @@ class ProfileEditButton(discord.ui.Button):
         await interaction.response.send_message(
             "Choose your profile colors and appearance.",
             view=ProfileEditView(self.profile_view),
-            ephemeral=False,
+            ephemeral=True,
         )
 
 
@@ -4356,7 +4348,6 @@ class ProfileView(discord.ui.View):
             return
         settings = self.bot.profile_settings_for_user(self.user_id)
         await self.message.edit(
-            embed=profile_embed(settings),
             attachments=[
                 discord.File(
                     render_profile_image(settings),
@@ -5190,7 +5181,6 @@ class NamingBot(discord.Client):
         settings = self.profile_settings_for_user(user_id)
         view = ProfileView(self, user_id)
         response = await message.reply(
-            embed=profile_embed(settings),
             file=discord.File(
                 render_profile_image(settings),
                 filename="profile.png",

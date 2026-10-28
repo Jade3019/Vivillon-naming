@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
+from PIL import Image
 
 from bot import (
     add_shinyhunter,
@@ -103,6 +104,11 @@ from bot import (
     NamingBot,
     AFKSettingsView,
     load_afk_settings,
+    load_profile_data,
+    save_profile_data,
+    render_profile_image,
+    ProfileView,
+    ProfileEditView,
     count_qualifying_sentences,
     ChatEventSession,
     EventMenuView,
@@ -830,6 +836,220 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(updated_sections[1].accessory.label, "Off")
 
 
+class ProfileTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.bot = NamingBot(ConfigTests().load_config())
+        self.directory = tempfile.TemporaryDirectory()
+        self.bot.profile_data_path = Path(self.directory.name) / "profile_data.json"
+        (
+            self.bot.profiles,
+            self.bot.profile_stats,
+            self.bot.profile_seen_catch_ids,
+        ) = load_profile_data(self.bot.profile_data_path)
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+        self.directory.cleanup()
+
+    async def test_profile_command_sends_image_and_edit_button(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.author.display_name = "Trainer"
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!profile"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock(return_value=Mock())
+
+        await self.bot.on_message(message)
+
+        message.reply.assert_awaited_once()
+        kwargs = message.reply.await_args.kwargs
+        self.assertFalse(kwargs["mention_author"])
+        self.assertNotIn("embed", kwargs)
+        self.assertEqual(kwargs["file"].filename, "profile.png")
+        self.assertIsInstance(kwargs["view"], ProfileView)
+        self.assertEqual(kwargs["view"].children[0].label, "Edit")
+
+    async def test_profile_command_can_target_a_mentioned_member(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!profile <@!456>"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock(return_value=Mock())
+        self.bot.profile_stats[f"{SERVER_ID}:456"] = {
+            "total": 25,
+            "shiny": 2,
+            "low_iv": 3,
+            "high_iv": 4,
+            "gmax": 5,
+            "missingno": 6,
+        }
+
+        await self.bot.on_message(message)
+
+        view = message.reply.await_args.kwargs["view"]
+        self.assertEqual(view.user_id, 456)
+        self.assertEqual(view.guild_id, SERVER_ID)
+
+    async def test_edit_button_opens_four_personalized_dropdowns(self) -> None:
+        profile_view = ProfileView(self.bot, 123, SERVER_ID)
+        interaction = Mock()
+        interaction.user.id = 123
+        interaction.response.send_message = AsyncMock()
+
+        await profile_view.children[0].callback(interaction)
+
+        kwargs = interaction.response.send_message.await_args.kwargs
+        self.assertFalse(kwargs["ephemeral"])
+        editor = kwargs["view"]
+        self.assertIsInstance(editor, ProfileEditView)
+        self.assertEqual(
+            [select.placeholder for select in editor.children],
+            ["Text color", "Background", "Middle background", "Frame"],
+        )
+        self.assertEqual(
+            [option.label for option in editor.children[1].options],
+            ["Default"],
+        )
+        self.assertEqual(
+            [option.label for option in editor.children[2].options],
+            ["White"],
+        )
+        self.assertEqual(
+            [option.label for option in editor.children[3].options],
+            ["No frame"],
+        )
+
+    async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
+        profile_view = ProfileView(self.bot, 123, SERVER_ID)
+        profile_view.message = Mock()
+        profile_view.message.edit = AsyncMock()
+        editor = ProfileEditView(profile_view)
+        text_color_select = editor.children[0]
+        text_color_select._values = ["pink"]
+        interaction = Mock()
+        interaction.user.id = 123
+        interaction.response.defer = AsyncMock()
+        interaction.message.edit = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await text_color_select.callback(interaction)
+
+        self.assertEqual(self.bot.profile_settings_for_user(123)["text_color"], "pink")
+        self.assertEqual(
+            load_profile_data(self.bot.profile_data_path)[0]["123"]["text_color"],
+            "pink",
+        )
+        profile_view.message.edit.assert_awaited_once()
+        interaction.message.edit.assert_awaited_once()
+        interaction.followup.send.assert_not_awaited()
+
+    async def test_caught_pokemon_count_is_persistent_and_deduplicated(self) -> None:
+        message = Mock()
+        message.id = 987654
+        message.guild = Mock()
+        message.guild.id = SERVER_ID
+        message.content = (
+            "Congratulations <@123>! You caught a Level 20 Bagon! (50.54%)!"
+        )
+        message.embeds = []
+        message.author.bot = True
+        self.bot.track_profile_catch(message)
+        self.bot.track_profile_catch(message)
+
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
+            1,
+        )
+        _, profile_stats, seen_catch_ids = load_profile_data(
+            self.bot.profile_data_path
+        )
+        self.assertEqual(profile_stats[f"{SERVER_ID}:123"]["total"], 1)
+        self.assertEqual(seen_catch_ids, [message.id])
+
+    def test_catch_categories_are_counted_only_in_the_profile_server(self) -> None:
+        catch_messages = (
+            (
+                1001,
+                SERVER_ID,
+                "Congratulations <@123>! You caught a Level 20 Bagon! "
+                "(95.00%)! These colors seem unusual... ✨\n"
+                "Woah! It seems that this Pokémon has the Gigantamax Factor...",
+            ),
+            (
+                1002,
+                SERVER_ID,
+                "Congratulations <@123>! You caught a Level 4 Eevee! (9.99%)!",
+            ),
+            (
+                1003,
+                SERVER_ID,
+                "Congratulations <@123>! You caught a Level 1 Missingno!",
+            ),
+            (
+                1004,
+                SERVER_ID + 1,
+                "Congratulations <@123>! You caught a Level 20 Bagon! (99.00%)!",
+            ),
+        )
+        for message_id, guild_id, content in catch_messages:
+            with self.subTest(message_id=message_id):
+                message = Mock()
+                message.id = message_id
+                message.guild.id = guild_id
+                message.content = content
+                message.embeds = []
+                self.bot.track_profile_catch(message)
+
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123),
+            {
+                "total": 3,
+                "shiny": 1,
+                "low_iv": 1,
+                "high_iv": 1,
+                "gmax": 1,
+                "missingno": 1,
+            },
+        )
+
+    def test_profile_card_keeps_default_backgrounds(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        image = Image.open(render_profile_image(settings, stats))
+        self.assertEqual(image.size, (1400, 825))
+        self.assertEqual(image.getpixel((700, 400)), (255, 255, 255))
+        self.assertEqual(image.getpixel((100, 800)), (41, 42, 47))
+        self.assertEqual(image.getpixel((1300, 800)), (41, 42, 47))
+
+    def test_removed_background_choices_migrate_to_defaults(self) -> None:
+        save_profile_data(
+            self.bot.profile_data_path,
+            {
+                "123": {
+                    "text_color": "white",
+                    "background": "rose",
+                    "middle_background": "soft_pink",
+                    "frame": "none",
+                }
+            },
+            {},
+            [],
+        )
+
+        profiles, _, _ = load_profile_data(self.bot.profile_data_path)
+
+        self.assertEqual(profiles["123"]["background"], "default")
+        self.assertEqual(profiles["123"]["middle_background"], "white")
+
+
 class ShinyhuntCommandTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.bot = NamingBot(ConfigTests().load_config())
@@ -1105,17 +1325,34 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(is_normal_starboard_pokemon(pokemon_name))
         self.assertFalse(is_normal_starboard_pokemon("Pikachu"))
 
-    def test_zygarde_cell_uses_species_artwork_thumbnail(self) -> None:
-        details = parse_catch_details(
-            "Congratulations <@123>! You caught a Level 22 Zygarde Cell! "
-            "(51.08%)!"
+    def test_alternate_forms_use_species_artwork_thumbnail(self) -> None:
+        examples = (
+            ("Zygarde Cell", "10118"),
+            ("Flying Silvally", "773"),
         )
+        for pokemon, sprite_id in examples:
+            with self.subTest(pokemon=pokemon):
+                details = parse_catch_details(
+                    f"Congratulations <@123>! You caught a Level 22 {pokemon}! "
+                    "(51.08%)!"
+                )
 
-        self.assertIsNotNone(details)
-        self.assertEqual(starboard_art_url(details), (
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-            "sprites/pokemon/other/home/10118.png"
-        ))
+                self.assertIsNotNone(details)
+                self.assertEqual(
+                    starboard_art_url(details),
+                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+                    f"sprites/pokemon/other/home/{sprite_id}.png",
+                )
+                embed = format_starboard_embed(
+                    details,
+                    "normal_pokemon",
+                    discord.utils.utcnow(),
+                )
+                self.assertEqual(
+                    embed.thumbnail.url,
+                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+                    f"sprites/pokemon/other/home/{sprite_id}.png",
+                )
 
     def test_categorizes_high_iv_low_iv_missingno_and_gigantamax(self) -> None:
         examples = (

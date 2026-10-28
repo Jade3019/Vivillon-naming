@@ -1153,7 +1153,7 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
         if not is_catch_detection_embed(embed):
             continue
         fields = {
-            field.name.strip().rstrip(":").casefold(): field.value.strip()
+            field.name.strip().rstrip(":").strip().casefold(): field.value.strip()
             for field in embed.fields
         }
         for line in (embed.description or "").splitlines():

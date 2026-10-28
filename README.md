@@ -245,6 +245,15 @@ settings are saved per member and server in `afk_settings.json` by default
 (override the path with `AFK_SETTINGS_FILE`). Both are on by default, preserving
 existing notification behavior.
 
+Use `v!profile` to view your profile card. The caught-Pokémon total counts
+Pokétwo catches that Vivillon sees from now on; catches from before profile
+tracking was added cannot be recovered. Press **Edit** below the card to choose
+text color, the outer background, and the middle background. The middle area is
+blank and white by default, independent of the outer background. Backgrounds
+currently use color presets, and the frame picker has no frame options yet.
+Profile choices and totals are saved in `profile_data.json` by default; set
+`PROFILE_DATA_FILE` to use another path.
+
 ## Exchanging reservations
 
 Reserve managers can move one member's reservations to others. Post a list

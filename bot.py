@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from io import BytesIO
 import json
 import logging
 import math
@@ -18,6 +19,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
+from PIL import Image, ImageDraw, ImageFont
 from image_match import (
     FORM_DISPLAY_NAMES,
     ARCEUS_FORM_SET,
@@ -86,6 +88,48 @@ RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 CHAT_EVENT_EMOJI: Final[str] = "⏲️"
 CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
 CHAT_EVENT_MIN_PARTICIPANTS: Final[int] = 2
+PROFILE_DEFAULTS: Final[dict[str, int | str]] = {
+    "catches": 0,
+    "text_color": "white",
+    "background": "default",
+    "middle_background": "white",
+    "frame": "none",
+}
+PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
+    "white": ("White", "#FFFFFF"),
+    "black": ("Black", "#171717"),
+    "pink": ("Pink", "#F3A6C8"),
+    "blue": ("Blue", "#9BD8F2"),
+    "gold": ("Gold", "#F4D06F"),
+}
+PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
+    "default": ("Default", "#292A2F"),
+    "rose": ("Rose", "#80566A"),
+    "blue": ("Blue", "#4D6F8D"),
+    "purple": ("Purple", "#69567F"),
+    "mint": ("Mint", "#4F756B"),
+}
+PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
+    "white": ("White", "#FFFFFF"),
+    "light_gray": ("Light Gray", "#F1F1F1"),
+    "soft_pink": ("Soft Pink", "#F9E4EC"),
+    "soft_blue": ("Soft Blue", "#E3F2FA"),
+}
+PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
+    "none": ("No frame", "No frame selected"),
+}
+PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
+    "text_color": PROFILE_TEXT_COLORS,
+    "background": PROFILE_BACKGROUNDS,
+    "middle_background": PROFILE_MIDDLE_BACKGROUNDS,
+    "frame": PROFILE_FRAMES,
+}
+PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
+    "text_color": "Text color",
+    "background": "Background",
+    "middle_background": "Middle background",
+    "frame": "Frame",
+}
 
 
 def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -4090,6 +4134,258 @@ def save_afk_settings(
         raise ValueError(f"Could not save AFK settings to {path}") from error
 
 
+def valid_profile_setting(setting: str, value: object) -> bool:
+    if setting == "catches":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    choices = PROFILE_SETTING_CHOICES.get(setting)
+    return isinstance(value, str) and choices is not None and value in choices
+
+
+def load_profile_data(
+    path: Path,
+) -> tuple[dict[str, dict[str, int | str]], list[int]]:
+    if not path.exists():
+        return {}, []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read profile data from {path}") from error
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"users", "seen_catch_message_ids"}
+        or not isinstance(data["users"], dict)
+        or not isinstance(data["seen_catch_message_ids"], list)
+    ):
+        raise ValueError(f"Profile data in {path} has an invalid format")
+
+    profiles: dict[str, dict[str, int | str]] = {}
+    for user_id, stored_settings in data["users"].items():
+        if (
+            not isinstance(user_id, str)
+            or not user_id.isdecimal()
+            or not isinstance(stored_settings, dict)
+            or any(
+                setting not in PROFILE_DEFAULTS
+                or not valid_profile_setting(setting, value)
+                for setting, value in stored_settings.items()
+            )
+        ):
+            raise ValueError(f"Profile data in {path} has an invalid user entry")
+        profiles[user_id] = {**PROFILE_DEFAULTS, **stored_settings}
+
+    seen_catch_ids = data["seen_catch_message_ids"]
+    if any(
+        isinstance(message_id, bool)
+        or not isinstance(message_id, int)
+        or message_id <= 0
+        for message_id in seen_catch_ids
+    ):
+        raise ValueError(f"Profile data in {path} has invalid catch message IDs")
+    return profiles, seen_catch_ids[-10000:]
+
+
+def save_profile_data(
+    path: Path,
+    profiles: dict[str, dict[str, int | str]],
+    seen_catch_ids: list[int],
+) -> None:
+    data = {
+        "users": profiles,
+        "seen_catch_message_ids": seen_catch_ids[-10000:],
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save profile data to {path}") from error
+
+
+def render_profile_image(
+    display_name: str,
+    settings: dict[str, int | str],
+) -> BytesIO:
+    width, height = 1200, 500
+    background_key = str(settings["background"])
+    middle_key = str(settings["middle_background"])
+    text_color_key = str(settings["text_color"])
+    background = PROFILE_BACKGROUNDS[background_key][1]
+    middle_background = PROFILE_MIDDLE_BACKGROUNDS[middle_key][1]
+    text_color = PROFILE_TEXT_COLORS[text_color_key][1]
+
+    image = Image.new("RGB", (width, height), background)
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(
+        (375, 64, 1150, 436),
+        radius=24,
+        fill=middle_background,
+        outline="#D4D4D4",
+        width=2,
+    )
+    title_font = ImageFont.load_default(size=23)
+    name_font = ImageFont.load_default(size=40)
+    label_font = ImageFont.load_default(size=24)
+    draw.text((64, 54), "TRAINER PROFILE", font=title_font, fill=text_color)
+
+    name = display_name.strip() or "Trainer"
+    while draw.textbbox((0, 0), name, font=name_font)[2] > 280 and len(name) > 3:
+        name = f"{name[:-4]}..."
+    draw.text((64, 95), name, font=name_font, fill=text_color)
+    draw.text(
+        (64, 220),
+        f"Total: {int(settings['catches']):,}",
+        font=label_font,
+        fill=text_color,
+    )
+
+    output = BytesIO()
+    image.save(output, format="PNG")
+    output.seek(0)
+    return output
+
+
+def profile_embed(settings: dict[str, int | str]) -> discord.Embed:
+    background = PROFILE_BACKGROUNDS[str(settings["background"])][1]
+    color = discord.Color(int(background.removeprefix("#"), 16))
+    embed = discord.Embed(color=color)
+    embed.set_image(url="attachment://profile.png")
+    return embed
+
+
+class ProfileEditSelect(discord.ui.Select):
+    def __init__(
+        self,
+        profile_view: "ProfileView",
+        setting: str,
+        row: int,
+    ) -> None:
+        self.profile_view = profile_view
+        self.setting = setting
+        current_value = profile_view.bot.profile_settings_for_user(
+            profile_view.user_id
+        )[setting]
+        choices = PROFILE_SETTING_CHOICES[setting]
+        super().__init__(
+            placeholder=PROFILE_SETTING_LABELS[setting],
+            options=[
+                discord.SelectOption(
+                    label=label,
+                    value=value,
+                    description=description,
+                    default=value == current_value,
+                )
+                for value, (label, description) in choices.items()
+            ],
+            min_values=1,
+            max_values=1,
+            row=row,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.profile_view.user_id:
+            await interaction.response.send_message(
+                "Only the member who opened this profile can edit it.",
+                ephemeral=True,
+            )
+            return
+        try:
+            self.profile_view.bot.set_profile_setting(
+                self.profile_view.user_id,
+                self.setting,
+                self.values[0],
+            )
+        except ValueError:
+            logger.exception(
+                "Could not save profile settings for user %s",
+                self.profile_view.user_id,
+            )
+            await interaction.response.send_message(
+                "I couldn't save your profile settings. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer()
+        try:
+            await self.profile_view.refresh()
+            await interaction.message.edit(
+                view=ProfileEditView(self.profile_view)
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Could not update profile display for user %s",
+                self.profile_view.user_id,
+            )
+            await interaction.followup.send(
+                "Your setting was saved, but I couldn't refresh the profile image.",
+                ephemeral=True,
+            )
+
+
+class ProfileEditView(discord.ui.View):
+    def __init__(self, profile_view: "ProfileView") -> None:
+        super().__init__(timeout=300)
+        for row, setting in enumerate(PROFILE_SETTING_LABELS):
+            self.add_item(ProfileEditSelect(profile_view, setting, row))
+
+
+class ProfileEditButton(discord.ui.Button):
+    def __init__(self, profile_view: "ProfileView") -> None:
+        super().__init__(
+            label="Edit",
+            style=discord.ButtonStyle.secondary,
+            custom_id="profile:edit",
+        )
+        self.profile_view = profile_view
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.profile_view.user_id:
+            await interaction.response.send_message(
+                "Only the member who opened this profile can edit it.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            "Choose your profile colors and appearance.",
+            view=ProfileEditView(self.profile_view),
+            ephemeral=True,
+        )
+
+
+class ProfileView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        user_id: int,
+        display_name: str,
+    ) -> None:
+        super().__init__(timeout=900)
+        self.bot = bot
+        self.user_id = user_id
+        self.display_name = display_name
+        self.message: discord.Message | None = None
+        self.add_item(ProfileEditButton(self))
+
+    async def refresh(self) -> None:
+        if self.message is None:
+            return
+        settings = self.bot.profile_settings_for_user(self.user_id)
+        await self.message.edit(
+            embed=profile_embed(settings),
+            attachments=[
+                discord.File(
+                    render_profile_image(self.display_name, settings),
+                    filename="profile.png",
+                )
+            ],
+            view=self,
+        )
+
+
 class NamingBot(discord.Client):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
@@ -4155,6 +4451,12 @@ class NamingBot(discord.Client):
             os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
         )
         self.afk_settings = load_afk_settings(self.afk_settings_path)
+        self.profile_data_path = Path(
+            os.environ.get("PROFILE_DATA_FILE", "profile_data.json")
+        )
+        self.profiles, self.profile_seen_catch_ids = load_profile_data(
+            self.profile_data_path
+        )
         self.appearance_path = Path(
             os.environ.get("APPEARANCE_FILE", "appearance.json")
         )
@@ -4170,6 +4472,62 @@ class NamingBot(discord.Client):
             Path(os.environ.get("BOXES_FILE", "boxes.json")),
             config.poketwo_bot_id,
         )
+
+    def profile_settings_for_user(self, user_id: int) -> dict[str, int | str]:
+        return {
+            **PROFILE_DEFAULTS,
+            **self.profiles.get(str(user_id), {}),
+        }
+
+    def set_profile_setting(self, user_id: int, setting: str, value: str) -> None:
+        if setting not in PROFILE_SETTING_CHOICES or not valid_profile_setting(
+            setting, value
+        ):
+            raise ValueError(f"Invalid profile setting: {setting}")
+        profiles = {key: dict(profile) for key, profile in self.profiles.items()}
+        updated = profiles.setdefault(str(user_id), dict(PROFILE_DEFAULTS))
+        updated[setting] = value
+        save_profile_data(
+            self.profile_data_path,
+            profiles,
+            self.profile_seen_catch_ids,
+        )
+        self.profiles = profiles
+
+    def track_profile_catch(self, message: discord.Message) -> None:
+        message_id = getattr(message, "id", None)
+        if (
+            getattr(message, "guild", None) is None
+            or isinstance(message_id, bool)
+            or not isinstance(message_id, int)
+            or message_id <= 0
+            or message_id in self.profile_seen_catch_ids
+        ):
+            return
+        details = parse_catch_details(message_text(message))
+        if details is None:
+            details = parse_catch_detection_details(message)
+        if details is None or details.user_id is None:
+            return
+
+        profiles = {key: dict(profile) for key, profile in self.profiles.items()}
+        user_settings = profiles.setdefault(
+            str(details.user_id),
+            dict(PROFILE_DEFAULTS),
+        )
+        user_settings["catches"] = int(user_settings["catches"]) + 1
+        seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
+        try:
+            save_profile_data(self.profile_data_path, profiles, seen_catch_ids)
+        except ValueError:
+            logger.exception(
+                "Could not record catch %s for profile user %s",
+                message_id,
+                details.user_id,
+            )
+            return
+        self.profiles = profiles
+        self.profile_seen_catch_ids = seen_catch_ids
 
     def update_appearance(self, guild_id: int, **changes) -> None:
         updated = {key: dict(value) for key, value in self.appearance.items()}
@@ -4631,6 +4989,7 @@ class NamingBot(discord.Client):
         ):
             return
         if poketwo_catch or catch_detection_report or parsed_catch_report:
+            self.track_profile_catch(message)
             await self.handle_catch_starboard(message)
         self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
@@ -4640,6 +4999,9 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.fullmatch(r"v!profile\s*", message.content, re.IGNORECASE):
+                await self.handle_profile_command(message)
+                return
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
                 await self.handle_event_command(message)
                 return
@@ -4841,6 +5203,26 @@ class NamingBot(discord.Client):
                 str(record["channel"]).casefold(),
             ),
         )
+
+    async def handle_profile_command(self, message: discord.Message) -> None:
+        user_id = message.author.id
+        display_name = getattr(message.author, "display_name", None)
+        if not isinstance(display_name, str) or not display_name.strip():
+            display_name = getattr(message.author, "name", "Trainer")
+        if not isinstance(display_name, str):
+            display_name = "Trainer"
+        settings = self.profile_settings_for_user(user_id)
+        view = ProfileView(self, user_id, display_name)
+        response = await message.reply(
+            embed=profile_embed(settings),
+            file=discord.File(
+                render_profile_image(display_name, settings),
+                filename="profile.png",
+            ),
+            view=view,
+            mention_author=False,
+        )
+        view.message = response
 
     async def handle_event_command(self, message: discord.Message) -> None:
         embed = discord.Embed(
@@ -5198,6 +5580,7 @@ class NamingBot(discord.Client):
         )
         if not poketwo_catch and not catch_detection_report and not parsed_catch_report:
             return
+        self.track_profile_catch(after)
         await self.handle_catch_starboard(after)
         self.track_incense_command(after)
         if not self.is_allowed_channel(after.channel):

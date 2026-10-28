@@ -109,7 +109,9 @@ shiny catches, catches with 90% IV or higher, catches below 10% IV, MissingNo.
 catches, and Gigantamax catches. The Normal Starboard posts Pokétwo catches and
 Catch Detection System reports for configured regional forms and featured
 Pokémon, with the catcher, Pokémon, level, IV, thumbnail, and catch time. Shiny
-catches also post to the shinyboard
+catches also post to the shinyboard. Catch Detection System shiny, high-IV,
+low-IV, MissingNo., and Gigantamax reports use the Vivillon Starboard, with
+shiny catches also posted to the shinyboard
 when configured. Shiny posts include the catcher, Pokémon, level, IV, gender
 when Pokétwo provides it, and a chain only when the catch message identifies
 one. Starboard channel choices and the shiny count are saved in

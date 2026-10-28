@@ -1391,6 +1391,71 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 ["Hisuian Qwilfish", "Ogerpon"],
             )
 
+    async def test_catch_detection_special_categories_use_vivillon_and_shinyboards(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            guild_id = SERVER_ID + 100
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(guild_id, "normal", 101)
+            self.bot.set_starboard_channel(guild_id, "shiny", 202, "shiny-board")
+            vivillon_channel = Mock(send=AsyncMock())
+            shiny_channel = Mock(send=AsyncMock(), edit=AsyncMock())
+            shiny_channel.name = "shiny-board"
+            self.bot.get_channel = Mock(
+                side_effect={101: vivillon_channel, 202: shiny_channel}.get
+            )
+
+            catches = (
+                (467, "High-IV Catch Detected!", "Regieleki", "95.16%", "38"),
+                (468, "Low-IV Catch Detected!", "Galarian Linoone", "8.60%", "1"),
+                (469, "Shiny Catch Detected!", "Bagon", "54.30%", "15"),
+                (
+                    470,
+                    "Gigantamax Catch Detected!",
+                    "Rillaboom",
+                    "54.30%",
+                    "15",
+                ),
+                (471, "MissingNo. Catch Detected!", "MissingNo.", "???", "???"),
+            )
+            for message_id, title, pokemon, ivs, level in catches:
+                message = Mock()
+                message.id = message_id
+                message.guild.id = guild_id
+                message.channel.id = 304
+                message.channel.guild.id = guild_id
+                message.author.bot = True
+                message.author.id = 987654321
+                message.created_at = discord.utils.utcnow()
+                embed = discord.Embed(title=title)
+                embed.add_field(name="Trainer", value="<@123>", inline=True)
+                embed.add_field(name="Pokemon", value=pokemon, inline=True)
+                embed.add_field(name="Level", value=level, inline=True)
+                embed.add_field(name="IVs", value=ivs, inline=True)
+                embed.set_footer(text="Catch Detection System")
+                message.embeds = [embed]
+                message.content = ""
+
+                await self.bot.on_message(message)
+
+            self.assertEqual(vivillon_channel.send.await_count, 5)
+            self.assertEqual(
+                [
+                    call.kwargs["embed"].title
+                    for call in vivillon_channel.send.await_args_list
+                ],
+                [
+                    "📈 High-IV Capture",
+                    "📉 Low-IV Capture",
+                    "✨ Shiny Capture ✨",
+                    "🌟 Gigantamax Capture",
+                    "❔ MissingNo. Capture",
+                ],
+            )
+            shiny_channel.send.assert_awaited_once()
+
     async def test_missingno_catch_posts_to_the_main_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"

@@ -1096,7 +1096,7 @@ def is_catch_detection_embed(embed: discord.Embed) -> bool:
     title = embed.title or ""
     footer = embed.footer.text or ""
     return footer == "Catch Detection System" and re.search(
-        r"(?:Regional|Rare) Catch Detected!",
+        r"\bCatch Detected!\s*$",
         title,
         re.IGNORECASE,
     ) is not None
@@ -1115,33 +1115,73 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             for field in embed.fields
         }
         trainer_match = re.search(r"<@!?(\d+)>", fields.get("trainer", ""))
-        pokemon = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
-        level = fields.get("level", "")
-        iv_match = re.search(
-            r"(\d+(?:\.\d+)?)\s*%?",
-            fields.get("ivs", fields.get("iv", "")),
+        pokemon_text = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
+        level = fields.get("level", "???")
+        iv_text = fields.get("ivs", fields.get("iv", ""))
+        iv_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", iv_text)
+        missingno = is_missingno_name(pokemon_text)
+        gender = None
+        if re.search(r"(?:♀|\bfemale\b)", pokemon_text, re.IGNORECASE):
+            gender = "Female"
+            pokemon_text = re.sub(
+                r"(?:♀|\bfemale\b)", "", pokemon_text, flags=re.IGNORECASE
+            )
+        elif re.search(r"(?:♂|\bmale\b)", pokemon_text, re.IGNORECASE):
+            gender = "Male"
+            pokemon_text = re.sub(
+                r"(?:♂|\bmale\b)", "", pokemon_text, flags=re.IGNORECASE
+            )
+        pokemon_text = pokemon_text.strip(" .,:;")
+        if missingno:
+            pokemon_text = "Missingno"
+        report_text = "\n".join(
+            [embed.title or "", embed.description or ""]
+            + [f"{field.name}: {field.value}" for field in embed.fields]
+        )
+        shiny = re.search(
+            r"\bshiny\b|colors seem unusual|✨", report_text, re.IGNORECASE
+        ) is not None
+        gigantamax = re.search(
+            r"\b(?:gigantamax|gmax)\b|gigantamax factor",
+            report_text,
+            re.IGNORECASE,
+        ) is not None
+        chain_match = re.search(
+            r"\b(?:shiny\s*(?:chain|streak)|chain|streak)\b[^\d]{0,30}(\d+)",
+            report_text,
+            re.IGNORECASE,
         )
         if (
             trainer_match is None
-            or not is_valid_pokemon_name(pokemon)
+            or (not missingno and not is_valid_pokemon_name(pokemon_text))
             or re.fullmatch(r"\d+|\?{2,}", level) is None
-            or iv_match is None
         ):
             continue
-        iv_value = float(iv_match.group(1))
-        if not 0 <= iv_value <= 100:
+        iv_value = float(iv_match.group(1)) if iv_match else None
+        if iv_value is not None and not 0 <= iv_value <= 100:
             continue
+        if missingno and iv_value is None:
+            iv_text = "???"
+        iv = (
+            f"{iv_value:g}%"
+            if iv_value is not None
+            else (iv_text if missingno and re.search(r"\?{2,}", iv_text) else "Unknown")
+        )
+        if gigantamax and not re.match(
+            r"^(?:gigantamax|gmax)\b", pokemon_text, re.IGNORECASE
+        ):
+            pokemon_text = f"Gigantamax {pokemon_text}"
         return CatchDetails(
             user_id=int(trainer_match.group(1)),
-            pokemon=display_pokemon_name(pokemon),
+            pokemon=display_pokemon_name(pokemon_text),
             level=level,
-            iv=f"{iv_value:g}%",
+            iv=iv,
             iv_value=iv_value,
-            gender=None,
-            shiny=False,
-            chain=None,
-            gigantamax=False,
-            missingno=False,
+            gender=gender,
+            shiny=shiny,
+            chain=int(chain_match.group(1)) if chain_match and shiny else None,
+            gigantamax=gigantamax,
+            missingno=missingno,
         )
     return None
 

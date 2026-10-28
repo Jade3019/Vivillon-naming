@@ -1227,6 +1227,14 @@ def has_catch_detection_embed(message: discord.Message) -> bool:
     return any(is_catch_detection_embed(embed) for embed in message.embeds)
 
 
+def is_automated_message(message: discord.Message) -> bool:
+    return bool(
+        getattr(message.author, "bot", False)
+        or getattr(message, "webhook_id", None) is not None
+        or getattr(message, "application_id", None) is not None
+    )
+
+
 def parse_catch_detection_details(message: discord.Message) -> CatchDetails | None:
     for embed in message.embeds:
         if not is_catch_detection_embed(embed):
@@ -5173,7 +5181,7 @@ class NamingBot(discord.Client):
         poketwo_catch = message.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(message)
         parsed_catch_report = (
-            message.author.bot
+            is_automated_message(message)
             and not poketwo_catch
             and parse_catch_details(message_text(message)) is not None
         )
@@ -5775,7 +5783,7 @@ class NamingBot(discord.Client):
         poketwo_catch = after.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(after)
         parsed_catch_report = (
-            after.author.bot
+            is_automated_message(after)
             and not poketwo_catch
             and parse_catch_details(message_text(after)) is not None
         )

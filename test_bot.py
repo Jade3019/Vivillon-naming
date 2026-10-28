@@ -1235,6 +1235,15 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(shiny_model_embed.image.url)
         self.assertIn("PKParaiso", shiny_model_embed.footer.text)
 
+        actual_shiny_embed = format_starboard_embed(
+            shiny_details,
+            "shiny",
+            caught_at,
+            jump_url="https://discord.com/channels/1/2/3",
+            use_3d_shiny_model=True,
+        )
+        self.assertEqual(actual_shiny_embed.footer.text, "Caught at")
+
         wiglett_embed = format_starboard_embed(
             wiglett_details,
             "shiny",
@@ -1246,10 +1255,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             wiglett_embed.thumbnail.url,
             "https://play.pokemonshowdown.com/sprites/ani-shiny/wiglett.gif",
         )
-        self.assertIn(
-            "Animated sprite via Pokémon Showdown",
-            wiglett_embed.footer.text,
-        )
+        self.assertEqual(wiglett_embed.footer.text, "Caught at")
 
         galarian_articuno = parse_catch_details(
             "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "

@@ -1621,15 +1621,15 @@ def format_starboard_embed(
     footer_text = (
         "Test preview — not an actual catch" if test_preview else "Caught at"
     )
-    if image_url and image_url.startswith(
+    if test_preview and image_url and image_url.startswith(
         "https://projectpokemon.org/images/sprites-models/"
     ):
         footer_text += " · 3D animation by PKParaiso via Project Pokémon"
-    elif image_url and image_url.startswith(
+    elif test_preview and image_url and image_url.startswith(
         "https://projectpokemon.org/images/shiny-sprite/"
     ):
         footer_text += " · 3D animation via Project Pokémon"
-    elif image_url and image_url.startswith(
+    elif test_preview and image_url and image_url.startswith(
         "https://play.pokemonshowdown.com/sprites/ani-shiny/"
     ):
         footer_text += " · Animated sprite via Pokémon Showdown"

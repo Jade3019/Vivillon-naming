@@ -1442,6 +1442,8 @@ def format_starboard_embed(
     details: CatchDetails,
     category: str,
     caught_at: datetime,
+    *,
+    test_preview: bool = False,
 ) -> discord.Embed:
     titles = {
         "shiny": "✨ Shiny Capture ✨",
@@ -1452,7 +1454,11 @@ def format_starboard_embed(
         "normal_pokemon": "⭐ Pokémon Spotlight",
     }
     embed = discord.Embed(
-        title=titles[category],
+        title=(
+            f"🧪 TEST — {titles[category]}"
+            if test_preview
+            else titles[category]
+        ),
         color=discord.Color(DEFAULT_EMBED_COLOR),
         timestamp=caught_at,
     )
@@ -1475,7 +1481,9 @@ def format_starboard_embed(
             embed.add_field(name="Gender", value=details.gender, inline=True)
         if details.chain is not None:
             embed.add_field(name="Shiny chain", value=str(details.chain), inline=True)
-    embed.set_footer(text="Caught at")
+    embed.set_footer(
+        text="Test preview — not an actual catch" if test_preview else "Caught at"
+    )
     image_url = starboard_art_url(details)
     if image_url:
         if category == "normal_pokemon":
@@ -5766,6 +5774,87 @@ class NamingBot(discord.Client):
                         exc_info=True,
                     )
 
+    async def post_test_normal_starboard(
+        self,
+        message: discord.Message,
+        pokemon_name: str,
+    ) -> None:
+        if message.guild is None:
+            return
+        channel_id = self.starboard_settings_for_guild(
+            message.guild.id
+        )["normal_pokemon_channel"]
+        if channel_id is None:
+            logger.warning(
+                "Cannot post v!test preview for message %s: Normal Starboard "
+                "is not configured in guild %s",
+                message.id,
+                message.guild.id,
+            )
+            await message.reply(
+                "Normal Starboard is not configured. Choose a channel in `v!settings`.",
+                mention_author=False,
+            )
+            return
+
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(channel_id)
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not load Normal Starboard channel %s in guild %s "
+                    "for v!test",
+                    channel_id,
+                    message.guild.id,
+                )
+                await message.reply(
+                    "I couldn't load the Normal Starboard channel. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+
+        details = CatchDetails(
+            user_id=message.author.id,
+            pokemon=display_pokemon_name(pokemon_name),
+            level="Unknown",
+            iv="Unknown",
+            iv_value=None,
+            gender=None,
+            shiny=False,
+            chain=None,
+            gigantamax=False,
+            missingno=False,
+        )
+        embed = format_starboard_embed(
+            details,
+            "normal_pokemon",
+            message.created_at,
+            test_preview=True,
+        )
+        self.tint_embeds(message.guild, {"embed": embed})
+        try:
+            await channel.send(
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            logger.info(
+                "Posted v!test preview for %s to Normal Starboard channel %s",
+                pokemon_name,
+                channel_id,
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Could not post v!test preview for %s to Normal Starboard channel %s",
+                pokemon_name,
+                channel_id,
+            )
+            await message.reply(
+                "I couldn't post the Normal Starboard test preview. "
+                "Check the bot logs and channel permissions.",
+                mention_author=False,
+            )
+
     async def handle_spawn(
         self, message: discord.Message, *, test_mode: bool = False
     ) -> None:
@@ -5966,6 +6055,9 @@ class NamingBot(discord.Client):
             ):
                 return
             assisted = naming_settings["assisted"]
+
+        if test_mode and is_normal_starboard_pokemon(name):
+            await self.post_test_normal_starboard(message, name)
 
         type_emojis = type_emoji_text(thumbnail_name, name)
         if type_emojis:

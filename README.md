@@ -60,7 +60,9 @@ The bot also handles spawns whose image or text Pokétwo adds by editing the mes
 
 To test an image manually, post it with `v!test` as the message caption. A
 Missingno match immediately posts a staff warning.
-Other test matches never send a catch command.
+Other test matches never send a catch command. A listed Pokémon recognized by
+`v!test` also posts a clearly labeled test preview to the configured Normal
+Starboard; its level and IV are shown as unknown.
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. `v!r` in that channel restores

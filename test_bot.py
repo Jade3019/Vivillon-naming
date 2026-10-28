@@ -1375,6 +1375,45 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(normal_channel.send.await_count, 2)
 
+    async def test_vtest_posts_labeled_preview_for_listed_pokemon(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            self.bot.image_http = Mock(close=AsyncMock())
+            message = Mock()
+            message.id = 474
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.id = 123
+            message.created_at = discord.utils.utcnow()
+            message.attachments = [
+                Mock(
+                    content_type="image/png",
+                    url="https://example.test/xurkitree.png",
+                )
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Xurkitree", 100.0)),
+            ):
+                await self.bot.handle_spawn(message, test_mode=True)
+
+            normal_channel.send.assert_awaited_once()
+            embed = normal_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(embed.title, "🧪 TEST — ⭐ Pokémon Spotlight")
+            self.assertEqual(embed.fields[0].value, "<@123>")
+            self.assertEqual(embed.fields[2].value, "Unknown")
+            self.assertEqual(embed.fields[3].value, "Unknown")
+            self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
+            message.reply.assert_awaited_once()
+
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
         self,
     ) -> None:

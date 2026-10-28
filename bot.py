@@ -139,6 +139,9 @@ PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "frame": "Frame",
 }
 PROFILE_EMOJI_URLS: Final[dict[str, str]] = {
+    "low_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c9.png",
+    "high_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c8.png",
+    "shiny": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2728.png",
     "gmax": "https://cdn.discordapp.com/emojis/1504098787658961028.png?size=64",
     "missingno": "https://cdn.discordapp.com/emojis/1563908280445575300.png?size=64",
 }

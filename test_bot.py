@@ -105,6 +105,7 @@ from bot import (
     AFKSettingsView,
     load_afk_settings,
     load_profile_data,
+    PROFILE_EMOJI_URLS,
     save_profile_data,
     render_profile_image,
     ProfileView,
@@ -974,6 +975,62 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profile_stats[f"{SERVER_ID}:123"]["total"], 1)
         self.assertEqual(seen_catch_ids, [message.id])
 
+    async def test_each_application_webhook_catch_increments_total(self) -> None:
+        self.bot.handle_catch_starboard = AsyncMock()
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.daycare.handle_message = AsyncMock(return_value=False)
+
+        catches = (
+            (987655, "Gliscor", ""),
+            (987656, "Unknownmon", "˚"),
+        )
+        for message_id, pokemon, suffix in catches:
+            message = Mock()
+            message.id = message_id
+            message.author.bot = False
+            message.author.id = 456
+            message.guild.id = SERVER_ID
+            message.channel.guild.id = SERVER_ID
+            message.content = (
+                f"Congratulations <@123>{suffix}! You caught a Level 36 {pokemon} "
+                "♂ (53.23%)!"
+            )
+            message.embeds = []
+            message.webhook_id = 789
+            message.application_id = 789
+            await self.bot.on_message(message)
+
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
+            2,
+        )
+
+    def test_total_uses_catch_announcement_prefix_not_spawn_or_species_parse(
+        self,
+    ) -> None:
+        catch = Mock()
+        catch.id = 987657
+        catch.guild.id = SERVER_ID
+        catch.author.bot = True
+        catch.content = "Congratulations <@123>˚! You caught a Level 7 Unknownmon!"
+        catch.embeds = []
+        spawn = Mock()
+        spawn.id = 987658
+        spawn.guild.id = SERVER_ID
+        spawn.author.bot = True
+        spawn.content = "A wild Treecko has appeared!"
+        spawn.embeds = []
+
+        self.bot.track_profile_catch(catch)
+        self.bot.track_profile_catch(spawn)
+
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
+            1,
+        )
+
     def test_catch_categories_are_counted_only_in_the_profile_server(self) -> None:
         catch_messages = (
             (
@@ -1028,6 +1085,21 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(image.getpixel((700, 400)), (255, 255, 255))
         self.assertEqual(image.getpixel((100, 800)), (41, 42, 47))
         self.assertEqual(image.getpixel((1300, 800)), (41, 42, 47))
+        self.assertNotEqual(image.getpixel((81, 375)), (41, 42, 47))
+        self.assertEqual(image.getpixel((380, 375)), (41, 42, 47))
+
+    def test_profile_stat_emojis_use_the_requested_symbols(self) -> None:
+        self.assertEqual(
+            {
+                name: PROFILE_EMOJI_URLS[name].rsplit("/", 1)[-1]
+                for name in ("low_iv", "high_iv", "shiny")
+            },
+            {
+                "low_iv": "1f4c9.png",
+                "high_iv": "1f4c8.png",
+                "shiny": "2728.png",
+            },
+        )
 
     def test_removed_background_choices_migrate_to_defaults(self) -> None:
         save_profile_data(

@@ -1435,16 +1435,24 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             )
             message.reply.assert_awaited_once()
 
-    async def test_vtest_shiny_posts_unknown_preview_to_shinyboard(self) -> None:
+    async def test_vtest_shiny_posts_unknown_preview_to_all_catch_destinations(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"
             self.bot.starboard_settings = {}
             self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
             self.bot.set_starboard_channel(SERVER_ID, "shiny", 202, "shiny-board")
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
             shiny_channel = Mock(send=AsyncMock())
             vivillon_channel = Mock(send=AsyncMock())
+            normal_pokemon_channel = Mock(send=AsyncMock())
             self.bot.get_channel = Mock(
-                side_effect={202: shiny_channel, 101: vivillon_channel}.get
+                side_effect={
+                    101: vivillon_channel,
+                    202: shiny_channel,
+                    303: normal_pokemon_channel,
+                }.get
             )
             self.bot.image_http = Mock(close=AsyncMock())
             message = Mock()
@@ -1467,22 +1475,40 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             with patch(
                 "bot.recognize_pokemon",
-                new=AsyncMock(return_value=("Pikachu", 100.0)),
+                new=AsyncMock(return_value=("Xurkitree", 100.0)),
             ):
                 await self.bot.on_message(message)
 
             shiny_channel.send.assert_awaited_once()
-            vivillon_channel.send.assert_not_awaited()
-            embed = shiny_channel.send.await_args.kwargs["embed"]
-            self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
-            self.assertEqual(embed.fields[0].value, "<@123>")
-            self.assertEqual(embed.fields[1].value, "Pikachu")
-            self.assertEqual(embed.fields[2].value, "Unknown")
-            self.assertEqual(embed.fields[3].value, "Unknown")
-            self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
+            vivillon_channel.send.assert_awaited_once()
+            normal_pokemon_channel.send.assert_awaited_once()
+            for channel in (shiny_channel, vivillon_channel):
+                embed = channel.send.await_args.kwargs["embed"]
+                self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
+                self.assertEqual(embed.fields[0].value, "<@123>")
+                self.assertEqual(embed.fields[1].value, "Xurkitree")
+                self.assertEqual(embed.fields[2].value, "Unknown")
+                self.assertEqual(embed.fields[3].value, "Unknown")
+                self.assertEqual(
+                    embed.footer.text,
+                    "Test preview — not an actual catch",
+                )
+                self.assertEqual(
+                    embed.description,
+                    f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
+                )
+            normal_embed = normal_pokemon_channel.send.await_args.kwargs["embed"]
             self.assertEqual(
-                embed.description,
-                f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
+                normal_embed.title,
+                "🧪 TEST — ⭐ Pokémon Spotlight",
+            )
+            self.assertEqual(normal_embed.fields[1].value, "Xurkitree")
+            self.assertTrue(
+                all(
+                    field.value == "Unknown"
+                    for field in normal_embed.fields
+                    if field.name in {"Level", "IV"}
+                )
             )
 
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(

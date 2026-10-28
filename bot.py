@@ -1421,6 +1421,34 @@ def is_normal_starboard_pokemon(pokemon_name: str) -> bool:
     )
 
 
+def catch_starboard_destinations(
+    details: CatchDetails,
+    settings: dict[str, int | str | None],
+) -> dict[int, str]:
+    channel_ids: dict[str, int | None] = {}
+    for key in ("normal_channel", "shiny_channel", "normal_pokemon_channel"):
+        value = settings[key]
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        ):
+            raise ValueError(f"Invalid starboard channel ID in {key}")
+        channel_ids[key] = value
+
+    category = starboard_category(details)
+    normal_pokemon_catch = is_normal_starboard_pokemon(details.pokemon)
+    posts: dict[int, str] = {}
+    normal_channel_id = channel_ids["normal_channel"]
+    shiny_channel_id = channel_ids["shiny_channel"]
+    normal_pokemon_channel_id = channel_ids["normal_pokemon_channel"]
+    if category is not None and normal_channel_id is not None:
+        posts[normal_channel_id] = category
+    if details.shiny and shiny_channel_id is not None:
+        posts.setdefault(shiny_channel_id, "shiny")
+    if normal_pokemon_catch and normal_pokemon_channel_id is not None:
+        posts.setdefault(normal_pokemon_channel_id, "normal_pokemon")
+    return posts
+
+
 def starboard_art_url(details: CatchDetails) -> str | None:
     pokemon_name = details.pokemon
     base_name = re.sub(
@@ -5699,13 +5727,7 @@ class NamingBot(discord.Client):
             return
 
         settings = self.starboard_settings_for_guild(message.guild.id)
-        posts: dict[int, str] = {}
-        if category is not None and settings["normal_channel"] is not None:
-            posts[settings["normal_channel"]] = category
-        if details.shiny and settings["shiny_channel"] is not None:
-            posts.setdefault(settings["shiny_channel"], "shiny")
-        if normal_pokemon_catch and settings["normal_pokemon_channel"] is not None:
-            posts.setdefault(settings["normal_pokemon_channel"], "normal_pokemon")
+        posts = catch_starboard_destinations(details, settings)
         if not posts:
             logger.info(
                 "No starboard destination configured for catch message %s in guild %s "
@@ -5815,42 +5837,7 @@ class NamingBot(discord.Client):
         if message.guild is None:
             return
         is_shiny = category == "shiny"
-        board_name = "Shinyboard" if is_shiny else "Normal Starboard"
-        settings_key = "shiny_channel" if is_shiny else "normal_pokemon_channel"
-        channel_id = self.starboard_settings_for_guild(message.guild.id)[
-            settings_key
-        ]
-        if channel_id is None:
-            logger.warning(
-                "Cannot post v!test preview for message %s: %s is not configured "
-                "in guild %s",
-                message.id,
-                board_name,
-                message.guild.id,
-            )
-            await message.reply(
-                f"{board_name} is not configured. Choose a channel in `v!settings`.",
-                mention_author=False,
-            )
-            return
-
-        channel = self.get_channel(channel_id)
-        if channel is None:
-            try:
-                channel = await self.fetch_channel(channel_id)
-            except discord.HTTPException:
-                logger.exception(
-                    "Could not load %s channel %s in guild %s for v!test",
-                    board_name,
-                    channel_id,
-                    message.guild.id,
-                )
-                await message.reply(
-                    f"I couldn't load the {board_name} channel. Check the bot logs.",
-                    mention_author=False,
-                )
-                return
-
+        settings = self.starboard_settings_for_guild(message.guild.id)
         details = CatchDetails(
             user_id=message.author.id,
             pokemon=display_pokemon_name(pokemon_name),
@@ -5863,37 +5850,71 @@ class NamingBot(discord.Client):
             gigantamax=False,
             missingno=False,
         )
-        embed = format_starboard_embed(
-            details,
-            category,
-            message.created_at,
-            jump_url=(
-                f"https://discord.com/channels/{message.guild.id}/"
-                f"{message.channel.id}/{message.id}"
-            ),
-            test_preview=True,
-        )
-        self.tint_embeds(message.guild, {"embed": embed})
-        try:
-            await channel.send(
-                embed=embed,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-            logger.info(
-                "Posted v!test preview for %s to %s channel %s",
-                pokemon_name,
+        posts = catch_starboard_destinations(details, settings)
+        if not posts:
+            board_name = "Shinyboard or Vivillon Starboard" if is_shiny else "Normal Starboard"
+            logger.warning(
+                "Cannot post v!test preview for message %s: no %s destination "
+                "is configured "
+                "in guild %s",
+                message.id,
                 board_name,
-                channel_id,
-            )
-        except discord.HTTPException:
-            logger.exception(
-                "Could not post v!test preview for %s to %s channel %s",
-                pokemon_name,
-                board_name,
-                channel_id,
+                message.guild.id,
             )
             await message.reply(
-                f"I couldn't post the {board_name} test preview. "
+                f"No {board_name} destination is configured. "
+                "Choose a channel in `v!settings`.",
+                mention_author=False,
+            )
+            return
+
+        failed_channels: list[int] = []
+        for channel_id, post_category in posts.items():
+            channel = self.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await self.fetch_channel(channel_id)
+                except discord.HTTPException:
+                    logger.exception(
+                        "Could not load starboard channel %s in guild %s for v!test",
+                        channel_id,
+                        message.guild.id,
+                    )
+                    failed_channels.append(channel_id)
+                    continue
+            embed = format_starboard_embed(
+                details,
+                post_category,
+                message.created_at,
+                jump_url=(
+                    f"https://discord.com/channels/{message.guild.id}/"
+                    f"{message.channel.id}/{message.id}"
+                ),
+                test_preview=True,
+            )
+            self.tint_embeds(message.guild, {"embed": embed})
+            try:
+                await channel.send(
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                logger.info(
+                    "Posted v!test preview for %s to starboard channel %s as %s",
+                    pokemon_name,
+                    channel_id,
+                    post_category,
+                )
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not post v!test preview for %s to starboard channel %s",
+                    pokemon_name,
+                    channel_id,
+                )
+                failed_channels.append(channel_id)
+        if failed_channels:
+            await message.reply(
+                "I couldn't post the test preview to every configured starboard "
+                f"channel ({', '.join(map(str, failed_channels))}). "
                 "Check the bot logs and channel permissions.",
                 mention_author=False,
             )

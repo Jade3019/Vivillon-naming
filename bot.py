@@ -1518,22 +1518,33 @@ def starboard_art_url(
     *,
     use_3d_shiny_model: bool = False,
 ) -> str | None:
-    pokemon_name = details.pokemon
     base_name = re.sub(
         r"^(?:gigantamax|gmax)\s+",
         "",
-        pokemon_name,
+        details.pokemon,
         flags=re.IGNORECASE,
     )
+    sprite_ids = load_sprite_ids()
+    if base_name not in sprite_ids:
+        base_name = next(
+            (
+                species_name
+                for species_name in NORMAL_STARBOARD_ALL_FORMS
+                if pokemon_matches_all_forms_reservation(base_name, species_name)
+            ),
+            base_name,
+        )
     sprite_name = f"Gmax {base_name}" if details.gigantamax else base_name
-    sprite_id = load_sprite_ids().get(sprite_name)
+    if sprite_name not in sprite_ids:
+        sprite_name = base_name
+    sprite_id = sprite_ids.get(sprite_name)
     regional_form = re.match(
         r"^(?:Alolan|Galarian|Hisuian|Paldean)\s+(.+)$",
         base_name,
         flags=re.IGNORECASE,
     )
     species_name = regional_form.group(1) if regional_form else base_name
-    base_sprite_id = load_sprite_ids().get(species_name)
+    base_sprite_id = sprite_ids.get(species_name)
     regional_form_prefix = (
         base_name.split(maxsplit=1)[0].casefold() if regional_form else None
     )

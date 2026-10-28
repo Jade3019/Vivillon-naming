@@ -1105,6 +1105,18 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(is_normal_starboard_pokemon(pokemon_name))
         self.assertFalse(is_normal_starboard_pokemon("Pikachu"))
 
+    def test_zygarde_cell_uses_species_artwork_thumbnail(self) -> None:
+        details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 22 Zygarde Cell! "
+            "(51.08%)!"
+        )
+
+        self.assertIsNotNone(details)
+        self.assertEqual(starboard_art_url(details), (
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/home/10118.png"
+        ))
+
     def test_categorizes_high_iv_low_iv_missingno_and_gigantamax(self) -> None:
         examples = (
             (

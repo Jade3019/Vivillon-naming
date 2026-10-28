@@ -1054,7 +1054,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(details.chain, 554)
         self.assertEqual(starboard_category(details), "shiny")
         shiny_embed = format_starboard_embed(
-            details, "shiny", discord.utils.utcnow()
+            details,
+            "shiny",
+            discord.utils.utcnow(),
+            jump_url="https://discord.com/channels/1/2/3",
         )
         self.assertEqual(
             [field.name for field in shiny_embed.fields],
@@ -1068,7 +1071,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(no_chain)
         self.assertIsNone(no_chain.chain)
         no_chain_embed = format_starboard_embed(
-            no_chain, "shiny", discord.utils.utcnow()
+            no_chain,
+            "shiny",
+            discord.utils.utcnow(),
+            jump_url="https://discord.com/channels/1/2/3",
         )
         self.assertNotIn("Shiny chain", [field.name for field in no_chain_embed.fields])
 
@@ -1129,7 +1135,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(starboard_category(details), expected_category)
                 if expected_category == "missingno":
                     missingno_embed = format_starboard_embed(
-                        details, expected_category, discord.utils.utcnow()
+                        details,
+                        expected_category,
+                        discord.utils.utcnow(),
+                        jump_url="https://discord.com/channels/1/2/3",
                     )
                     self.assertEqual(
                         [field.name for field in missingno_embed.fields],
@@ -1139,7 +1148,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(missingno_embed.fields[3].value, "???")
                 if expected_category == "gigantamax":
                     gigantamax_embed = format_starboard_embed(
-                        details, expected_category, discord.utils.utcnow()
+                        details,
+                        expected_category,
+                        discord.utils.utcnow(),
+                        jump_url="https://discord.com/channels/1/2/3",
                     )
                     self.assertEqual(
                         [field.name for field in gigantamax_embed.fields],
@@ -1152,7 +1164,12 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(details)
         caught_at = discord.utils.utcnow()
-        embed = format_starboard_embed(details, "high_iv", caught_at)
+        embed = format_starboard_embed(
+            details,
+            "high_iv",
+            caught_at,
+            jump_url="https://discord.com/channels/1/2/3",
+        )
 
         self.assertEqual(
             [field.name for field in embed.fields],
@@ -1412,6 +1429,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(embed.fields[2].value, "Unknown")
             self.assertEqual(embed.fields[3].value, "Unknown")
             self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
+            self.assertEqual(
+                embed.description,
+                f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/474)",
+            )
             message.reply.assert_awaited_once()
 
     async def test_vtest_shiny_posts_unknown_preview_to_shinyboard(self) -> None:
@@ -1459,6 +1480,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(embed.fields[2].value, "Unknown")
             self.assertEqual(embed.fields[3].value, "Unknown")
             self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
+            self.assertEqual(
+                embed.description,
+                f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
+            )
 
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
         self,
@@ -1502,6 +1527,13 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 [embed.fields[1].value for embed in sent_embeds],
                 ["Hisuian Qwilfish", "Ogerpon"],
+            )
+            self.assertEqual(
+                [embed.description for embed in sent_embeds],
+                [
+                    f"[Jump to message](https://discord.com/channels/{guild_id}/304/{message_id})"
+                    for message_id in (465, 466)
+                ],
             )
 
     async def test_catch_detection_description_rows_post_pokemon_name(self) -> None:

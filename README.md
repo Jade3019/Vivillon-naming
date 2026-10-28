@@ -65,7 +65,8 @@ Other test matches never send a catch command. A listed Pokémon recognized by
 Starboard; its level and IV are shown as unknown.
 Use `v!test shiny` with an image to post a shiny test preview to the configured
 Shinyboard, also with unknown level and IV. Real shiny catches are also posted
-to the Vivillon Starboard.
+to the Vivillon Starboard. Each starboard embed includes a `Jump to message`
+link to its source catch (or to the test command for a preview).
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. `v!r` in that channel restores

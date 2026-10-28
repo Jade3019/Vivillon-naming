@@ -1455,6 +1455,7 @@ def format_starboard_embed(
     category: str,
     caught_at: datetime,
     *,
+    jump_url: str,
     test_preview: bool = False,
 ) -> discord.Embed:
     titles = {
@@ -1471,6 +1472,7 @@ def format_starboard_embed(
             if test_preview
             else titles[category]
         ),
+        description=f"[Jump to message]({jump_url})",
         color=discord.Color(DEFAULT_EMBED_COLOR),
         timestamp=caught_at,
     )
@@ -5735,6 +5737,10 @@ class NamingBot(discord.Client):
                 details,
                 post_category,
                 message.created_at,
+                jump_url=(
+                    f"https://discord.com/channels/{message.guild.id}/"
+                    f"{message.channel.id}/{message.id}"
+                ),
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
@@ -5861,6 +5867,10 @@ class NamingBot(discord.Client):
             details,
             category,
             message.created_at,
+            jump_url=(
+                f"https://discord.com/channels/{message.guild.id}/"
+                f"{message.channel.id}/{message.id}"
+            ),
             test_preview=True,
         )
         self.tint_embeds(message.guild, {"embed": embed})

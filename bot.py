@@ -56,6 +56,10 @@ API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!api\s*$",
     re.IGNORECASE,
 )
+PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
+    re.IGNORECASE,
+)
 SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -89,11 +93,18 @@ CHAT_EVENT_EMOJI: Final[str] = "⏲️"
 CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
 CHAT_EVENT_MIN_PARTICIPANTS: Final[int] = 2
 PROFILE_DEFAULTS: Final[dict[str, int | str]] = {
-    "catches": 0,
     "text_color": "white",
     "background": "default",
     "middle_background": "white",
     "frame": "none",
+}
+PROFILE_STAT_DEFAULTS: Final[dict[str, int]] = {
+    "total": 0,
+    "shiny": 0,
+    "low_iv": 0,
+    "high_iv": 0,
+    "gmax": 0,
+    "missingno": 0,
 }
 PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
     "white": ("White", "#FFFFFF"),
@@ -126,6 +137,10 @@ PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "background": "Background",
     "middle_background": "Middle background",
     "frame": "Frame",
+}
+PROFILE_EMOJI_URLS: Final[dict[str, str]] = {
+    "gmax": "https://cdn.discordapp.com/emojis/1504098787658961028.png?size=64",
+    "missingno": "https://cdn.discordapp.com/emojis/1563908280445575300.png?size=64",
 }
 
 
@@ -4145,18 +4160,28 @@ def valid_profile_setting(setting: str, value: object) -> bool:
 
 def load_profile_data(
     path: Path,
-) -> tuple[dict[str, dict[str, int | str]], list[int]]:
+) -> tuple[
+    dict[str, dict[str, int | str]],
+    dict[str, dict[str, int]],
+    list[int],
+]:
     if not path.exists():
-        return {}, []
+        return {}, {}, []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"Could not read profile data from {path}") from error
+    legacy_keys = {"users", "seen_catch_message_ids"}
+    current_keys = legacy_keys | {"server_stats"}
     if (
         not isinstance(data, dict)
-        or set(data) != {"users", "seen_catch_message_ids"}
+        or set(data) not in (legacy_keys, current_keys)
         or not isinstance(data["users"], dict)
         or not isinstance(data["seen_catch_message_ids"], list)
+        or (
+            "server_stats" in data
+            and not isinstance(data["server_stats"], dict)
+        )
     ):
         raise ValueError(f"Profile data in {path} has an invalid format")
 
@@ -4167,17 +4192,45 @@ def load_profile_data(
             or not user_id.isdecimal()
             or not isinstance(stored_settings, dict)
             or any(
-                setting not in PROFILE_DEFAULTS
+                setting not in PROFILE_DEFAULTS and setting != "catches"
                 or not valid_profile_setting(setting, value)
                 for setting, value in stored_settings.items()
             )
         ):
             raise ValueError(f"Profile data in {path} has an invalid user entry")
-        profile = {**PROFILE_DEFAULTS, **stored_settings}
+        profile = {
+            **PROFILE_DEFAULTS,
+            **{
+                setting: value
+                for setting, value in stored_settings.items()
+                if setting != "catches"
+            },
+        }
         for setting, legacy_choices in PROFILE_LEGACY_CHOICES.items():
             if profile[setting] in legacy_choices:
                 profile[setting] = PROFILE_DEFAULTS[setting]
         profiles[user_id] = profile
+
+    profile_stats: dict[str, dict[str, int]] = {}
+    for user_key, stored_stats in data.get("server_stats", {}).items():
+        ids = user_key.split(":") if isinstance(user_key, str) else []
+        if (
+            len(ids) != 2
+            or any(not identifier.isdecimal() for identifier in ids)
+            or not isinstance(stored_stats, dict)
+            or any(
+                stat not in PROFILE_STAT_DEFAULTS
+                or isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                for stat, value in stored_stats.items()
+            )
+        ):
+            raise ValueError(f"Profile data in {path} has an invalid server stat")
+        profile_stats[user_key] = {
+            **PROFILE_STAT_DEFAULTS,
+            **stored_stats,
+        }
 
     seen_catch_ids = data["seen_catch_message_ids"]
     if any(
@@ -4187,16 +4240,18 @@ def load_profile_data(
         for message_id in seen_catch_ids
     ):
         raise ValueError(f"Profile data in {path} has invalid catch message IDs")
-    return profiles, seen_catch_ids[-10000:]
+    return profiles, profile_stats, seen_catch_ids[-10000:]
 
 
 def save_profile_data(
     path: Path,
     profiles: dict[str, dict[str, int | str]],
+    profile_stats: dict[str, dict[str, int]],
     seen_catch_ids: list[int],
 ) -> None:
     data = {
         "users": profiles,
+        "server_stats": profile_stats,
         "seen_catch_message_ids": seen_catch_ids[-10000:],
     }
     try:
@@ -4211,7 +4266,81 @@ def save_profile_data(
         raise ValueError(f"Could not save profile data to {path}") from error
 
 
-def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
+def profile_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    filename = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    font_path = Path("/usr/share/fonts/truetype/dejavu") / filename
+    try:
+        return ImageFont.truetype(str(font_path), size)
+    except OSError:
+        return ImageFont.load_default(size=size)
+
+
+def draw_profile_stat_icon(
+    image: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    name: str,
+    position: tuple[int, int],
+    emoji_assets: dict[str, bytes],
+) -> None:
+    x, y = position
+    asset = emoji_assets.get(name)
+    if asset is not None:
+        try:
+            with Image.open(BytesIO(asset)) as emoji:
+                emoji_image = emoji.convert("RGBA")
+            emoji_image.thumbnail((36, 36), Image.Resampling.LANCZOS)
+            image.paste(emoji_image, (x, y), emoji_image)
+            return
+        except OSError as error:
+            logger.warning("Could not render profile emoji %s: %s", name, error)
+
+    if name == "shiny":
+        draw.polygon(
+            [
+                (x + 17, y),
+                (x + 22, y + 12),
+                (x + 35, y + 17),
+                (x + 22, y + 22),
+                (x + 17, y + 35),
+                (x + 12, y + 22),
+                (x, y + 17),
+                (x + 12, y + 12),
+            ],
+            fill="#F4D06F",
+        )
+    elif name in {"low_iv", "high_iv"}:
+        color = "#F05B63" if name == "low_iv" else "#52C788"
+        points = (
+            [(x + 3, y + 5), (x + 12, y + 13), (x + 21, y + 18), (x + 32, y + 29)]
+            if name == "low_iv"
+            else [(x + 3, y + 29), (x + 12, y + 21), (x + 21, y + 15), (x + 32, y + 4)]
+        )
+        draw.line(points, fill=color, width=4)
+        end_x, end_y = points[-1]
+        direction = 1 if name == "low_iv" else -1
+        draw.polygon(
+            [
+                (end_x, end_y),
+                (end_x - 10, end_y - 2 * direction),
+                (end_x - 3, end_y - 10 * direction),
+            ],
+            fill=color,
+        )
+    elif name == "gmax":
+        draw.ellipse((x + 2, y + 2, x + 34, y + 34), fill="#E84B4B")
+        draw.rectangle((x + 3, y + 15, x + 33, y + 21), fill="#FFFFFF")
+        draw.ellipse((x + 12, y + 12, x + 24, y + 24), fill="#FFFFFF")
+        draw.ellipse((x + 15, y + 15, x + 21, y + 21), fill="#303036")
+    else:
+        draw.rectangle((x + 3, y + 3, x + 33, y + 33), fill="#9A72B8")
+        draw.text((x + 8, y + 3), "?", font=profile_font(27, bold=True), fill="#FFFFFF")
+
+
+def render_profile_image(
+    settings: dict[str, int | str],
+    stats: dict[str, int],
+    emoji_assets: dict[str, bytes] | None = None,
+) -> BytesIO:
     width, height = 1400, 825
     background_key = str(settings["background"])
     middle_key = str(settings["middle_background"])
@@ -4223,13 +4352,33 @@ def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
     image = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(image)
     draw.rectangle((430, 0, 949, height - 1), fill=middle_background)
-    label_font = ImageFont.load_default(size=36)
-    draw.text(
-        (64, 380),
-        f"Total: {int(settings['catches']):,}",
-        font=label_font,
-        fill=text_color,
+    heading_font = profile_font(36, bold=True)
+    stat_font = profile_font(30)
+    draw.text((64, 245), "Pokemon Catches", font=heading_font, fill=text_color)
+    rows = (
+        ("Total", "total", None),
+        ("Shiny", "shiny", "shiny"),
+        ("Low IV", "low_iv", "low_iv"),
+        ("High IV", "high_iv", "high_iv"),
+        ("Gmax", "gmax", "gmax"),
+        ("Missingno", "missingno", "missingno"),
     )
+    for index, (label, stat, icon) in enumerate(rows):
+        y = 310 + index * 50
+        draw.text(
+            (64, y),
+            f"{label}: {stats[stat]:,}",
+            font=stat_font,
+            fill=text_color,
+        )
+        if icon is not None:
+            draw_profile_stat_icon(
+                image,
+                draw,
+                icon,
+                (370, y - 2),
+                emoji_assets or {},
+            )
 
     output = BytesIO()
     image.save(output, format="PNG")
@@ -4342,10 +4491,12 @@ class ProfileView(discord.ui.View):
         self,
         bot: "NamingBot",
         user_id: int,
+        guild_id: int,
     ) -> None:
         super().__init__(timeout=900)
         self.bot = bot
         self.user_id = user_id
+        self.guild_id = guild_id
         self.message: discord.Message | None = None
         self.add_item(ProfileEditButton(self))
 
@@ -4353,10 +4504,12 @@ class ProfileView(discord.ui.View):
         if self.message is None:
             return
         settings = self.bot.profile_settings_for_user(self.user_id)
+        stats = self.bot.profile_stats_for_user(self.guild_id, self.user_id)
+        emoji_assets = await self.bot.load_profile_emoji_assets()
         await self.message.edit(
             attachments=[
                 discord.File(
-                    render_profile_image(settings),
+                    render_profile_image(settings, stats, emoji_assets),
                     filename="profile.png",
                 )
             ],
@@ -4432,9 +4585,14 @@ class NamingBot(discord.Client):
         self.profile_data_path = Path(
             os.environ.get("PROFILE_DATA_FILE", "profile_data.json")
         )
-        self.profiles, self.profile_seen_catch_ids = load_profile_data(
+        (
+            self.profiles,
+            self.profile_stats,
+            self.profile_seen_catch_ids,
+        ) = load_profile_data(
             self.profile_data_path
         )
+        self.profile_emoji_cache: dict[str, bytes] | None = None
         self.appearance_path = Path(
             os.environ.get("APPEARANCE_FILE", "appearance.json")
         )
@@ -4457,6 +4615,44 @@ class NamingBot(discord.Client):
             **self.profiles.get(str(user_id), {}),
         }
 
+    def profile_stats_for_user(
+        self,
+        guild_id: int,
+        user_id: int,
+    ) -> dict[str, int]:
+        return {
+            **PROFILE_STAT_DEFAULTS,
+            **self.profile_stats.get(f"{guild_id}:{user_id}", {}),
+        }
+
+    async def load_profile_emoji_assets(self) -> dict[str, bytes]:
+        if self.profile_emoji_cache is not None:
+            return self.profile_emoji_cache
+        emoji_assets: dict[str, bytes] = {}
+        if self.image_http is not None:
+            for name, url in PROFILE_EMOJI_URLS.items():
+                try:
+                    async with self.image_http.get(url) as response:
+                        if response.status != 200:
+                            logger.warning(
+                                "Could not load profile emoji %s (HTTP %s)",
+                                name,
+                                response.status,
+                            )
+                            continue
+                        asset = await response.read()
+                    with Image.open(BytesIO(asset)) as emoji:
+                        emoji.verify()
+                    emoji_assets[name] = asset
+                except (aiohttp.ClientError, OSError) as error:
+                    logger.warning(
+                        "Could not load profile emoji %s: %s",
+                        name,
+                        error,
+                    )
+        self.profile_emoji_cache = emoji_assets
+        return emoji_assets
+
     def set_profile_setting(self, user_id: int, setting: str, value: str) -> None:
         choices = PROFILE_SETTING_CHOICES.get(setting)
         if choices is None or value not in choices:
@@ -4467,14 +4663,17 @@ class NamingBot(discord.Client):
         save_profile_data(
             self.profile_data_path,
             profiles,
+            self.profile_stats,
             self.profile_seen_catch_ids,
         )
         self.profiles = profiles
 
     def track_profile_catch(self, message: discord.Message) -> None:
+        guild = getattr(message, "guild", None)
         message_id = getattr(message, "id", None)
         if (
-            getattr(message, "guild", None) is None
+            guild is None
+            or getattr(guild, "id", None) != SERVER_ID
             or isinstance(message_id, bool)
             or not isinstance(message_id, int)
             or message_id <= 0
@@ -4487,15 +4686,32 @@ class NamingBot(discord.Client):
         if details is None or details.user_id is None:
             return
 
-        profiles = {key: dict(profile) for key, profile in self.profiles.items()}
-        user_settings = profiles.setdefault(
-            str(details.user_id),
-            dict(PROFILE_DEFAULTS),
+        profile_stats = {
+            key: dict(stats) for key, stats in self.profile_stats.items()
+        }
+        user_stats = profile_stats.setdefault(
+            f"{SERVER_ID}:{details.user_id}",
+            dict(PROFILE_STAT_DEFAULTS),
         )
-        user_settings["catches"] = int(user_settings["catches"]) + 1
+        user_stats["total"] += 1
+        if details.shiny:
+            user_stats["shiny"] += 1
+        if details.iv_value is not None and details.iv_value < 10:
+            user_stats["low_iv"] += 1
+        if details.iv_value is not None and details.iv_value >= 90:
+            user_stats["high_iv"] += 1
+        if details.gigantamax:
+            user_stats["gmax"] += 1
+        if details.missingno:
+            user_stats["missingno"] += 1
         seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
         try:
-            save_profile_data(self.profile_data_path, profiles, seen_catch_ids)
+            save_profile_data(
+                self.profile_data_path,
+                self.profiles,
+                profile_stats,
+                seen_catch_ids,
+            )
         except ValueError:
             logger.exception(
                 "Could not record catch %s for profile user %s",
@@ -4503,7 +4719,7 @@ class NamingBot(discord.Client):
                 details.user_id,
             )
             return
-        self.profiles = profiles
+        self.profile_stats = profile_stats
         self.profile_seen_catch_ids = seen_catch_ids
 
     def update_appearance(self, guild_id: int, **changes) -> None:
@@ -4976,7 +5192,7 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
-            if re.fullmatch(r"v!profile\s*", message.content, re.IGNORECASE):
+            if PROFILE_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_profile_command(message)
                 return
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
@@ -5182,12 +5398,23 @@ class NamingBot(discord.Client):
         )
 
     async def handle_profile_command(self, message: discord.Message) -> None:
-        user_id = message.author.id
+        match = PROFILE_COMMAND_PATTERN.fullmatch(message.content)
+        if match is None:
+            return
+        if message.guild is None or message.guild.id != SERVER_ID:
+            await message.reply(
+                "Profiles are only available in the configured profile server.",
+                mention_author=False,
+            )
+            return
+        user_id = int(match.group(1)) if match.group(1) else message.author.id
         settings = self.profile_settings_for_user(user_id)
-        view = ProfileView(self, user_id)
+        stats = self.profile_stats_for_user(message.guild.id, user_id)
+        emoji_assets = await self.load_profile_emoji_assets()
+        view = ProfileView(self, user_id, message.guild.id)
         response = await message.reply(
             file=discord.File(
-                render_profile_image(settings),
+                render_profile_image(settings, stats, emoji_assets),
                 filename="profile.png",
             ),
             view=view,

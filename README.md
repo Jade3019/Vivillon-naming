@@ -245,15 +245,17 @@ settings are saved per member and server in `afk_settings.json` by default
 (override the path with `AFK_SETTINGS_FILE`). Both are on by default, preserving
 existing notification behavior.
 
-Use `v!profile` to view your profile card. The caught-Pokémon total counts
-Pokétwo catches that Vivillon sees from now on; catches from before profile
-tracking was added cannot be recovered. The profile card is public. Its public
-**Edit** menu appears only after the owner presses **Edit**; changing a setting
-updates the card without a confirmation reply. The card has the normal gray
-background on its left and right sides, with the blank middle column white.
-Until image choices are provided, the background and middle-background pickers
-have only those defaults; the frame picker has no frame options yet. Profile
-choices and totals are saved in `profile_data.json` by default; set
+Use `v!profile` to view your catch stats, or `v!profile @user` to view another
+member's stats in server `1530949341013868635`. The card counts total catches,
+shinies, catches below 10% IV, catches at or above 90% IV, Gigantamax catches,
+and Missingno catches seen by Vivillon from now on; earlier catches cannot be
+recovered. The profile card is public. Its public **Edit** menu appears only
+after the owner presses **Edit**; changing a setting updates the card without a
+confirmation reply. The card has the normal gray background on its left and
+right sides, with the blank middle column white. Until image choices are
+provided, the background and middle-background pickers have only those
+defaults; the frame picker has no frame options yet. Profile choices and
+per-server totals are saved in `profile_data.json` by default; set
 `PROFILE_DATA_FILE` to use another path.
 
 ## Exchanging reservations

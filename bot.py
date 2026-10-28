@@ -1204,8 +1204,7 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             re.IGNORECASE,
         )
         if (
-            not trainer
-            or (not missingno and not is_valid_pokemon_name(pokemon_text))
+            (not missingno and not is_valid_pokemon_name(pokemon_text))
             or re.fullmatch(r"\d+|\?{2,}", level) is None
         ):
             continue

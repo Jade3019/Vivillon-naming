@@ -1060,6 +1060,12 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             jump_url="https://discord.com/channels/1/2/3",
         )
         self.assertEqual(
+            shiny_embed.thumbnail.url,
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/official-artwork/shiny/371.png",
+        )
+        self.assertIsNone(shiny_embed.image.url)
+        self.assertEqual(
             [field.name for field in shiny_embed.fields],
             ["Caught by", "Pokémon", "Level", "IV", "Gender", "Shiny chain"],
         )
@@ -1182,6 +1188,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-normal-sprites/pincurchin.gif",
         )
+        self.assertEqual(
+            embed.footer.text,
+            "Caught at · 3D animation by PKParaiso via Project Pokémon",
+        )
         shiny_details = parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Grookey! "
             "(50.54%)! These colors seem unusual... ✨"
@@ -1190,6 +1200,30 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             starboard_art_url(shiny_details),
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-shiny-sprites/grookey.gif",
+        )
+        shiny_model_embed = format_starboard_embed(
+            shiny_details,
+            "shiny",
+            caught_at,
+            jump_url="https://discord.com/channels/1/2/3",
+            test_preview=True,
+        )
+        self.assertEqual(
+            shiny_model_embed.thumbnail.url,
+            "https://projectpokemon.org/images/sprites-models/"
+            "swsh-shiny-sprites/grookey.gif",
+        )
+        self.assertIsNone(shiny_model_embed.image.url)
+        self.assertIn("PKParaiso", shiny_model_embed.footer.text)
+
+        galarian_articuno = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "
+            "These colors seem unusual... ✨"
+        )
+        self.assertEqual(
+            starboard_art_url(galarian_articuno),
+            "https://projectpokemon.org/images/sprites-models/"
+            "swsh-shiny-sprites/articuno-galar.gif",
         )
 
     async def test_starboard_channels_save_per_server_and_render_settings_view(self) -> None:

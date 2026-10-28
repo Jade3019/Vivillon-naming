@@ -930,6 +930,15 @@ SPRITE_URL = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
     "sprites/pokemon/other/official-artwork/{}.png"
 )
+SHINY_SPRITE_URL = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+    "sprites/pokemon/other/official-artwork/shiny/{}.png"
+)
+SWSH_FORM_MODEL_SLUGS: Final[dict[str, str]] = {
+    "Galarian Articuno": "articuno-galar",
+    "Galarian Moltres": "moltres-galar",
+    "Galarian Zapdos": "zapdos-galar",
+}
 
 
 @lru_cache(maxsize=1)
@@ -941,9 +950,11 @@ def load_sprite_ids() -> dict[str, int]:
         return {}
 
 
-def sprite_url_for_pokemon(name: str) -> str | None:
+def sprite_url_for_pokemon(name: str, *, shiny: bool = False) -> str | None:
     sprite_id = load_sprite_ids().get(name)
-    return SPRITE_URL.format(sprite_id) if sprite_id else None
+    if not sprite_id:
+        return None
+    return (SHINY_SPRITE_URL if shiny else SPRITE_URL).format(sprite_id)
 
 
 THUMBNAIL_ASSETS_DIR: Final[Path] = Path(__file__).with_name("assets") / "thumbnails"
@@ -1462,6 +1473,15 @@ def starboard_art_url(details: CatchDetails) -> str | None:
     base_sprite_id = load_sprite_ids().get(base_name)
     slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(base_name)).strip("-")
 
+    form_model_slug = SWSH_FORM_MODEL_SLUGS.get(base_name)
+    if form_model_slug is not None:
+        sprite_directory = (
+            "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
+        )
+        return (
+            "https://projectpokemon.org/images/sprites-models/"
+            f"{sprite_directory}/{form_model_slug}.gif"
+        )
     if (
         details.gigantamax
         and sprite_id is not None
@@ -1475,7 +1495,7 @@ def starboard_art_url(details: CatchDetails) -> str | None:
         slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(sprite_name)).strip("-")
         sprite_directory = "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
         return f"https://projectpokemon.org/images/sprites-models/{sprite_directory}/{slug}.gif"
-    return sprite_url_for_pokemon(sprite_name)
+    return sprite_url_for_pokemon(sprite_name, shiny=details.shiny)
 
 
 def format_starboard_embed(
@@ -1523,12 +1543,17 @@ def format_starboard_embed(
             embed.add_field(name="Gender", value=details.gender, inline=True)
         if details.chain is not None:
             embed.add_field(name="Shiny chain", value=str(details.chain), inline=True)
-    embed.set_footer(
-        text="Test preview — not an actual catch" if test_preview else "Caught at"
-    )
     image_url = starboard_art_url(details)
+    footer_text = (
+        "Test preview — not an actual catch" if test_preview else "Caught at"
+    )
+    if image_url and image_url.startswith(
+        "https://projectpokemon.org/images/sprites-models/"
+    ):
+        footer_text += " · 3D animation by PKParaiso via Project Pokémon"
+    embed.set_footer(text=footer_text)
     if image_url:
-        if category == "normal_pokemon":
+        if category in {"normal_pokemon", "shiny"}:
             embed.set_thumbnail(url=image_url)
         else:
             embed.set_image(url=image_url)

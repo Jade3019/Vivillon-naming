@@ -1062,13 +1062,16 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             shiny_embed.thumbnail.url,
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-            "sprites/pokemon/other/official-artwork/shiny/371.png",
+            "sprites/pokemon/other/home/shiny/371.png",
         )
         self.assertIsNone(shiny_embed.image.url)
-        self.assertEqual(
-            [field.name for field in shiny_embed.fields],
-            ["Caught by", "Pokémon", "Level", "IV", "Gender", "Shiny chain"],
-        )
+        self.assertEqual(shiny_embed.fields, [])
+        self.assertIn("**Caught by:** <@123>", shiny_embed.description)
+        self.assertIn("**Pokémon:** Bagon", shiny_embed.description)
+        self.assertIn("**Level:** 20", shiny_embed.description)
+        self.assertIn("**IV:** 50.54%", shiny_embed.description)
+        self.assertIn("**Gender:** Female", shiny_embed.description)
+        self.assertIn("**Shiny chain:** 554", shiny_embed.description)
 
         no_chain = parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Bagon! "
@@ -1082,7 +1085,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             discord.utils.utcnow(),
             jump_url="https://discord.com/channels/1/2/3",
         )
-        self.assertNotIn("Shiny chain", [field.name for field in no_chain_embed.fields])
+        self.assertNotIn("**Shiny chain:**", no_chain_embed.description)
 
     def test_normal_starboard_matches_requested_forms_and_all_form_families(
         self,
@@ -1146,12 +1149,9 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         discord.utils.utcnow(),
                         jump_url="https://discord.com/channels/1/2/3",
                     )
-                    self.assertEqual(
-                        [field.name for field in missingno_embed.fields],
-                        ["Caught by", "Pokémon", "Level", "IV"],
-                    )
-                    self.assertEqual(missingno_embed.fields[2].value, "???")
-                    self.assertEqual(missingno_embed.fields[3].value, "???")
+                    self.assertEqual(missingno_embed.fields, [])
+                    self.assertIn("**Level:** ???", missingno_embed.description)
+                    self.assertIn("**IV:** ???", missingno_embed.description)
                 if expected_category == "gigantamax":
                     gigantamax_embed = format_starboard_embed(
                         details,
@@ -1159,10 +1159,12 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         discord.utils.utcnow(),
                         jump_url="https://discord.com/channels/1/2/3",
                     )
-                    self.assertEqual(
-                        [field.name for field in gigantamax_embed.fields],
-                        ["Caught by", "Pokémon", "Level"],
+                    self.assertEqual(gigantamax_embed.fields, [])
+                    self.assertIn(
+                        f"**Pokémon:** {expected_name}",
+                        gigantamax_embed.description,
                     )
+                    self.assertIn("**Level:** 30", gigantamax_embed.description)
 
     def test_starboard_embed_has_requested_fields_timestamp_and_artwork(self) -> None:
         details = parse_catch_details(
@@ -1177,17 +1179,18 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             jump_url="https://discord.com/channels/1/2/3",
         )
 
-        self.assertEqual(
-            [field.name for field in embed.fields],
-            ["Caught by", "Pokémon", "IV", "Level"],
-        )
-        self.assertEqual(embed.fields[0].value, "<@123>")
+        self.assertEqual(embed.fields, [])
+        self.assertIn("**Caught by:** <@123>", embed.description)
+        self.assertIn("**Pokémon:** Pincurchin", embed.description)
+        self.assertIn("**IV:** 95.16%", embed.description)
+        self.assertIn("**Level:** 37", embed.description)
         self.assertEqual(embed.timestamp, caught_at)
         self.assertEqual(
-            embed.image.url,
+            embed.thumbnail.url,
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-            "sprites/pokemon/other/official-artwork/871.png",
+            "sprites/pokemon/other/home/871.png",
         )
+        self.assertIsNone(embed.image.url)
         self.assertEqual(embed.footer.text, "Caught at")
         shiny_details = parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Grookey! "
@@ -1196,7 +1199,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             starboard_art_url(shiny_details),
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-            "sprites/pokemon/other/official-artwork/shiny/810.png",
+            "sprites/pokemon/other/home/shiny/810.png",
         )
         self.assertEqual(
             starboard_art_url(shiny_details, use_3d_shiny_model=True),
@@ -1368,14 +1371,15 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             normal_channel.send.assert_awaited_once()
             embed = normal_channel.send.await_args.kwargs["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
-            self.assertEqual(
-                [field.name for field in embed.fields],
-                ["Caught by", "Pokémon", "Level", "IV"],
-            )
+            self.assertEqual(embed.fields, [])
+            self.assertIn("**Caught by:** <@123>", embed.description)
+            self.assertIn("**Pokémon:** Obstagoon", embed.description)
+            self.assertIn("**Level:** 22", embed.description)
+            self.assertIn("**IV:** 42.12%", embed.description)
             self.assertEqual(
                 embed.thumbnail.url,
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-                "sprites/pokemon/other/official-artwork/862.png",
+                "sprites/pokemon/other/home/862.png",
             )
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)
@@ -1406,7 +1410,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             normal_channel.send.assert_awaited_once()
             embed = normal_channel.send.await_args.kwargs["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
-            self.assertEqual(embed.fields[1].value, "Xurkitree")
+            self.assertIn("**Pokémon:** Xurkitree", embed.description)
 
     async def test_normal_starboard_posts_catch_with_curly_apostrophe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1434,8 +1438,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             normal_channel.send.assert_awaited_once()
             embed = normal_channel.send.await_args.kwargs["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
-            self.assertEqual(embed.fields[1].value, "Galarian Farfetch'd")
-            self.assertEqual(embed.fields[2].value, "10")
+            self.assertIn("**Pokémon:** Galarian Farfetch'd", embed.description)
+            self.assertIn("**Level:** 10", embed.description)
 
     async def test_normal_starboard_posts_in_unlisted_guild_for_new_and_edited_catches(
         self,
@@ -1503,13 +1507,22 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             normal_channel.send.assert_awaited_once()
             embed = normal_channel.send.await_args.kwargs["embed"]
             self.assertEqual(embed.title, "🧪 TEST — ⭐ Pokémon Spotlight")
-            self.assertEqual(embed.fields[0].value, "<@123>")
-            self.assertEqual(embed.fields[2].value, "Unknown")
-            self.assertEqual(embed.fields[3].value, "Unknown")
+            self.assertIn("**Caught by:** <@123>", embed.description)
+            self.assertIn("**Pokémon:** Xurkitree", embed.description)
+            self.assertIn("**Level:** Unknown", embed.description)
+            self.assertIn("**IV:** Unknown", embed.description)
             self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
             self.assertEqual(
                 embed.description,
-                f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/474)",
+                "\n".join(
+                    (
+                        f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/474)",
+                        "**Caught by:** <@123>",
+                        "**Pokémon:** Xurkitree",
+                        "**Level:** Unknown",
+                        "**IV:** Unknown",
+                    )
+                ),
             )
             message.reply.assert_awaited_once()
 
@@ -1563,18 +1576,19 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             for channel in (shiny_channel, vivillon_channel):
                 embed = channel.send.await_args.kwargs["embed"]
                 self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
-                self.assertEqual(embed.fields[0].value, "<@123>")
-                self.assertEqual(embed.fields[1].value, "Galarian Articuno")
-                self.assertEqual(embed.fields[2].value, "Unknown")
-                self.assertEqual(embed.fields[3].value, "Unknown")
+                self.assertEqual(embed.fields, [])
+                self.assertIn("**Caught by:** <@123>", embed.description)
+                self.assertIn("**Pokémon:** Galarian Articuno", embed.description)
+                self.assertIn("**Level:** Unknown", embed.description)
+                self.assertIn("**IV:** Unknown", embed.description)
                 self.assertTrue(
                     embed.footer.text.startswith(
                         "Test preview — not an actual catch"
                     )
                 )
-                self.assertEqual(
-                    embed.description,
+                self.assertIn(
                     f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
+                    embed.description,
                 )
                 self.assertIsNone(embed.image.url)
             shiny_embed = shiny_channel.send.await_args.kwargs["embed"]
@@ -1588,7 +1602,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 vivillon_embed.thumbnail.url,
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-                "sprites/pokemon/other/official-artwork/shiny/10169.png",
+                "sprites/pokemon/other/home/shiny/10169.png",
             )
             self.assertNotIn("PKParaiso", vivillon_embed.footer.text)
 
@@ -1675,7 +1689,14 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 for call in normal_channel.send.await_args_list
             ]
             self.assertEqual(
-                [embed.fields[1].value for embed in sent_embeds],
+                [
+                    next(
+                        line
+                        for line in embed.description.splitlines()
+                        if line.startswith("**Pokémon:** ")
+                    ).removeprefix("**Pokémon:** ")
+                    for embed in sent_embeds
+                ],
                 [
                     "Hisuian Qwilfish",
                     "Ogerpon",
@@ -1687,15 +1708,15 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 ],
             )
             self.assertEqual(
-                [embed.description for embed in sent_embeds],
+                [embed.description.splitlines()[0] for embed in sent_embeds],
                 [
                     f"[Jump to message](https://discord.com/channels/{guild_id}/304/{message_id})"
                     for message_id in (465, 466, 467, 468, 469, 470, 471)
                 ],
             )
-            self.assertEqual(sent_embeds[2].fields[0].value, "@KillerX")
-            self.assertEqual(sent_embeds[4].fields[0].value, "@A")
-            self.assertEqual(sent_embeds[6].fields[0].value, "Unknown")
+            self.assertIn("**Caught by:** @KillerX", sent_embeds[2].description)
+            self.assertIn("**Caught by:** @A", sent_embeds[4].description)
+            self.assertIn("**Caught by:** Unknown", sent_embeds[6].description)
 
     async def test_catch_detection_description_rows_post_pokemon_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1730,7 +1751,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             normal_channel.send.assert_awaited_once()
             sent_embed = normal_channel.send.await_args.kwargs["embed"]
-            self.assertEqual(sent_embed.fields[1].value, "Tapu Fini")
+            self.assertIn("**Pokémon:** Tapu Fini", sent_embed.description)
 
     async def test_catch_detection_special_categories_use_vivillon_and_shinyboards(
         self,
@@ -1822,10 +1843,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             main_channel.send.assert_awaited_once()
             embed = main_channel.send.await_args.kwargs["embed"]
             self.assertEqual(embed.title, "❔ MissingNo. Capture")
-            self.assertEqual(
-                [field.value for field in embed.fields],
-                ["<@123>", "Missingno", "???", "???"],
-            )
+            self.assertEqual(embed.fields, [])
+            self.assertIn("**Caught by:** <@123>", embed.description)
+            self.assertIn("**Pokémon:** Missingno", embed.description)
+            self.assertIn("**Level:** ???", embed.description)
+            self.assertIn("**IV:** ???", embed.description)
 
     async def test_shiny_catches_increment_and_persist_the_channel_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1915,11 +1937,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 "✨ Shiny Capture ✨",
             )
             self.assertIn(
-                "Gender",
-                [
-                    field.name
-                    for field in shiny_channel.send.await_args.kwargs["embed"].fields
-                ],
+                "**Gender:** Female",
+                shiny_channel.send.await_args.kwargs["embed"].description,
             )
 
 

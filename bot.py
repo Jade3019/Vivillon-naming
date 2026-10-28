@@ -934,6 +934,14 @@ SHINY_SPRITE_URL = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
     "sprites/pokemon/other/official-artwork/shiny/{}.png"
 )
+STARBOARD_SPRITE_URL = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+    "sprites/pokemon/other/home/{}.png"
+)
+STARBOARD_SHINY_SPRITE_URL = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+    "sprites/pokemon/other/home/shiny/{}.png"
+)
 PROJECT_POKEMON_SHINY_MODEL_URL = (
     "https://projectpokemon.org/images/shiny-sprite/{}.gif"
 )
@@ -961,6 +969,18 @@ def sprite_url_for_pokemon(name: str, *, shiny: bool = False) -> str | None:
     if not sprite_id:
         return None
     return (SHINY_SPRITE_URL if shiny else SPRITE_URL).format(sprite_id)
+
+
+def starboard_sprite_url_for_pokemon(
+    name: str,
+    *,
+    shiny: bool = False,
+) -> str | None:
+    sprite_id = load_sprite_ids().get(name)
+    if not sprite_id:
+        return None
+    url = STARBOARD_SHINY_SPRITE_URL if shiny else STARBOARD_SPRITE_URL
+    return url.format(sprite_id)
 
 
 def pokemon_sprite_slug(name: str) -> str:
@@ -1567,7 +1587,7 @@ def starboard_art_url(
         return SHOWDOWN_ANIMATED_SHINY_SPRITE_URL.format(
             pokemon_sprite_slug(base_name)
         )
-    return sprite_url_for_pokemon(sprite_name, shiny=details.shiny)
+    return starboard_sprite_url_for_pokemon(sprite_name, shiny=details.shiny)
 
 
 def format_starboard_embed(
@@ -1587,38 +1607,38 @@ def format_starboard_embed(
         "gigantamax": "🌟 Gigantamax Capture",
         "normal_pokemon": "⭐ Pokémon Spotlight",
     }
+    caught_by = details.trainer or (
+        f"<@{details.user_id}>" if details.user_id is not None else "Unknown"
+    )
+    description_lines = [
+        f"[Jump to message]({jump_url})",
+        f"**Caught by:** {caught_by}",
+        f"**Pokémon:** {details.pokemon}",
+    ]
+    if category in {"high_iv", "low_iv"}:
+        description_lines.extend(
+            (f"**IV:** {details.iv}", f"**Level:** {details.level}")
+        )
+    else:
+        description_lines.append(f"**Level:** {details.level}")
+        if category != "gigantamax":
+            description_lines.append(f"**IV:** {details.iv}")
+    if category == "shiny":
+        if details.gender:
+            description_lines.append(f"**Gender:** {details.gender}")
+        if details.chain is not None:
+            description_lines.append(f"**Shiny chain:** {details.chain}")
+
     embed = discord.Embed(
         title=(
             f"🧪 TEST — {titles[category]}"
             if test_preview
             else titles[category]
         ),
-        description=f"[Jump to message]({jump_url})",
+        description="\n".join(description_lines),
         color=discord.Color(DEFAULT_EMBED_COLOR),
         timestamp=caught_at,
     )
-    caught_by = details.trainer or (
-        f"<@{details.user_id}>" if details.user_id is not None else "Unknown"
-    )
-    embed.add_field(name="Caught by", value=caught_by, inline=False)
-    embed.add_field(name="Pokémon", value=details.pokemon, inline=True)
-    if category == "normal_pokemon":
-        embed.add_field(name="Level", value=details.level, inline=True)
-        embed.add_field(name="IV", value=details.iv, inline=True)
-    elif category in {"shiny", "missingno", "high_iv", "low_iv"}:
-        if category in {"high_iv", "low_iv"}:
-            embed.add_field(name="IV", value=details.iv, inline=True)
-            embed.add_field(name="Level", value=details.level, inline=True)
-        else:
-            embed.add_field(name="Level", value=details.level, inline=True)
-            embed.add_field(name="IV", value=details.iv, inline=True)
-    else:
-        embed.add_field(name="Level", value=details.level, inline=True)
-    if category == "shiny":
-        if details.gender:
-            embed.add_field(name="Gender", value=details.gender, inline=True)
-        if details.chain is not None:
-            embed.add_field(name="Shiny chain", value=str(details.chain), inline=True)
     image_url = starboard_art_url(
         details,
         use_3d_shiny_model=use_3d_shiny_model,
@@ -1638,12 +1658,9 @@ def format_starboard_embed(
         "https://play.pokemonshowdown.com/sprites/ani-shiny/"
     ):
         footer_text += " · Animated sprite via Pokémon Showdown"
-    embed.set_footer(text=footer_text)
+    embed.set_footer(text=footer_text    )
     if image_url:
-        if category in {"normal_pokemon", "shiny"}:
-            embed.set_thumbnail(url=image_url)
-        else:
-            embed.set_image(url=image_url)
+        embed.set_thumbnail(url=image_url)
     return embed
 
 

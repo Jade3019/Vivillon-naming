@@ -4205,11 +4205,8 @@ def save_profile_data(
         raise ValueError(f"Could not save profile data to {path}") from error
 
 
-def render_profile_image(
-    display_name: str,
-    settings: dict[str, int | str],
-) -> BytesIO:
-    width, height = 1200, 500
+def render_profile_image(settings: dict[str, int | str]) -> BytesIO:
+    width, height = 1400, 600
     background_key = str(settings["background"])
     middle_key = str(settings["middle_background"])
     text_color_key = str(settings["text_color"])
@@ -4219,22 +4216,8 @@ def render_profile_image(
 
     image = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle(
-        (375, 64, 1150, 436),
-        radius=24,
-        fill=middle_background,
-        outline="#D4D4D4",
-        width=2,
-    )
-    title_font = ImageFont.load_default(size=23)
-    name_font = ImageFont.load_default(size=40)
+    draw.rectangle((430, 0, 949, height - 1), fill=middle_background)
     label_font = ImageFont.load_default(size=24)
-    draw.text((64, 54), "TRAINER PROFILE", font=title_font, fill=text_color)
-
-    name = display_name.strip() or "Trainer"
-    while draw.textbbox((0, 0), name, font=name_font)[2] > 280 and len(name) > 3:
-        name = f"{name[:-4]}..."
-    draw.text((64, 95), name, font=name_font, fill=text_color)
     draw.text(
         (64, 220),
         f"Total: {int(settings['catches']):,}",
@@ -4352,7 +4335,7 @@ class ProfileEditButton(discord.ui.Button):
         await interaction.response.send_message(
             "Choose your profile colors and appearance.",
             view=ProfileEditView(self.profile_view),
-            ephemeral=True,
+            ephemeral=False,
         )
 
 
@@ -4361,12 +4344,10 @@ class ProfileView(discord.ui.View):
         self,
         bot: "NamingBot",
         user_id: int,
-        display_name: str,
     ) -> None:
         super().__init__(timeout=900)
         self.bot = bot
         self.user_id = user_id
-        self.display_name = display_name
         self.message: discord.Message | None = None
         self.add_item(ProfileEditButton(self))
 
@@ -4378,7 +4359,7 @@ class ProfileView(discord.ui.View):
             embed=profile_embed(settings),
             attachments=[
                 discord.File(
-                    render_profile_image(self.display_name, settings),
+                    render_profile_image(settings),
                     filename="profile.png",
                 )
             ],
@@ -5206,17 +5187,12 @@ class NamingBot(discord.Client):
 
     async def handle_profile_command(self, message: discord.Message) -> None:
         user_id = message.author.id
-        display_name = getattr(message.author, "display_name", None)
-        if not isinstance(display_name, str) or not display_name.strip():
-            display_name = getattr(message.author, "name", "Trainer")
-        if not isinstance(display_name, str):
-            display_name = "Trainer"
         settings = self.profile_settings_for_user(user_id)
-        view = ProfileView(self, user_id, display_name)
+        view = ProfileView(self, user_id)
         response = await message.reply(
             embed=profile_embed(settings),
             file=discord.File(
-                render_profile_image(display_name, settings),
+                render_profile_image(settings),
                 filename="profile.png",
             ),
             view=view,

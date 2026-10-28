@@ -6,6 +6,8 @@ reserves.json
 reserves.json.tmp
 server_settings.json
 server_settings.json.tmp
+starboard_settings.json
+starboard_settings.json.tmp
 .bank_cache/
 pokemon_images/archive/
 boxes.json

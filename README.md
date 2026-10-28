@@ -103,6 +103,23 @@ active ping targets; when targets exist, it still has to identify each spawn to
 check for a match. Settings are saved to `server_settings.json` by default; set
 `SERVER_SETTINGS_FILE` to use another path.
 
+Open **Starboard** from `v!settings` to choose separate main and shiny catch
+channels. The main starboard posts shiny catches, catches with 90% IV or higher,
+catches below 10% IV, MissingNo. catches, and Gigantamax catches. Shiny catches
+also post to the shinyboard when one is configured. Shiny posts include the
+catcher, Pokémon, level, IV, gender when Pokétwo provides it, and a chain only
+when the catch message identifies one. Other catch types show the requested
+catcher and Pokémon details, and each embed carries the catch time. Starboard
+channel choices are saved in `starboard_settings.json` by default; set
+`STARBOARD_SETTINGS_FILE` to use another path.
+
+Catch embeds use animated Generation 8 GIFs where the linked
+[Project Pokémon sprite index](https://projectpokemon.org/home/docs/spriteindex_148/3d-models-generation-8-pok%C3%A9mon-r123/)
+provides them, including available Gigantamax and shiny variants. The index does
+not cover every Pokémon, so other catches use the project's existing Pokémon
+artwork sprites as a fallback. The index credits pkparaiso for its animated
+GIFs; the bot links to those hosted images and does not bundle them.
+
 Use `v!api` in the configured server to view the number of Pokémon recognized
 since restart, recent inference and response-time statistics, current request
 load, and configured recognition backend in a three-column status layout.

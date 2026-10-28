@@ -10,6 +10,7 @@ import time
 from collections import OrderedDict, deque
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Final
@@ -973,6 +974,203 @@ def format_pc_catch_embed(
         embed.set_thumbnail(url=f"attachment://{custom_path.name}")
     elif sprite_url:
         embed.set_thumbnail(url=sprite_url)
+    return embed
+
+
+@dataclass(frozen=True)
+class CatchDetails:
+    user_id: int
+    pokemon: str
+    level: str
+    iv: str
+    iv_value: float | None
+    gender: str | None
+    shiny: bool
+    chain: int | None
+    gigantamax: bool
+    missingno: bool
+
+
+def parse_catch_details(text: str) -> CatchDetails | None:
+    catch_match = re.search(r"\byou caught\b(?P<body>[^\n]*)", text, re.IGNORECASE)
+    if catch_match is None:
+        return None
+
+    user_match = re.search(
+        r"\bcongratulations\s+<@!?(\d+)>",
+        text[: catch_match.start()],
+        re.IGNORECASE,
+    )
+    if user_match is None:
+        return None
+
+    body = catch_match.group("body").strip()
+    level_match = re.search(
+        r"\b(?:level|lv\.?)\s*(\d+|\?{2,})",
+        body,
+        re.IGNORECASE,
+    )
+    if level_match is None:
+        level = "???"
+        pokemon_text = body.split("!", 1)[0].strip()
+        pokemon_text = re.sub(r"^a\s+", "", pokemon_text, flags=re.IGNORECASE)
+        pokemon_text = re.sub(
+            r"\s*\(\s*(?:\d+(?:\.\d+)?|\?{2,})\s*%?\s*\)\s*$",
+            "",
+            pokemon_text,
+        ).strip()
+        if not is_missingno_name(pokemon_text):
+            return None
+    else:
+        level = level_match.group(1)
+        pokemon_text = body[level_match.end() :].strip()
+        pokemon_text = re.sub(r"^[.!,:;]+\s*", "", pokemon_text)
+        pokemon_text = pokemon_text.split("!", 1)[0].strip()
+        pokemon_text = re.sub(
+            r"\s*\(\s*(?:\d+(?:\.\d+)?|\?{2,})\s*%?\s*\)\s*$",
+            "",
+            pokemon_text,
+        ).strip()
+
+    gender = None
+    if re.search(r"(?:♀|\bfemale\b)", pokemon_text, re.IGNORECASE):
+        gender = "Female"
+        pokemon_text = re.sub(r"(?:♀|\bfemale\b)", "", pokemon_text, flags=re.IGNORECASE)
+    elif re.search(r"(?:♂|\bmale\b)", pokemon_text, re.IGNORECASE):
+        gender = "Male"
+        pokemon_text = re.sub(r"(?:♂|\bmale\b)", "", pokemon_text, flags=re.IGNORECASE)
+    pokemon_text = pokemon_text.strip(" .,:;")
+    missingno = is_missingno_name(pokemon_text)
+    if missingno:
+        pokemon_text = "Missingno"
+    elif not pokemon_text or not is_valid_pokemon_name(pokemon_text):
+        return None
+
+    iv_match = re.search(
+        r"\(\s*(\d+(?:\.\d+)?|\?{2,})\s*%\s*\)"
+        r"|\bIV\s*[:=]\s*(\d+(?:\.\d+)?|\?{2,})\s*%?",
+        text,
+        re.IGNORECASE,
+    )
+    iv_text = next((value for value in iv_match.groups() if value), None) if iv_match else None
+    if missingno and iv_text is None:
+        iv_text = "???"
+    iv_value = None
+    if iv_text and not iv_text.startswith("?"):
+        numeric_iv = float(iv_text)
+        if 0 <= numeric_iv <= 100:
+            iv_value = numeric_iv
+        else:
+            iv_text = None
+    iv = f"{iv_text}%" if iv_text and not iv_text.startswith("?") else (iv_text or "Unknown")
+
+    shiny = bool(re.search(r"colors seem unusual|✨", text, re.IGNORECASE))
+    chain_match = re.search(
+        r"\b(?:shiny\s*(?:chain|streak)|chain|streak)\b[^\d]{0,30}(\d+)",
+        text,
+        re.IGNORECASE,
+    )
+    chain = int(chain_match.group(1)) if chain_match and shiny else None
+    gigantamax = bool(
+        re.search(r"\b(?:gigantamax|gmax)\b|gigantamax factor", text, re.IGNORECASE)
+    )
+    if gigantamax and not re.match(r"^(?:gigantamax|gmax)\b", pokemon_text, re.IGNORECASE):
+        pokemon_text = f"Gigantamax {pokemon_text}"
+
+    return CatchDetails(
+        user_id=int(user_match.group(1)),
+        pokemon=display_pokemon_name(pokemon_text),
+        level=level,
+        iv=iv,
+        iv_value=iv_value,
+        gender=gender,
+        shiny=shiny,
+        chain=chain,
+        gigantamax=gigantamax,
+        missingno=missingno,
+    )
+
+
+def starboard_category(details: CatchDetails) -> str | None:
+    if details.missingno:
+        return "missingno"
+    if details.gigantamax:
+        return "gigantamax"
+    if details.shiny:
+        return "shiny"
+    if details.iv_value is not None and details.iv_value >= 90:
+        return "high_iv"
+    if details.iv_value is not None and details.iv_value < 10:
+        return "low_iv"
+    return None
+
+
+def starboard_art_url(details: CatchDetails) -> str | None:
+    pokemon_name = details.pokemon
+    base_name = re.sub(
+        r"^(?:gigantamax|gmax)\s+",
+        "",
+        pokemon_name,
+        flags=re.IGNORECASE,
+    )
+    sprite_name = f"Gmax {base_name}" if details.gigantamax else base_name
+    sprite_id = load_sprite_ids().get(sprite_name)
+    base_sprite_id = load_sprite_ids().get(base_name)
+    slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(base_name)).strip("-")
+
+    if (
+        details.gigantamax
+        and sprite_id is not None
+        and base_sprite_id is not None
+        and 810 <= base_sprite_id <= 905
+    ):
+        slug = f"{slug}-gigantamax"
+        sprite_directory = "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
+        return f"https://projectpokemon.org/images/sprites-models/{sprite_directory}/{slug}.gif"
+    if sprite_id is not None and 810 <= sprite_id <= 905:
+        slug = re.sub(r"[^a-z0-9]+", "-", normalize_pokemon_alias(sprite_name)).strip("-")
+        sprite_directory = "swsh-shiny-sprites" if details.shiny else "swsh-normal-sprites"
+        return f"https://projectpokemon.org/images/sprites-models/{sprite_directory}/{slug}.gif"
+    return sprite_url_for_pokemon(sprite_name)
+
+
+def format_starboard_embed(
+    details: CatchDetails,
+    category: str,
+    caught_at: datetime,
+) -> discord.Embed:
+    titles = {
+        "shiny": "✨ Shiny Capture ✨",
+        "high_iv": "📈 High-IV Capture",
+        "low_iv": "📉 Low-IV Capture",
+        "missingno": "❔ MissingNo. Capture",
+        "gigantamax": "🌟 Gigantamax Capture",
+    }
+    embed = discord.Embed(
+        title=titles[category],
+        color=discord.Color(DEFAULT_EMBED_COLOR),
+        timestamp=caught_at,
+    )
+    embed.add_field(name="Caught by", value=f"<@{details.user_id}>", inline=False)
+    embed.add_field(name="Pokémon", value=details.pokemon, inline=True)
+    if category in {"shiny", "missingno", "high_iv", "low_iv"}:
+        if category in {"high_iv", "low_iv"}:
+            embed.add_field(name="IV", value=details.iv, inline=True)
+            embed.add_field(name="Level", value=details.level, inline=True)
+        else:
+            embed.add_field(name="Level", value=details.level, inline=True)
+            embed.add_field(name="IV", value=details.iv, inline=True)
+    else:
+        embed.add_field(name="Level", value=details.level, inline=True)
+    if category == "shiny":
+        if details.gender:
+            embed.add_field(name="Gender", value=details.gender, inline=True)
+        if details.chain is not None:
+            embed.add_field(name="Shiny chain", value=str(details.chain), inline=True)
+    embed.set_footer(text="Caught at")
+    image_url = starboard_art_url(details)
+    if image_url:
+        embed.set_image(url=image_url)
     return embed
 
 
@@ -2345,6 +2543,28 @@ class NamingSettingsBackButton(discord.ui.Button):
         )
 
 
+class StarboardSectionButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Open",
+            style=discord.ButtonStyle.primary,
+            custom_id="server_settings:open:starboard",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=StarboardSettingsView(self.bot, self.guild_id)
+        )
+
+
 class ServerSettingsView(discord.ui.LayoutView):
     def __init__(self, bot: "NamingBot", guild_id: int) -> None:
         super().__init__(timeout=None)
@@ -2377,7 +2597,7 @@ class ServerSettingsView(discord.ui.LayoutView):
                     "### ⭐ Starboard\n"
                     "Main starboard and the separate shinyboard."
                 ),
-                accessory=InertSettingsButton("starboard"),
+                accessory=StarboardSectionButton(bot, guild_id),
             ),
             discord.ui.Section(
                 discord.ui.TextDisplay(
@@ -2392,6 +2612,149 @@ class ServerSettingsView(discord.ui.LayoutView):
                 "open a ticket in the support server:\n"
                 "-# https://discord.gg/5XurUaW8"
             ),
+            accent_color=discord.Color(0x9B59F5),
+        )
+        self.add_item(container)
+
+
+async def starboard_settings_guard(
+    interaction: discord.Interaction, guild_id: int
+) -> bool:
+    if interaction.guild_id != guild_id:
+        await interaction.response.send_message(
+            "These settings can only be used in their original server.",
+            ephemeral=True,
+        )
+        return False
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    if permissions is None or not permissions.manage_guild:
+        await interaction.response.send_message(
+            "You need the Manage Server permission to change starboards.",
+            ephemeral=True,
+        )
+        return False
+    return True
+
+
+class StarboardChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, bot: "NamingBot", guild_id: int, board: str) -> None:
+        super().__init__(
+            channel_types=[discord.ChannelType.text],
+            placeholder=(
+                "Choose the main starboard channel"
+                if board == "normal"
+                else "Choose the shinyboard channel"
+            ),
+            custom_id=f"server_settings:starboard:select:{board}",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.board = board
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not await starboard_settings_guard(interaction, self.guild_id):
+            return
+        channel = self.values[0]
+        if getattr(getattr(channel, "guild", None), "id", None) != self.guild_id:
+            await interaction.response.send_message(
+                "Choose a channel from this server.",
+                ephemeral=True,
+            )
+            return
+        try:
+            self.bot.set_starboard_channel(self.guild_id, self.board, channel.id)
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            view=StarboardSettingsView(self.bot, self.guild_id)
+        )
+
+
+class StarboardClearButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int, board: str) -> None:
+        label = "Clear Main" if board == "normal" else "Clear Shiny"
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"server_settings:starboard:clear:{board}",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.board = board
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not await starboard_settings_guard(interaction, self.guild_id):
+            return
+        try:
+            self.bot.set_starboard_channel(self.guild_id, self.board, None)
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            view=StarboardSettingsView(self.bot, self.guild_id)
+        )
+
+
+class StarboardBackButton(discord.ui.Button):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(
+            label="Back",
+            style=discord.ButtonStyle.secondary,
+            custom_id="server_settings:starboard:back",
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These settings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=ServerSettingsView(self.bot, self.guild_id)
+        )
+
+
+class StarboardSettingsView(discord.ui.LayoutView):
+    def __init__(self, bot: "NamingBot", guild_id: int) -> None:
+        super().__init__(timeout=None)
+        settings = bot.starboard_settings_for_guild(guild_id)
+        main_channel = settings["normal_channel"]
+        shiny_channel = settings["shiny_channel"]
+        main_text = f"<#{main_channel}>" if main_channel else "`Not set`"
+        shiny_text = f"<#{shiny_channel}>" if shiny_channel else "`Not set`"
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                "# ⭐ Catch Starboards\n"
+                "Choose where special catches are posted. Changes save instantly."
+            ),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(
+                "### Main Starboard\n"
+                f"Current channel: {main_text}\n"
+                "Receives shiny, high-IV (90%+), low-IV (under 10%), "
+                "MissingNo., and Gigantamax catches."
+            ),
+            discord.ui.ActionRow(
+                StarboardChannelSelect(bot, guild_id, "normal")
+            ),
+            discord.ui.TextDisplay(
+                "### Shinyboard\n"
+                f"Current channel: {shiny_text}\n"
+                "Receives shiny catches. A shiny catch is also posted to the main starboard."
+            ),
+            discord.ui.ActionRow(
+                StarboardChannelSelect(bot, guild_id, "shiny")
+            ),
+            discord.ui.ActionRow(
+                StarboardClearButton(bot, guild_id, "normal"),
+                StarboardClearButton(bot, guild_id, "shiny"),
+            ),
+            discord.ui.Separator(),
+            discord.ui.ActionRow(StarboardBackButton(bot, guild_id)),
             accent_color=discord.Color(0x9B59F5),
         )
         self.add_item(container)
@@ -3054,6 +3417,66 @@ def save_server_settings(
         raise ValueError(f"Could not save server settings to {path}") from error
 
 
+STARBOARD_DEFAULTS: Final[dict[str, int | None]] = {
+    "normal_channel": None,
+    "shiny_channel": None,
+}
+STARBOARD_SETTING_KEYS: Final[frozenset[str]] = frozenset(STARBOARD_DEFAULTS)
+
+
+def load_starboard_settings(path: Path) -> dict[str, dict[str, int | None]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read starboard settings from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Starboard settings in {path} have an invalid format")
+
+    settings: dict[str, dict[str, int | None]] = {}
+    for guild_id, guild_settings in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(guild_settings, dict)
+            or any(
+                key not in STARBOARD_SETTING_KEYS
+                or (
+                    value is not None
+                    and (
+                        isinstance(value, bool)
+                        or not isinstance(value, int)
+                        or value <= 0
+                    )
+                )
+                for key, value in guild_settings.items()
+            )
+        ):
+            raise ValueError(f"Starboard settings in {path} have an invalid entry")
+        settings[guild_id] = {
+            **STARBOARD_DEFAULTS,
+            **guild_settings,
+        }
+    return settings
+
+
+def save_starboard_settings(
+    path: Path,
+    settings: dict[str, dict[str, int | None]],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save starboard settings to {path}") from error
+
+
 AFK_DEFAULTS: Final[dict[str, bool]] = {
     "shinyhunt": True,
     "collection": True,
@@ -3127,6 +3550,7 @@ class NamingBot(discord.Client):
             else Path(__file__).with_name("image_bank.npz")
         )
         self.handled_spawn_ids: dict[int, None] = {}
+        self.handled_catch_ids: dict[int, None] = {}
         self.muted_poketwo_channels: set[int] = set()
         self.incense_path = Path(
             os.environ.get("INCENSE_TRACKING_FILE", "incenses.json")
@@ -3158,6 +3582,12 @@ class NamingBot(discord.Client):
             os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
         )
         self.server_settings = load_server_settings(self.server_settings_path)
+        self.starboard_settings_path = Path(
+            os.environ.get("STARBOARD_SETTINGS_FILE", "starboard_settings.json")
+        )
+        self.starboard_settings = load_starboard_settings(
+            self.starboard_settings_path
+        )
         self.afk_settings_path = Path(
             os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
         )
@@ -3278,6 +3708,38 @@ class NamingBot(discord.Client):
             **SERVER_NAMING_DEFAULTS,
             **self.server_settings.get(str(guild_id), {}),
         }
+
+    def starboard_settings_for_guild(self, guild_id: int) -> dict[str, int | None]:
+        return {
+            **STARBOARD_DEFAULTS,
+            **self.starboard_settings.get(str(guild_id), {}),
+        }
+
+    def set_starboard_channel(
+        self,
+        guild_id: int,
+        board: str,
+        channel_id: int | None,
+    ) -> dict[str, int | None]:
+        setting_key = f"{board}_channel"
+        if setting_key not in STARBOARD_SETTING_KEYS:
+            raise ValueError(f"Unknown starboard: {board}")
+        if channel_id is not None and (
+            isinstance(channel_id, bool)
+            or not isinstance(channel_id, int)
+            or channel_id <= 0
+        ):
+            raise ValueError("A starboard channel ID must be a positive integer.")
+        updated_settings = {
+            key: dict(settings) for key, settings in self.starboard_settings.items()
+        }
+        guild_key = str(guild_id)
+        guild_settings = self.starboard_settings_for_guild(guild_id)
+        guild_settings[setting_key] = channel_id
+        updated_settings[guild_key] = guild_settings
+        save_starboard_settings(self.starboard_settings_path, updated_settings)
+        self.starboard_settings = updated_settings
+        return guild_settings
 
     def toggle_naming_setting(self, guild_id: int, setting: str) -> dict[str, bool]:
         if setting not in SERVER_NAMING_SETTING_KEYS:
@@ -3548,6 +4010,8 @@ class NamingBot(discord.Client):
         self.track_chat_event_message(message)
 
         text = message_text(message)
+        if message.author.id == self.config.poketwo_bot_id:
+            await self.handle_catch_starboard(message)
         if message.author.id != self.config.poketwo_bot_id:
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
                 await self.handle_event_command(message)
@@ -4090,7 +4554,9 @@ class NamingBot(discord.Client):
         self.track_incense_command(after)
         if not self.is_allowed_channel(after.channel):
             return
-        if SPAWN_PATTERN.search(message_text(after)):
+        text = message_text(after)
+        await self.handle_catch_starboard(after)
+        if SPAWN_PATTERN.search(text):
             await self.handle_spawn(after)
 
     async def handle_grab_command(self, message: discord.Message) -> None:
@@ -4750,6 +5216,59 @@ class NamingBot(discord.Client):
                 pokemon_name,
             )
         await reply_with_reservation_embeds(message, embeds)
+
+    async def handle_catch_starboard(self, message: discord.Message) -> None:
+        if message.guild is None or message.id in self.handled_catch_ids:
+            return
+        details = parse_catch_details(message_text(message))
+        if details is None:
+            return
+        category = starboard_category(details)
+        if category is None:
+            return
+
+        settings = self.starboard_settings_for_guild(message.guild.id)
+        posts: dict[int, str] = {}
+        if settings["normal_channel"] is not None:
+            posts[settings["normal_channel"]] = category
+        if details.shiny and settings["shiny_channel"] is not None:
+            posts.setdefault(settings["shiny_channel"], "shiny")
+        if not posts:
+            return
+
+        self.handled_catch_ids[message.id] = None
+        while len(self.handled_catch_ids) > 5000:
+            del self.handled_catch_ids[next(iter(self.handled_catch_ids))]
+
+        for channel_id, post_category in posts.items():
+            channel = self.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await self.fetch_channel(channel_id)
+                except discord.HTTPException:
+                    logger.exception(
+                        "Could not load starboard channel %s in guild %s",
+                        channel_id,
+                        message.guild.id,
+                    )
+                    continue
+            embed = format_starboard_embed(
+                details,
+                post_category,
+                message.created_at,
+            )
+            self.tint_embeds(message.guild, {"embed": embed})
+            try:
+                await channel.send(
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not post catch message %s to starboard channel %s",
+                    message.id,
+                    channel_id,
+                )
 
     async def handle_spawn(
         self, message: discord.Message, *, test_mode: bool = False

@@ -54,6 +54,7 @@ from bot import (
     format_spawn_mention_lines,
     format_spawn_reply,
     format_shinyhunt_status,
+    format_starboard_embed,
     is_valid_pokemon_name,
     is_image_test_command,
     is_missingno_name,
@@ -65,6 +66,7 @@ from bot import (
     type_icon_filename_for_pokemon,
     load_pokemon_forms,
     load_server_settings,
+    load_starboard_settings,
     load_reservations,
     _org_api_port_from_environment,
     is_known_pokemon_name,
@@ -75,6 +77,10 @@ from bot import (
     parse_shinyhunt_remove_command,
     ReservationPagesView,
     NamingSettingsView,
+    StarboardSettingsView,
+    parse_catch_details,
+    starboard_art_url,
+    starboard_category,
     ServerSettingsView,
     remove_reservation,
     remove_reservations,
@@ -1021,6 +1027,265 @@ class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
             interaction.response.edit_message.assert_awaited_once_with(
                 content="Everyone's Pokémon collection in this server has been cleared.",
                 view=None,
+            )
+
+
+class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.bot = NamingBot(ConfigTests().load_config())
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    def test_parses_shiny_catch_details_and_only_shows_explicit_chain(self) -> None:
+        details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 20 Bagon ♀! "
+            "(50.54%)! These colors seem unusual... ✨ Shiny streak reset. (554)"
+        )
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details.user_id, 123)
+        self.assertEqual(details.pokemon, "Bagon")
+        self.assertEqual(details.level, "20")
+        self.assertEqual(details.iv, "50.54%")
+        self.assertEqual(details.gender, "Female")
+        self.assertTrue(details.shiny)
+        self.assertEqual(details.chain, 554)
+        self.assertEqual(starboard_category(details), "shiny")
+        shiny_embed = format_starboard_embed(
+            details, "shiny", discord.utils.utcnow()
+        )
+        self.assertEqual(
+            [field.name for field in shiny_embed.fields],
+            ["Caught by", "Pokémon", "Level", "IV", "Gender", "Shiny chain"],
+        )
+
+        no_chain = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 20 Bagon! "
+            "(50.54%)! These colors seem unusual... ✨"
+        )
+        self.assertIsNotNone(no_chain)
+        self.assertIsNone(no_chain.chain)
+        no_chain_embed = format_starboard_embed(
+            no_chain, "shiny", discord.utils.utcnow()
+        )
+        self.assertNotIn("Shiny chain", [field.name for field in no_chain_embed.fields])
+
+    def test_categorizes_high_iv_low_iv_missingno_and_gigantamax(self) -> None:
+        examples = (
+            (
+                "Congratulations <@123>! You caught a Level 37 Pichu! (95.16%)!",
+                "high_iv",
+                "Pichu",
+            ),
+            (
+                "Congratulations <@123>! You caught a Level 18 Archer! (8.60%)!",
+                "low_iv",
+                "Archer",
+            ),
+            (
+                "Congratulations <@123>! You caught a Level ??? ???! (???)!",
+                "missingno",
+                "Missingno",
+            ),
+            (
+                "Congratulations <@123>! You caught a ???! (???)!",
+                "missingno",
+                "Missingno",
+            ),
+            (
+                "Congratulations <@123>! You caught a Level 30 Charizard ♀! "
+                "(50.54%)! Gigantamax Factor",
+                "gigantamax",
+                "Gigantamax Charizard",
+            ),
+        )
+        for text, expected_category, expected_name in examples:
+            with self.subTest(expected_category=expected_category):
+                details = parse_catch_details(text)
+                self.assertIsNotNone(details)
+                self.assertEqual(details.pokemon, expected_name)
+                self.assertEqual(starboard_category(details), expected_category)
+                if expected_category == "missingno":
+                    missingno_embed = format_starboard_embed(
+                        details, expected_category, discord.utils.utcnow()
+                    )
+                    self.assertEqual(
+                        [field.name for field in missingno_embed.fields],
+                        ["Caught by", "Pokémon", "Level", "IV"],
+                    )
+                    self.assertEqual(missingno_embed.fields[2].value, "???")
+                    self.assertEqual(missingno_embed.fields[3].value, "???")
+                if expected_category == "gigantamax":
+                    gigantamax_embed = format_starboard_embed(
+                        details, expected_category, discord.utils.utcnow()
+                    )
+                    self.assertEqual(
+                        [field.name for field in gigantamax_embed.fields],
+                        ["Caught by", "Pokémon", "Level"],
+                    )
+
+    def test_starboard_embed_has_requested_fields_timestamp_and_artwork(self) -> None:
+        details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 37 Pincurchin! (95.16%)!"
+        )
+        self.assertIsNotNone(details)
+        caught_at = discord.utils.utcnow()
+        embed = format_starboard_embed(details, "high_iv", caught_at)
+
+        self.assertEqual(
+            [field.name for field in embed.fields],
+            ["Caught by", "Pokémon", "IV", "Level"],
+        )
+        self.assertEqual(embed.fields[0].value, "<@123>")
+        self.assertEqual(embed.timestamp, caught_at)
+        self.assertEqual(
+            embed.image.url,
+            "https://projectpokemon.org/images/sprites-models/"
+            "swsh-normal-sprites/pincurchin.gif",
+        )
+        shiny_details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 20 Grookey! "
+            "(50.54%)! These colors seem unusual... ✨"
+        )
+        self.assertEqual(
+            starboard_art_url(shiny_details),
+            "https://projectpokemon.org/images/sprites-models/"
+            "swsh-shiny-sprites/grookey.gif",
+        )
+
+    async def test_starboard_channels_save_per_server_and_render_settings_view(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+
+            self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
+            self.bot.set_starboard_channel(SERVER_ID, "shiny", 202)
+
+            self.assertEqual(
+                load_starboard_settings(self.bot.starboard_settings_path)[
+                    str(SERVER_ID)
+                ],
+                {"normal_channel": 101, "shiny_channel": 202},
+            )
+            view = StarboardSettingsView(self.bot, SERVER_ID)
+            self.assertTrue(view.has_components_v2())
+            component_ids = {
+                item.custom_id
+                for item in view.walk_children()
+                if getattr(item, "custom_id", None)
+            }
+            self.assertIn("server_settings:starboard:select:normal", component_ids)
+            self.assertIn("server_settings:starboard:select:shiny", component_ids)
+
+    async def test_shiny_catch_posts_to_both_boards_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
+            self.bot.set_starboard_channel(SERVER_ID, "shiny", 202)
+            main_channel = Mock(send=AsyncMock())
+            shiny_channel = Mock(send=AsyncMock())
+            channels = {101: main_channel, 202: shiny_channel}
+            self.bot.get_channel = Mock(side_effect=channels.get)
+            message = Mock()
+            message.id = 456
+            message.guild.id = SERVER_ID
+            message.channel.id = 303
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 20 Bagon ♀! "
+                "(50.54%)! These colors seem unusual... ✨"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+            await self.bot.on_message(message)
+
+            main_channel.send.assert_awaited_once()
+            shiny_channel.send.assert_awaited_once()
+            self.assertEqual(
+                main_channel.send.await_args.kwargs["embed"].title,
+                "✨ Shiny Capture ✨",
+            )
+            self.assertFalse(
+                shiny_channel.send.await_args.kwargs["allowed_mentions"].users
+            )
+
+    async def test_missingno_catch_posts_to_the_main_board(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
+            main_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=main_channel)
+            message = Mock()
+            message.id = 457
+            message.guild.id = SERVER_ID
+            message.channel.id = 303
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level ??? ???! (???)!"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+
+            main_channel.send.assert_awaited_once()
+            embed = main_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(embed.title, "❔ MissingNo. Capture")
+            self.assertEqual(
+                [field.value for field in embed.fields],
+                ["<@123>", "Missingno", "???", "???"],
+            )
+
+    async def test_shiny_gigantamax_uses_the_matching_embed_on_each_board(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
+            self.bot.set_starboard_channel(SERVER_ID, "shiny", 202)
+            main_channel = Mock(send=AsyncMock())
+            shiny_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(
+                side_effect={101: main_channel, 202: shiny_channel}.get
+            )
+            message = Mock()
+            message.id = 458
+            message.guild.id = SERVER_ID
+            message.channel.id = 303
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 30 Corviknight ♀! "
+                "(95.16%)! Gigantamax Factor. These colors seem unusual... ✨"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+
+            self.assertEqual(
+                main_channel.send.await_args.kwargs["embed"].title,
+                "🌟 Gigantamax Capture",
+            )
+            self.assertEqual(
+                shiny_channel.send.await_args.kwargs["embed"].title,
+                "✨ Shiny Capture ✨",
+            )
+            self.assertIn(
+                "Gender",
+                [
+                    field.name
+                    for field in shiny_channel.send.await_args.kwargs["embed"].fields
+                ],
             )
 
 

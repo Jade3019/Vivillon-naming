@@ -68,9 +68,9 @@ configured destinations as a real shiny catch: Vivillon Starboard and
 Shinyboard, never Normal Starboard. Preview level and IV are unknown. Each
 starboard embed includes a `Jump to message` link to
 its source catch (or to the test command for a preview). Shiny embeds use a
-small thumbnail. Only Shinyboard embeds use the moving shiny 3D model from
-Project Pokémon's Gen 8 sprite index, with PKParaiso credited in the footer.
-Other starboards use static artwork in the shiny form.
+small thumbnail. Only Shinyboard embeds use an animated shiny image: a 3D GIF
+from Project Pokémon when available, or an animated sprite for unsupported
+species/forms. Other starboards use static artwork in the shiny form.
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. `v!r` in that channel restores
@@ -131,12 +131,14 @@ the shinyboard with a numeric suffix (for example, `shiny-board-1`, then
 `shiny-board-2`). The bot needs Manage Channels permission to rename the
 channel; catches are still counted if Discord prevents a rename.
 
-Catch embeds use animated Generation 8 GIFs where the linked
-[Project Pokémon sprite index](https://projectpokemon.org/home/docs/spriteindex_148/3d-models-generation-8-pok%C3%A9mon-r123/)
-provides them, including available Gigantamax and shiny variants. The index does
-not cover every Pokémon, so other catches use the project's existing Pokémon
-artwork sprites as a fallback. The index credits pkparaiso for its animated
-GIFs; the bot links to those hosted images and does not bundle them.
+Shinyboard embeds use animated shiny GIFs from the
+[Project Pokémon sprite index](https://projectpokemon.org/home/docs/spriteindex_148/)
+where a 3D model is available, including the
+[Generation 8 models](https://projectpokemon.org/home/docs/spriteindex_148/3d-models-generation-8-pok%C3%A9mon-r123/).
+For unsupported species/forms, the Shinyboard uses Pokémon Showdown's animated
+shiny sprite instead. Project Pokémon credits PKParaiso for the Generation 8
+animations; the bot links to hosted images and does not bundle them. Other
+starboards continue to use static shiny artwork.
 
 Use `v!api` in the configured server to view the number of Pokémon recognized
 since restart, recent inference and response-time statistics, current request

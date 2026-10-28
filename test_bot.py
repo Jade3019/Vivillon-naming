@@ -1203,6 +1203,22 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-shiny-sprites/grookey.gif",
         )
+        articuno_details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 50 Articuno! "
+            "These colors seem unusual... ✨"
+        )
+        self.assertEqual(
+            starboard_art_url(articuno_details, use_3d_shiny_model=True),
+            "https://projectpokemon.org/images/shiny-sprite/articuno.gif",
+        )
+        wiglett_details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 20 Wiglett! "
+            "These colors seem unusual... ✨"
+        )
+        self.assertEqual(
+            starboard_art_url(wiglett_details, use_3d_shiny_model=True),
+            "https://play.pokemonshowdown.com/sprites/ani-shiny/wiglett.gif",
+        )
         shiny_model_embed = format_starboard_embed(
             shiny_details,
             "shiny",
@@ -1218,6 +1234,22 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(shiny_model_embed.image.url)
         self.assertIn("PKParaiso", shiny_model_embed.footer.text)
+
+        wiglett_embed = format_starboard_embed(
+            wiglett_details,
+            "shiny",
+            caught_at,
+            jump_url="https://discord.com/channels/1/2/3",
+            use_3d_shiny_model=True,
+        )
+        self.assertEqual(
+            wiglett_embed.thumbnail.url,
+            "https://play.pokemonshowdown.com/sprites/ani-shiny/wiglett.gif",
+        )
+        self.assertIn(
+            "Animated sprite via Pokémon Showdown",
+            wiglett_embed.footer.text,
+        )
 
         galarian_articuno = parse_catch_details(
             "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "

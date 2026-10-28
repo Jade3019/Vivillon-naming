@@ -934,6 +934,12 @@ SHINY_SPRITE_URL = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
     "sprites/pokemon/other/official-artwork/shiny/{}.png"
 )
+PROJECT_POKEMON_SHINY_MODEL_URL = (
+    "https://projectpokemon.org/images/shiny-sprite/{}.gif"
+)
+SHOWDOWN_ANIMATED_SHINY_SPRITE_URL = (
+    "https://play.pokemonshowdown.com/sprites/ani-shiny/{}.gif"
+)
 SWSH_FORM_MODEL_SLUGS: Final[dict[str, str]] = {
     "Galarian Articuno": "articuno-galar",
     "Galarian Moltres": "moltres-galar",
@@ -955,6 +961,27 @@ def sprite_url_for_pokemon(name: str, *, shiny: bool = False) -> str | None:
     if not sprite_id:
         return None
     return (SHINY_SPRITE_URL if shiny else SPRITE_URL).format(sprite_id)
+
+
+def pokemon_sprite_slug(name: str) -> str:
+    normalized = (
+        unicodedata.normalize("NFKD", name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .casefold()
+        .replace("'", "")
+        .replace("’", "")
+    )
+    for prefix, suffix in (
+        ("alolan ", "alola"),
+        ("galarian ", "galar"),
+        ("hisuian ", "hisui"),
+        ("paldean ", "paldea"),
+    ):
+        if normalized.startswith(prefix):
+            normalized = f"{normalized[len(prefix):]} {suffix}"
+            break
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
 
 
 THUMBNAIL_ASSETS_DIR: Final[Path] = Path(__file__).with_name("assets") / "thumbnails"
@@ -1478,7 +1505,16 @@ def starboard_art_url(
     )
     sprite_name = f"Gmax {base_name}" if details.gigantamax else base_name
     sprite_id = load_sprite_ids().get(sprite_name)
-    base_sprite_id = load_sprite_ids().get(base_name)
+    regional_form = re.match(
+        r"^(?:Alolan|Galarian|Hisuian|Paldean)\s+(.+)$",
+        base_name,
+        flags=re.IGNORECASE,
+    )
+    species_name = regional_form.group(1) if regional_form else base_name
+    base_sprite_id = load_sprite_ids().get(species_name)
+    regional_form_prefix = (
+        base_name.split(maxsplit=1)[0].casefold() if regional_form else None
+    )
 
     if use_3d_shiny_model and details.shiny:
         form_model_slug = SWSH_FORM_MODEL_SLUGS.get(base_name)
@@ -1493,21 +1529,42 @@ def starboard_art_url(
             and base_sprite_id is not None
             and 810 <= base_sprite_id <= 905
         ):
-            slug = re.sub(
-                r"[^a-z0-9]+", "-", normalize_pokemon_alias(base_name)
-            ).strip("-")
+            slug = pokemon_sprite_slug(base_name)
             return (
                 "https://projectpokemon.org/images/sprites-models/"
                 f"swsh-shiny-sprites/{slug}-gigantamax.gif"
             )
-        if sprite_id is not None and 810 <= sprite_id <= 905:
-            slug = re.sub(
-                r"[^a-z0-9]+", "-", normalize_pokemon_alias(sprite_name)
-            ).strip("-")
+        if (
+            sprite_id is not None
+            and 810 <= sprite_id <= 905
+            and not regional_form
+        ):
+            slug = pokemon_sprite_slug(sprite_name)
             return (
                 "https://projectpokemon.org/images/sprites-models/"
                 f"swsh-shiny-sprites/{slug}.gif"
             )
+        if (
+            base_sprite_id is not None
+            and 810 <= base_sprite_id <= 905
+            and regional_form_prefix == "galarian"
+        ):
+            slug = pokemon_sprite_slug(base_name)
+            return (
+                "https://projectpokemon.org/images/sprites-models/"
+                f"swsh-shiny-sprites/{slug}.gif"
+            )
+        if (
+            base_sprite_id is not None
+            and base_sprite_id <= 809
+            and regional_form_prefix not in {"hisuian", "paldean"}
+        ):
+            return PROJECT_POKEMON_SHINY_MODEL_URL.format(
+                pokemon_sprite_slug(base_name)
+            )
+        return SHOWDOWN_ANIMATED_SHINY_SPRITE_URL.format(
+            pokemon_sprite_slug(base_name)
+        )
     return sprite_url_for_pokemon(sprite_name, shiny=details.shiny)
 
 
@@ -1568,6 +1625,14 @@ def format_starboard_embed(
         "https://projectpokemon.org/images/sprites-models/"
     ):
         footer_text += " · 3D animation by PKParaiso via Project Pokémon"
+    elif image_url and image_url.startswith(
+        "https://projectpokemon.org/images/shiny-sprite/"
+    ):
+        footer_text += " · 3D animation via Project Pokémon"
+    elif image_url and image_url.startswith(
+        "https://play.pokemonshowdown.com/sprites/ani-shiny/"
+    ):
+        footer_text += " · Animated sprite via Pokémon Showdown"
     embed.set_footer(text=footer_text)
     if image_url:
         if category in {"normal_pokemon", "shiny"}:

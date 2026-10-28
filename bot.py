@@ -104,16 +104,13 @@ PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
 }
 PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "default": ("Default", "#292A2F"),
-    "rose": ("Rose", "#80566A"),
-    "blue": ("Blue", "#4D6F8D"),
-    "purple": ("Purple", "#69567F"),
-    "mint": ("Mint", "#4F756B"),
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("White", "#FFFFFF"),
-    "light_gray": ("Light Gray", "#F1F1F1"),
-    "soft_pink": ("Soft Pink", "#F9E4EC"),
-    "soft_blue": ("Soft Blue", "#E3F2FA"),
+}
+PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
+    "background": frozenset({"rose", "blue", "purple", "mint"}),
+    "middle_background": frozenset({"light_gray", "soft_pink", "soft_blue"}),
 }
 PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "none": ("No frame", "No frame selected"),
@@ -4138,7 +4135,12 @@ def valid_profile_setting(setting: str, value: object) -> bool:
     if setting == "catches":
         return isinstance(value, int) and not isinstance(value, bool) and value >= 0
     choices = PROFILE_SETTING_CHOICES.get(setting)
-    return isinstance(value, str) and choices is not None and value in choices
+    legacy_choices = PROFILE_LEGACY_CHOICES.get(setting, frozenset())
+    return (
+        isinstance(value, str)
+        and choices is not None
+        and (value in choices or value in legacy_choices)
+    )
 
 
 def load_profile_data(
@@ -4171,7 +4173,11 @@ def load_profile_data(
             )
         ):
             raise ValueError(f"Profile data in {path} has an invalid user entry")
-        profiles[user_id] = {**PROFILE_DEFAULTS, **stored_settings}
+        profile = {**PROFILE_DEFAULTS, **stored_settings}
+        for setting, legacy_choices in PROFILE_LEGACY_CHOICES.items():
+            if profile[setting] in legacy_choices:
+                profile[setting] = PROFILE_DEFAULTS[setting]
+        profiles[user_id] = profile
 
     seen_catch_ids = data["seen_catch_message_ids"]
     if any(
@@ -4327,7 +4333,7 @@ class ProfileEditButton(discord.ui.Button):
         await interaction.response.send_message(
             "Choose your profile colors and appearance.",
             view=ProfileEditView(self.profile_view),
-            ephemeral=True,
+            ephemeral=False,
         )
 
 
@@ -4452,9 +4458,8 @@ class NamingBot(discord.Client):
         }
 
     def set_profile_setting(self, user_id: int, setting: str, value: str) -> None:
-        if setting not in PROFILE_SETTING_CHOICES or not valid_profile_setting(
-            setting, value
-        ):
+        choices = PROFILE_SETTING_CHOICES.get(setting)
+        if choices is None or value not in choices:
             raise ValueError(f"Invalid profile setting: {setting}")
         profiles = {key: dict(profile) for key, profile in self.profiles.items()}
         updated = profiles.setdefault(str(user_id), dict(PROFILE_DEFAULTS))

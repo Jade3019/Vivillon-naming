@@ -247,14 +247,14 @@ existing notification behavior.
 
 Use `v!profile` to view your profile card. The caught-Pokémon total counts
 Pokétwo catches that Vivillon sees from now on; catches from before profile
-tracking was added cannot be recovered. The profile card is public, while the
-**Edit** menu appears privately when its owner presses **Edit**; changes update
-the public card. The card has the normal background on its left and right
-sides, with the blank middle column white by default and independent of that
-background. Use **Edit** to choose text color, background, and middle
-background. Backgrounds currently use color presets, and the frame picker has
-no frame options yet. Profile choices and totals are saved in
-`profile_data.json` by default; set `PROFILE_DATA_FILE` to use another path.
+tracking was added cannot be recovered. The profile card is public. Its public
+**Edit** menu appears only after the owner presses **Edit**; changing a setting
+updates the card without a confirmation reply. The card has the normal gray
+background on its left and right sides, with the blank middle column white.
+Until image choices are provided, the background and middle-background pickers
+have only those defaults; the frame picker has no frame options yet. Profile
+choices and totals are saved in `profile_data.json` by default; set
+`PROFILE_DATA_FILE` to use another path.
 
 ## Exchanging reservations
 

@@ -1347,6 +1347,50 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(normal_channel.send.await_count, 2)
 
+    async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            guild_id = SERVER_ID + 100
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(guild_id, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+
+            for message_id, title, pokemon in (
+                (465, "🌎 Regional Catch Detected!", "Hisuian Qwilfish"),
+                (466, "⭐ Rare Catch Detected!", "Ogerpon"),
+            ):
+                message = Mock()
+                message.id = message_id
+                message.guild.id = guild_id
+                message.channel.id = 304
+                message.channel.guild.id = guild_id
+                message.author.bot = True
+                message.author.id = 987654321
+                message.created_at = discord.utils.utcnow()
+                embed = discord.Embed(title=title)
+                embed.add_field(name="Trainer", value="<@123> 🌟", inline=True)
+                embed.add_field(name="Pokemon", value=pokemon, inline=True)
+                embed.add_field(name="Level", value="15", inline=True)
+                embed.add_field(name="IVs", value="54.30%", inline=True)
+                embed.set_footer(text="Catch Detection System")
+                message.embeds = [embed]
+                message.content = ""
+
+                await self.bot.on_message(message)
+
+            self.assertEqual(normal_channel.send.await_count, 2)
+            sent_embeds = [
+                call.kwargs["embed"]
+                for call in normal_channel.send.await_args_list
+            ]
+            self.assertEqual(
+                [embed.fields[1].value for embed in sent_embeds],
+                ["Hisuian Qwilfish", "Ogerpon"],
+            )
+
     async def test_missingno_catch_posts_to_the_main_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"

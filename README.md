@@ -106,9 +106,10 @@ check for a match. Settings are saved to `server_settings.json` by default; set
 Open **Starboard** from `v!settings` to choose separate **Vivillon Starboard**,
 **Shinyboard**, and **Normal Starboard** channels. The Vivillon Starboard posts
 shiny catches, catches with 90% IV or higher, catches below 10% IV, MissingNo.
-catches, and Gigantamax catches. The Normal Starboard posts catches for the
-configured regional forms and featured Pokémon, with the catcher, Pokémon,
-level, IV, thumbnail, and catch time. Shiny catches also post to the shinyboard
+catches, and Gigantamax catches. The Normal Starboard posts Pokétwo catches and
+Catch Detection System reports for configured regional forms and featured
+Pokémon, with the catcher, Pokémon, level, IV, thumbnail, and catch time. Shiny
+catches also post to the shinyboard
 when configured. Shiny posts include the catcher, Pokémon, level, IV, gender
 when Pokétwo provides it, and a chain only when the catch message identifies
 one. Starboard channel choices and the shiny count are saved in

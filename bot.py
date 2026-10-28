@@ -1092,6 +1092,60 @@ def parse_catch_details(text: str) -> CatchDetails | None:
     )
 
 
+def is_catch_detection_embed(embed: discord.Embed) -> bool:
+    title = embed.title or ""
+    footer = embed.footer.text or ""
+    return footer == "Catch Detection System" and re.search(
+        r"(?:Regional|Rare) Catch Detected!",
+        title,
+        re.IGNORECASE,
+    ) is not None
+
+
+def has_catch_detection_embed(message: discord.Message) -> bool:
+    return any(is_catch_detection_embed(embed) for embed in message.embeds)
+
+
+def parse_catch_detection_details(message: discord.Message) -> CatchDetails | None:
+    for embed in message.embeds:
+        if not is_catch_detection_embed(embed):
+            continue
+        fields = {
+            field.name.strip().rstrip(":").casefold(): field.value.strip()
+            for field in embed.fields
+        }
+        trainer_match = re.search(r"<@!?(\d+)>", fields.get("trainer", ""))
+        pokemon = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
+        level = fields.get("level", "")
+        iv_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*%?",
+            fields.get("ivs", fields.get("iv", "")),
+        )
+        if (
+            trainer_match is None
+            or not is_valid_pokemon_name(pokemon)
+            or re.fullmatch(r"\d+|\?{2,}", level) is None
+            or iv_match is None
+        ):
+            continue
+        iv_value = float(iv_match.group(1))
+        if not 0 <= iv_value <= 100:
+            continue
+        return CatchDetails(
+            user_id=int(trainer_match.group(1)),
+            pokemon=display_pokemon_name(pokemon),
+            level=level,
+            iv=f"{iv_value:g}%",
+            iv_value=iv_value,
+            gender=None,
+            shiny=False,
+            chain=None,
+            gigantamax=False,
+            missingno=False,
+        )
+    return None
+
+
 def starboard_category(details: CatchDetails) -> str | None:
     if details.missingno:
         return "missingno"
@@ -4321,9 +4375,15 @@ class NamingBot(discord.Client):
         # drop the org bot's own JSON requests, and before channel filtering.
         if self.org_rpc is not None and await self.org_rpc.handle_message(message):
             return
-        if message.author.bot and message.author.id != self.config.poketwo_bot_id:
+        poketwo_catch = message.author.id == self.config.poketwo_bot_id
+        catch_detection_report = has_catch_detection_embed(message)
+        if (
+            message.author.bot
+            and not poketwo_catch
+            and not catch_detection_report
+        ):
             return
-        if message.author.id == self.config.poketwo_bot_id:
+        if poketwo_catch or catch_detection_report:
             await self.handle_catch_starboard(message)
         self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
@@ -4869,7 +4929,9 @@ class NamingBot(discord.Client):
         self, before: discord.Message, after: discord.Message
     ) -> None:
         # Pokétwo sometimes adds the spawn image or text by editing the message.
-        if after.author.id != self.config.poketwo_bot_id:
+        poketwo_catch = after.author.id == self.config.poketwo_bot_id
+        catch_detection_report = has_catch_detection_embed(after)
+        if not poketwo_catch and not catch_detection_report:
             return
         await self.handle_catch_starboard(after)
         self.track_incense_command(after)
@@ -5541,6 +5603,8 @@ class NamingBot(discord.Client):
         if message.guild is None or message.id in self.handled_catch_ids:
             return
         details = parse_catch_details(message_text(message))
+        if details is None:
+            details = parse_catch_detection_details(message)
         if details is None:
             return
         category = starboard_category(details)

@@ -248,15 +248,16 @@ existing notification behavior.
 Use `v!profile` to view your catch stats, or `v!profile @user` to view another
 member's stats in server `1530949341013868635`. The card counts total catches,
 shinies, catches below 10% IV, catches at or above 90% IV, Gigantamax catches,
-and Missingno catches seen by Vivillon from now on; earlier catches cannot be
-recovered. The profile card is public. Its public **Edit** menu appears only
-after the owner presses **Edit**; changing a setting updates the card without a
-confirmation reply. The card has the normal gray background on its left and
-right sides, with the blank middle column white. Until image choices are
-provided, the background and middle-background pickers have only those
-defaults; the frame picker has no frame options yet. Profile choices and
-per-server totals are saved in `profile_data.json` by default; set
-`PROFILE_DATA_FILE` to use another path.
+and Missingno catches seen by Vivillon from now on. Each recognized catch
+message adds one to Total; a spawn by itself does not count, and the total has
+no cap. Earlier catches cannot be recovered. The profile card is public. Its
+public **Edit** menu appears only after the owner presses **Edit**; changing a
+setting updates the card without a confirmation reply. The card has the normal
+gray background on its left and right sides, with the blank middle column
+white. Until image choices are provided, the background and middle-background
+pickers have only those defaults; the frame picker has no frame options yet.
+Profile choices and per-server totals are saved in `profile_data.json` by
+default; set `PROFILE_DATA_FILE` to use another path.
 
 ## Exchanging reservations
 

@@ -4376,20 +4376,21 @@ def render_profile_image(
     )
     for index, (label, stat, icon) in enumerate(rows):
         y = 310 + index * 50
-        draw.text(
-            (64, y),
-            f"{label}: {stats[stat]:,}",
-            font=stat_font,
-            fill=text_color,
-        )
+        text_x = 110 if icon is not None else 64
         if icon is not None:
             draw_profile_stat_icon(
                 image,
                 draw,
                 icon,
-                (370, y - 2),
+                (64, y - 2),
                 emoji_assets or {},
             )
+        draw.text(
+            (text_x, y),
+            f"{label}: {stats[stat]:,}",
+            font=stat_font,
+            fill=text_color,
+        )
 
     output = BytesIO()
     image.save(output, format="PNG")

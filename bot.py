@@ -1039,6 +1039,7 @@ def parse_catch_details(text: str) -> CatchDetails | None:
     elif re.search(r"(?:♂|\bmale\b)", pokemon_text, re.IGNORECASE):
         gender = "Male"
         pokemon_text = re.sub(r"(?:♂|\bmale\b)", "", pokemon_text, flags=re.IGNORECASE)
+    pokemon_text = pokemon_text.replace("’", "'").replace("‘", "'")
     pokemon_text = pokemon_text.strip(" .,:;")
     missingno = is_missingno_name(pokemon_text)
     if missingno:

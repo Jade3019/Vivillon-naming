@@ -1284,6 +1284,35 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)
 
+    async def test_normal_starboard_posts_catch_with_curly_apostrophe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            message = Mock()
+            message.id = 462
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 10 "
+                "Galarian Farfetch’d ♀! (62.90%)!"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+
+            normal_channel.send.assert_awaited_once()
+            embed = normal_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
+            self.assertEqual(embed.fields[1].value, "Galarian Farfetch'd")
+            self.assertEqual(embed.fields[2].value, "10")
+
     async def test_missingno_catch_posts_to_the_main_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"

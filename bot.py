@@ -4417,13 +4417,19 @@ class NamingBot(discord.Client):
             return
         poketwo_catch = message.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(message)
+        parsed_catch_report = (
+            message.author.bot
+            and not poketwo_catch
+            and parse_catch_details(message_text(message)) is not None
+        )
         if (
             message.author.bot
             and not poketwo_catch
             and not catch_detection_report
+            and not parsed_catch_report
         ):
             return
-        if poketwo_catch or catch_detection_report:
+        if poketwo_catch or catch_detection_report or parsed_catch_report:
             await self.handle_catch_starboard(message)
         self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
@@ -4971,7 +4977,12 @@ class NamingBot(discord.Client):
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         poketwo_catch = after.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(after)
-        if not poketwo_catch and not catch_detection_report:
+        parsed_catch_report = (
+            after.author.bot
+            and not poketwo_catch
+            and parse_catch_details(message_text(after)) is not None
+        )
+        if not poketwo_catch and not catch_detection_report and not parsed_catch_report:
             return
         await self.handle_catch_starboard(after)
         self.track_incense_command(after)
@@ -5661,6 +5672,14 @@ class NamingBot(discord.Client):
         if normal_pokemon_catch and settings["normal_pokemon_channel"] is not None:
             posts.setdefault(settings["normal_pokemon_channel"], "normal_pokemon")
         if not posts:
+            logger.info(
+                "No starboard destination configured for catch message %s in guild %s "
+                "(category=%s, normal_starboard_match=%s)",
+                message.id,
+                message.guild.id,
+                category,
+                normal_pokemon_catch,
+            )
             return
 
         self.handled_catch_ids[message.id] = None
@@ -5689,6 +5708,12 @@ class NamingBot(discord.Client):
                 await channel.send(
                     embed=embed,
                     allowed_mentions=discord.AllowedMentions.none(),
+                )
+                logger.info(
+                    "Posted catch message %s to starboard channel %s as %s",
+                    message.id,
+                    channel_id,
+                    post_category,
                 )
             except discord.HTTPException:
                 logger.exception(

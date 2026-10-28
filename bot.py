@@ -1114,6 +1114,15 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             field.name.strip().rstrip(":").casefold(): field.value.strip()
             for field in embed.fields
         }
+        for line in (embed.description or "").splitlines():
+            description_field = re.fullmatch(
+                r"\s*`{0,3}\s*(trainer|pokemon|level|ivs?)\s*:\s*(.*?)\s*`{0,3}\s*",
+                line,
+                re.IGNORECASE,
+            )
+            if description_field is not None:
+                name, value = description_field.groups()
+                fields.setdefault(name.casefold(), value.strip())
         trainer_match = re.search(r"<@!?(\d+)>", fields.get("trainer", ""))
         pokemon_text = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
         level = fields.get("level", "???")

@@ -1458,6 +1458,41 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 ["Hisuian Qwilfish", "Ogerpon"],
             )
 
+    async def test_catch_detection_description_rows_post_pokemon_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            guild_id = SERVER_ID + 100
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(guild_id, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            message = Mock()
+            message.id = 467
+            message.guild.id = guild_id
+            message.channel.id = 304
+            message.channel.guild.id = guild_id
+            message.author.bot = True
+            message.author.id = 987654321
+            message.created_at = discord.utils.utcnow()
+            embed = discord.Embed(
+                title="⭐ Rare Catch Detected!",
+                description=(
+                    "Trainer : <@123>\n"
+                    "Pokemon : Tapu Fini\n"
+                    "Level : 34\n"
+                    "IVs : 40.32%"
+                ),
+            )
+            embed.set_footer(text="Catch Detection System")
+            message.embeds = [embed]
+            message.content = ""
+
+            await self.bot.on_message(message)
+
+            normal_channel.send.assert_awaited_once()
+            sent_embed = normal_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(sent_embed.fields[1].value, "Tapu Fini")
+
     async def test_catch_detection_special_categories_use_vivillon_and_shinyboards(
         self,
     ) -> None:

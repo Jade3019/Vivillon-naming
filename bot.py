@@ -60,6 +60,10 @@ PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
+PROFILE_CATCH_PREFIX_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\bCongratulations\s+(?P<catcher>[^!\n]+)!\s*You caught a\b",
+    re.IGNORECASE,
+)
 SHINYHUNT_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!sh\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -1211,6 +1215,20 @@ def parse_catch_details(text: str) -> CatchDetails | None:
         gigantamax=gigantamax,
         missingno=missingno,
     )
+
+
+def profile_catch_user_id(message: discord.Message) -> int | None:
+    match = PROFILE_CATCH_PREFIX_PATTERN.search(message_text(message))
+    if match is None:
+        return None
+    mention = re.search(r"<@!?(\d+)>", match.group("catcher"))
+    if mention is not None:
+        return int(mention.group(1))
+    for user in getattr(message, "mentions", []):
+        user_id = getattr(user, "id", None)
+        if isinstance(user_id, int) and not isinstance(user_id, bool):
+            return user_id
+    return None
 
 
 def is_catch_detection_embed(embed: discord.Embed) -> bool:
@@ -4695,27 +4713,31 @@ class NamingBot(discord.Client):
         details = parse_catch_details(message_text(message))
         if details is None:
             details = parse_catch_detection_details(message)
-        if details is None or details.user_id is None:
+        user_id = profile_catch_user_id(message)
+        if user_id is None and details is not None:
+            user_id = details.user_id
+        if user_id is None:
             return
 
         profile_stats = {
             key: dict(stats) for key, stats in self.profile_stats.items()
         }
         user_stats = profile_stats.setdefault(
-            f"{SERVER_ID}:{details.user_id}",
+            f"{SERVER_ID}:{user_id}",
             dict(PROFILE_STAT_DEFAULTS),
         )
         user_stats["total"] += 1
-        if details.shiny:
-            user_stats["shiny"] += 1
-        if details.iv_value is not None and details.iv_value < 10:
-            user_stats["low_iv"] += 1
-        if details.iv_value is not None and details.iv_value >= 90:
-            user_stats["high_iv"] += 1
-        if details.gigantamax:
-            user_stats["gmax"] += 1
-        if details.missingno:
-            user_stats["missingno"] += 1
+        if details is not None:
+            if details.shiny:
+                user_stats["shiny"] += 1
+            if details.iv_value is not None and details.iv_value < 10:
+                user_stats["low_iv"] += 1
+            if details.iv_value is not None and details.iv_value >= 90:
+                user_stats["high_iv"] += 1
+            if details.gigantamax:
+                user_stats["gmax"] += 1
+            if details.missingno:
+                user_stats["missingno"] += 1
         seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
         try:
             save_profile_data(
@@ -4728,7 +4750,7 @@ class NamingBot(discord.Client):
             logger.exception(
                 "Could not record catch %s for profile user %s",
                 message_id,
-                details.user_id,
+                user_id,
             )
             return
         self.profile_stats = profile_stats
@@ -5184,7 +5206,7 @@ class NamingBot(discord.Client):
         parsed_catch_report = (
             is_automated_message(message)
             and not poketwo_catch
-            and parse_catch_details(message_text(message)) is not None
+            and profile_catch_user_id(message) is not None
         )
         if (
             message.author.bot
@@ -5786,7 +5808,7 @@ class NamingBot(discord.Client):
         parsed_catch_report = (
             is_automated_message(after)
             and not poketwo_catch
-            and parse_catch_details(message_text(after)) is not None
+            and profile_catch_user_id(after) is not None
         )
         if not poketwo_catch and not catch_detection_report and not parsed_catch_report:
             return

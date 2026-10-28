@@ -1640,9 +1640,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             normal_channel = Mock(send=AsyncMock())
             self.bot.get_channel = Mock(return_value=normal_channel)
 
-            for message_id, title, pokemon in (
-                (465, "🌎 Regional Catch Detected!", "Hisuian Qwilfish"),
-                (466, "⭐ Rare Catch Detected!", "Ogerpon"),
+            for message_id, title, pokemon, trainer in (
+                (465, "🌎 Regional Catch Detected!", "Hisuian Qwilfish", "<@123> 🌟"),
+                (466, "⭐ Rare Catch Detected!", "Ogerpon", "<@123> 🌟"),
+                (467, "🌎 Regional Catch Detected!", "Obstagoon", "@KillerX"),
+                (468, "⭐ Rare Catch Detected!", "Azelf", "@KillerX"),
             ):
                 message = Mock()
                 message.id = message_id
@@ -1653,7 +1655,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 message.author.id = 987654321
                 message.created_at = discord.utils.utcnow()
                 embed = discord.Embed(title=title)
-                embed.add_field(name="Trainer", value="<@123> 🌟", inline=True)
+                embed.add_field(name="Trainer", value=trainer, inline=True)
                 embed.add_field(name="Pokemon", value=pokemon, inline=True)
                 embed.add_field(name="Level", value="15", inline=True)
                 embed.add_field(name="IVs", value="54.30%", inline=True)
@@ -1663,22 +1665,23 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
                 await self.bot.on_message(message)
 
-            self.assertEqual(normal_channel.send.await_count, 2)
+            self.assertEqual(normal_channel.send.await_count, 4)
             sent_embeds = [
                 call.kwargs["embed"]
                 for call in normal_channel.send.await_args_list
             ]
             self.assertEqual(
                 [embed.fields[1].value for embed in sent_embeds],
-                ["Hisuian Qwilfish", "Ogerpon"],
+                ["Hisuian Qwilfish", "Ogerpon", "Obstagoon", "Azelf"],
             )
             self.assertEqual(
                 [embed.description for embed in sent_embeds],
                 [
                     f"[Jump to message](https://discord.com/channels/{guild_id}/304/{message_id})"
-                    for message_id in (465, 466)
+                    for message_id in (465, 466, 467, 468)
                 ],
             )
+            self.assertEqual(sent_embeds[2].fields[0].value, "@KillerX")
 
     async def test_catch_detection_description_rows_post_pokemon_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

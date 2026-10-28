@@ -1020,7 +1020,7 @@ def format_pc_catch_embed(
 
 @dataclass(frozen=True)
 class CatchDetails:
-    user_id: int
+    user_id: int | None
     pokemon: str
     level: str
     iv: str
@@ -1030,6 +1030,7 @@ class CatchDetails:
     chain: int | None
     gigantamax: bool
     missingno: bool
+    trainer: str | None = None
 
 
 def parse_catch_details(text: str) -> CatchDetails | None:
@@ -1164,7 +1165,8 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             if description_field is not None:
                 name, value = description_field.groups()
                 fields.setdefault(name.casefold(), value.strip())
-        trainer_match = re.search(r"<@!?(\d+)>", fields.get("trainer", ""))
+        trainer = fields.get("trainer", "").strip()
+        trainer_match = re.search(r"<@!?(\d+)>", trainer)
         pokemon_text = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
         level = fields.get("level", "???")
         iv_text = fields.get("ivs", fields.get("iv", ""))
@@ -1202,7 +1204,7 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             re.IGNORECASE,
         )
         if (
-            trainer_match is None
+            not trainer
             or (not missingno and not is_valid_pokemon_name(pokemon_text))
             or re.fullmatch(r"\d+|\?{2,}", level) is None
         ):
@@ -1222,7 +1224,7 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
         ):
             pokemon_text = f"Gigantamax {pokemon_text}"
         return CatchDetails(
-            user_id=int(trainer_match.group(1)),
+            user_id=int(trainer_match.group(1)) if trainer_match else None,
             pokemon=display_pokemon_name(pokemon_text),
             level=level,
             iv=iv,
@@ -1232,6 +1234,7 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
             chain=int(chain_match.group(1)) if chain_match and shiny else None,
             gigantamax=gigantamax,
             missingno=missingno,
+            trainer=trainer if trainer_match is None else None,
         )
     return None
 
@@ -1595,7 +1598,10 @@ def format_starboard_embed(
         color=discord.Color(DEFAULT_EMBED_COLOR),
         timestamp=caught_at,
     )
-    embed.add_field(name="Caught by", value=f"<@{details.user_id}>", inline=False)
+    caught_by = details.trainer or (
+        f"<@{details.user_id}>" if details.user_id is not None else "Unknown"
+    )
+    embed.add_field(name="Caught by", value=caught_by, inline=False)
     embed.add_field(name="Pokémon", value=details.pokemon, inline=True)
     if category == "normal_pokemon":
         embed.add_field(name="Level", value=details.level, inline=True)

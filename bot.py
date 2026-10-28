@@ -1595,7 +1595,6 @@ def format_starboard_embed(
     category: str,
     caught_at: datetime,
     *,
-    jump_url: str,
     use_3d_shiny_model: bool = False,
     test_preview: bool = False,
 ) -> discord.Embed:
@@ -1611,7 +1610,6 @@ def format_starboard_embed(
         f"<@{details.user_id}>" if details.user_id is not None else "Unknown"
     )
     description_lines = [
-        f"[Jump to message]({jump_url})",
         f"**Caught by:** {caught_by}",
         f"**Pokémon:** {details.pokemon}",
     ]
@@ -1658,10 +1656,23 @@ def format_starboard_embed(
         "https://play.pokemonshowdown.com/sprites/ani-shiny/"
     ):
         footer_text += " · Animated sprite via Pokémon Showdown"
-    embed.set_footer(text=footer_text    )
+    embed.set_footer(text=footer_text)
     if image_url:
         embed.set_thumbnail(url=image_url)
     return embed
+
+
+def starboard_jump_view(jump_url: str) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(
+        discord.ui.Button(
+            label="Jump to message",
+            emoji="🔗",
+            style=discord.ButtonStyle.link,
+            url=jump_url,
+        )
+    )
+    return view
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
@@ -5884,14 +5895,14 @@ class NamingBot(discord.Client):
                         message.guild.id,
                     )
                     continue
+            jump_url = (
+                f"https://discord.com/channels/{message.guild.id}/"
+                f"{message.channel.id}/{message.id}"
+            )
             embed = format_starboard_embed(
                 details,
                 post_category,
                 message.created_at,
-                jump_url=(
-                    f"https://discord.com/channels/{message.guild.id}/"
-                    f"{message.channel.id}/{message.id}"
-                ),
                 use_3d_shiny_model=(
                     details.shiny and channel_id == settings["shiny_channel"]
                 ),
@@ -5900,6 +5911,7 @@ class NamingBot(discord.Client):
             try:
                 await channel.send(
                     embed=embed,
+                    view=starboard_jump_view(jump_url),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
                 logger.info(
@@ -6014,14 +6026,14 @@ class NamingBot(discord.Client):
                     )
                     failed_channels.append(channel_id)
                     continue
+            jump_url = (
+                f"https://discord.com/channels/{message.guild.id}/"
+                f"{message.channel.id}/{message.id}"
+            )
             embed = format_starboard_embed(
                 details,
                 post_category,
                 message.created_at,
-                jump_url=(
-                    f"https://discord.com/channels/{message.guild.id}/"
-                    f"{message.channel.id}/{message.id}"
-                ),
                 use_3d_shiny_model=(
                     is_shiny and channel_id == settings["shiny_channel"]
                 ),
@@ -6031,6 +6043,7 @@ class NamingBot(discord.Client):
             try:
                 await channel.send(
                     embed=embed,
+                    view=starboard_jump_view(jump_url),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
                 logger.info(

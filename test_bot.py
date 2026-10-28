@@ -1057,7 +1057,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             details,
             "shiny",
             discord.utils.utcnow(),
-            jump_url="https://discord.com/channels/1/2/3",
         )
         self.assertEqual(
             shiny_embed.thumbnail.url,
@@ -1083,7 +1082,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             no_chain,
             "shiny",
             discord.utils.utcnow(),
-            jump_url="https://discord.com/channels/1/2/3",
         )
         self.assertNotIn("**Shiny chain:**", no_chain_embed.description)
 
@@ -1147,7 +1145,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         details,
                         expected_category,
                         discord.utils.utcnow(),
-                        jump_url="https://discord.com/channels/1/2/3",
                     )
                     self.assertEqual(missingno_embed.fields, [])
                     self.assertIn("**Level:** ???", missingno_embed.description)
@@ -1157,7 +1154,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         details,
                         expected_category,
                         discord.utils.utcnow(),
-                        jump_url="https://discord.com/channels/1/2/3",
                     )
                     self.assertEqual(gigantamax_embed.fields, [])
                     self.assertIn(
@@ -1176,7 +1172,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             details,
             "high_iv",
             caught_at,
-            jump_url="https://discord.com/channels/1/2/3",
         )
 
         self.assertEqual(embed.fields, [])
@@ -1226,7 +1221,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             shiny_details,
             "shiny",
             caught_at,
-            jump_url="https://discord.com/channels/1/2/3",
             use_3d_shiny_model=True,
             test_preview=True,
         )
@@ -1242,7 +1236,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             shiny_details,
             "shiny",
             caught_at,
-            jump_url="https://discord.com/channels/1/2/3",
             use_3d_shiny_model=True,
         )
         self.assertEqual(actual_shiny_embed.footer.text, "Caught at")
@@ -1251,7 +1244,6 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             wiglett_details,
             "shiny",
             caught_at,
-            jump_url="https://discord.com/channels/1/2/3",
             use_3d_shiny_model=True,
         )
         self.assertEqual(
@@ -1383,6 +1375,13 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)
+            button = normal_channel.send.await_args.kwargs["view"].children[0]
+            self.assertEqual(button.label, "Jump to message")
+            self.assertEqual(button.style, discord.ButtonStyle.link)
+            self.assertEqual(
+                button.url,
+                f"https://discord.com/channels/{SERVER_ID}/304/{message.id}",
+            )
 
     async def test_normal_starboard_accepts_catch_text_from_other_bot_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1516,13 +1515,17 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 embed.description,
                 "\n".join(
                     (
-                        f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/474)",
                         "**Caught by:** <@123>",
                         "**Pokémon:** Xurkitree",
                         "**Level:** Unknown",
                         "**IV:** Unknown",
                     )
                 ),
+            )
+            button = normal_channel.send.await_args.kwargs["view"].children[0]
+            self.assertEqual(
+                button.url,
+                f"https://discord.com/channels/{SERVER_ID}/304/474",
             )
             message.reply.assert_awaited_once()
 
@@ -1586,11 +1589,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         "Test preview — not an actual catch"
                     )
                 )
-                self.assertIn(
-                    f"[Jump to message](https://discord.com/channels/{SERVER_ID}/304/475)",
-                    embed.description,
-                )
                 self.assertIsNone(embed.image.url)
+                self.assertEqual(
+                    channel.send.await_args.kwargs["view"].children[0].url,
+                    f"https://discord.com/channels/{SERVER_ID}/304/475",
+                )
             shiny_embed = shiny_channel.send.await_args.kwargs["embed"]
             self.assertEqual(
                 shiny_embed.thumbnail.url,
@@ -1708,9 +1711,12 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 ],
             )
             self.assertEqual(
-                [embed.description.splitlines()[0] for embed in sent_embeds],
                 [
-                    f"[Jump to message](https://discord.com/channels/{guild_id}/304/{message_id})"
+                    call.kwargs["view"].children[0].url
+                    for call in normal_channel.send.await_args_list
+                ],
+                [
+                    f"https://discord.com/channels/{guild_id}/304/{message_id}"
                     for message_id in (465, 466, 467, 468, 469, 470, 471)
                 ],
             )

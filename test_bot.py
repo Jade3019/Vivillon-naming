@@ -1078,6 +1078,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         for pokemon_name in (
             "Alolan Ninetales",
             "Galarian Zen Darmanitan",
+            "Perrserker",
             "Hisuian Zorua",
             "Combat Breed Tauros",
             "Fighting Arceus",
@@ -1312,6 +1313,39 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
             self.assertEqual(embed.fields[1].value, "Galarian Farfetch'd")
             self.assertEqual(embed.fields[2].value, "10")
+
+    async def test_normal_starboard_posts_in_unlisted_guild_for_new_and_edited_catches(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            guild_id = SERVER_ID + 100
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(guild_id, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+
+            for message_id, use_edit in ((463, False), (464, True)):
+                message = Mock()
+                message.id = message_id
+                message.guild.id = guild_id
+                message.channel.id = 304
+                message.channel.guild.id = guild_id
+                message.author.bot = True
+                message.author.id = self.bot.config.poketwo_bot_id
+                message.created_at = discord.utils.utcnow()
+                message.content = (
+                    "Congratulations <@123>! You caught a Level 22 Perrserker! "
+                    "(62.90%)!"
+                )
+                message.embeds = []
+
+                if use_edit:
+                    await self.bot.on_message_edit(Mock(), message)
+                else:
+                    await self.bot.on_message(message)
+
+            self.assertEqual(normal_channel.send.await_count, 2)
 
     async def test_missingno_catch_posts_to_the_main_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

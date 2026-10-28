@@ -1150,6 +1150,7 @@ Sirfetch'd
 Cursola
 Runerigus
 Mr. Rime
+Perrserker
 Hisuian Growlithe
 Hisuian Arcanine
 Hisuian Electrode
@@ -4322,6 +4323,8 @@ class NamingBot(discord.Client):
             return
         if message.author.bot and message.author.id != self.config.poketwo_bot_id:
             return
+        if message.author.id == self.config.poketwo_bot_id:
+            await self.handle_catch_starboard(message)
         self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
             return
@@ -4329,8 +4332,6 @@ class NamingBot(discord.Client):
         self.track_chat_event_message(message)
 
         text = message_text(message)
-        if message.author.id == self.config.poketwo_bot_id:
-            await self.handle_catch_starboard(message)
         if message.author.id != self.config.poketwo_bot_id:
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
                 await self.handle_event_command(message)
@@ -4870,11 +4871,11 @@ class NamingBot(discord.Client):
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         if after.author.id != self.config.poketwo_bot_id:
             return
+        await self.handle_catch_starboard(after)
         self.track_incense_command(after)
         if not self.is_allowed_channel(after.channel):
             return
         text = message_text(after)
-        await self.handle_catch_starboard(after)
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(after)
 

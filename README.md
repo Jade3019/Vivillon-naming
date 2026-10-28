@@ -103,15 +103,20 @@ active ping targets; when targets exist, it still has to identify each spawn to
 check for a match. Settings are saved to `server_settings.json` by default; set
 `SERVER_SETTINGS_FILE` to use another path.
 
-Open **Starboard** from `v!settings` to choose separate main and shiny catch
-channels. The main starboard posts shiny catches, catches with 90% IV or higher,
-catches below 10% IV, MissingNo. catches, and Gigantamax catches. Shiny catches
-also post to the shinyboard when one is configured. Shiny posts include the
-catcher, Pokémon, level, IV, gender when Pokétwo provides it, and a chain only
-when the catch message identifies one. Other catch types show the requested
-catcher and Pokémon details, and each embed carries the catch time. Starboard
-channel choices are saved in `starboard_settings.json` by default; set
-`STARBOARD_SETTINGS_FILE` to use another path.
+Open **Starboard** from `v!settings` to choose separate **Vivillon Starboard**,
+**Shinyboard**, and **Normal Starboard** channels. The Vivillon Starboard posts
+shiny catches, catches with 90% IV or higher, catches below 10% IV, MissingNo.
+catches, and Gigantamax catches. The Normal Starboard posts catches for the
+configured regional forms and featured Pokémon, with the catcher, Pokémon,
+level, IV, thumbnail, and catch time. Shiny catches also post to the shinyboard
+when configured. Shiny posts include the catcher, Pokémon, level, IV, gender
+when Pokétwo provides it, and a chain only when the catch message identifies
+one. Starboard channel choices and the shiny count are saved in
+`starboard_settings.json` by default; set `STARBOARD_SETTINGS_FILE` to use
+another path. Each caught shiny increments the saved shiny count and renames
+the shinyboard with a numeric suffix (for example, `shiny-board-1`, then
+`shiny-board-2`). The bot needs Manage Channels permission to rename the
+channel; catches are still counted if Discord prevents a rename.
 
 Catch embeds use animated Generation 8 GIFs where the linked
 [Project Pokémon sprite index](https://projectpokemon.org/home/docs/spriteindex_148/3d-models-generation-8-pok%C3%A9mon-r123/)

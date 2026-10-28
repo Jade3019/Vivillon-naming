@@ -58,6 +58,7 @@ from bot import (
     is_valid_pokemon_name,
     is_image_test_command,
     is_missingno_name,
+    is_normal_starboard_pokemon,
     is_single_type_fire_pokemon,
     is_single_type_normal_pokemon,
     is_single_type_water_pokemon,
@@ -1071,6 +1072,25 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("Shiny chain", [field.name for field in no_chain_embed.fields])
 
+    def test_normal_starboard_matches_requested_forms_and_all_form_families(
+        self,
+    ) -> None:
+        for pokemon_name in (
+            "Alolan Ninetales",
+            "Galarian Zen Darmanitan",
+            "Hisuian Zorua",
+            "Combat Breed Tauros",
+            "Fighting Arceus",
+            "Douse Drive Genesect",
+            "Wellspring-Mask Ogerpon",
+            "Rapid Strike Urshifu",
+            "Zenith Marshadow",
+            "Gigantamax Urshifu",
+        ):
+            with self.subTest(pokemon_name=pokemon_name):
+                self.assertTrue(is_normal_starboard_pokemon(pokemon_name))
+        self.assertFalse(is_normal_starboard_pokemon("Pikachu"))
+
     def test_categorizes_high_iv_low_iv_missingno_and_gigantamax(self) -> None:
         examples = (
             (
@@ -1161,12 +1181,19 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
 
             self.bot.set_starboard_channel(SERVER_ID, "normal", 101)
             self.bot.set_starboard_channel(SERVER_ID, "shiny", 202)
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
 
             self.assertEqual(
                 load_starboard_settings(self.bot.starboard_settings_path)[
                     str(SERVER_ID)
                 ],
-                {"normal_channel": 101, "shiny_channel": 202},
+                {
+                    "normal_channel": 101,
+                    "shiny_channel": 202,
+                    "normal_pokemon_channel": 303,
+                    "shiny_base_name": None,
+                    "shiny_count": 0,
+                },
             )
             view = StarboardSettingsView(self.bot, SERVER_ID)
             self.assertTrue(view.has_components_v2())
@@ -1177,6 +1204,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertIn("server_settings:starboard:select:normal", component_ids)
             self.assertIn("server_settings:starboard:select:shiny", component_ids)
+            self.assertIn(
+                "server_settings:starboard:select:normal_pokemon",
+                component_ids,
+            )
 
     async def test_shiny_catch_posts_to_both_boards_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1215,6 +1246,44 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 shiny_channel.send.await_args.kwargs["allowed_mentions"].users
             )
 
+    async def test_normal_starboard_posts_listed_catch_with_thumbnail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            message = Mock()
+            message.id = 461
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 22 Obstagoon! "
+                "(42.12%)!"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+
+            normal_channel.send.assert_awaited_once()
+            embed = normal_channel.send.await_args.kwargs["embed"]
+            self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
+            self.assertEqual(
+                [field.name for field in embed.fields],
+                ["Caught by", "Pokémon", "Level", "IV"],
+            )
+            self.assertEqual(
+                embed.thumbnail.url,
+                "https://projectpokemon.org/images/sprites-models/"
+                "swsh-normal-sprites/obstagoon.gif",
+            )
+            self.assertIsNone(embed.image.url)
+            self.assertEqual(embed.timestamp, message.created_at)
+
     async def test_missingno_catch_posts_to_the_main_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"
@@ -1243,6 +1312,58 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 [field.value for field in embed.fields],
                 ["<@123>", "Missingno", "???", "???"],
+            )
+
+    async def test_shiny_catches_increment_and_persist_the_channel_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(
+                SERVER_ID,
+                "shiny",
+                202,
+                "shiny-board",
+            )
+            shiny_channel = Mock(send=AsyncMock(), edit=AsyncMock())
+            shiny_channel.name = "shiny-board"
+            self.bot.get_channel = Mock(return_value=shiny_channel)
+
+            for message_id in (459, 460):
+                message = Mock()
+                message.id = message_id
+                message.guild.id = SERVER_ID
+                message.channel.id = 303
+                message.channel.guild.id = SERVER_ID
+                message.author.bot = True
+                message.author.id = self.bot.config.poketwo_bot_id
+                message.created_at = discord.utils.utcnow()
+                message.content = (
+                    "Congratulations <@123>! You caught a Level 20 Bagon! "
+                    "(50.54%)! These colors seem unusual... ✨"
+                )
+                message.embeds = []
+
+                await self.bot.on_message(message)
+
+            self.assertEqual(shiny_channel.send.await_count, 2)
+            self.assertEqual(
+                shiny_channel.edit.await_args_list,
+                [
+                    call(
+                        name="shiny-board-1",
+                        reason="Update shiny catch count",
+                    ),
+                    call(
+                        name="shiny-board-2",
+                        reason="Update shiny catch count",
+                    ),
+                ],
+            )
+            self.assertEqual(
+                load_starboard_settings(self.bot.starboard_settings_path)[
+                    str(SERVER_ID)
+                ]["shiny_count"],
+                2,
             )
 
     async def test_shiny_gigantamax_uses_the_matching_embed_on_each_board(self) -> None:

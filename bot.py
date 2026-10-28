@@ -1105,6 +1105,214 @@ def starboard_category(details: CatchDetails) -> str | None:
     return None
 
 
+NORMAL_STARBOARD_POKEMON_NAMES: Final[frozenset[str]] = frozenset(
+    normalize_pokemon_alias(name).replace("’", "'")
+    for name in """
+Alolan Ninetales
+Alolan Vulpix
+Alolan Geodude
+Alolan Graveler
+Alolan Raticate
+Alolan Rattata
+Alolan Persian
+Alolan Meowth
+Alolan Exeggutor
+Alolan Dugtrio
+Alolan Diglett
+Alolan Grimer
+Alolan Golem
+Alolan Sandshrew
+Alolan Sandslash
+Alolan Marowak
+Alolan Raichu
+Alolan Muk
+Galarian Linoone
+Galarian Yamask
+Galarian Slowpoke
+Galarian Slowbro
+Galarian Slowking
+Galarian Farfetch'd
+Galarian Rapidash
+Galarian Ponyta
+Galarian Mr. Mime
+Galarian Weezing
+Galarian Zigzagoon
+Galarian Corsola
+Galarian Meowth
+Galarian Darumaka
+Galarian Stunfisk
+Galarian Darmanitan
+Galarian Zen Darmanitan
+Darmanitan Galar Zen
+Obstagoon
+Sirfetch'd
+Cursola
+Runerigus
+Mr. Rime
+Hisuian Growlithe
+Hisuian Arcanine
+Hisuian Electrode
+Hisuian Voltorb
+Hisuian Typhlosion
+Hisuian Lilligant
+Hisuian Samurott
+Hisuian Sneasel
+Hisuian Decidueye
+Hisuian Qwilfish
+Hisuian Braviary
+Hisuian Avalugg
+Hisuian Zoroark
+Hisuian Zorua
+Hisuian Sliggoo
+Hisuian Goodra
+Basculegion
+Sneasler
+Overqwil
+Paldean Wooper
+Combat Breed Tauros
+Tauros Combat Breed
+Blaze Breed Tauros
+Tauros Blaze Breed
+Aqua Breed Tauros
+Tauros Aqua Breed
+Articuno
+Zapdos
+Moltres
+Mewtwo
+Mew
+Raikou
+Entei
+Suicune
+Lugia
+Ho-oh
+Celebi
+Regirock
+Regice
+Registeel
+Latias
+Latios
+Kyogre
+Groudon
+Rayquaza
+Jirachi
+Deoxys
+Attack Deoxys
+Defense Deoxys
+Speed Deoxys
+Uxie
+Mesprit
+Azelf
+Dialga
+Palkia
+Heatran
+Regigigas
+Giratina
+Cresselia
+Phione
+Manaphy
+Darkrai
+Shaymin
+Victini
+Cobalion
+Terrakion
+Virizion
+Tornadus
+Thundurus
+Reshiram
+Zekrom
+Landorus
+Kyurem
+Keldeo
+Meloetta
+Pirouette Meloetta
+Yveltal
+Diancie
+Hoopa
+Volcanion
+Type: Null
+Type Null
+Tapu Koko
+Tapu Lele
+Tapu Bulu
+Tapu Fini
+Cosmog
+Cosmoem
+Solgaleo
+Lunala
+Nihilego
+Buzzwole
+Pheromosa
+Xurkitree
+Celesteela
+Kartana
+Guzzlord
+Necrozma
+Magearna
+Marshadow
+Zenith Marshadow
+Poipole
+Naganadel
+Stakataka
+Blacephalon
+Zeraora
+Meltan
+Kubfu
+Zarude
+Dada Zarude
+Regieleki
+Regidrago
+Glastrier
+Spectrier
+Calyrex
+Enamorus
+Wo-Chien
+Chien-Pao
+Ting-Lu
+Chi-Yu
+Okidogi
+Munkidori
+Fezandipiti
+Terapagos
+Pecharunt
+Zacian
+Zamazenta
+Eternatus
+Melmetal
+Galarian Articuno
+Galarian Moltres
+Galarian Zapdos
+""".splitlines()
+    if name.strip()
+)
+NORMAL_STARBOARD_ALL_FORMS: Final[tuple[str, ...]] = (
+    "Arceus",
+    "Genesect",
+    "Xerneas",
+    "Zygarde",
+    "Silvally",
+    "Ogerpon",
+    "Urshifu",
+    "Koraidon",
+    "Miraidon",
+)
+
+
+def is_normal_starboard_pokemon(pokemon_name: str) -> bool:
+    pokemon_name = re.sub(
+        r"^(?:gigantamax|gmax)\s+",
+        "",
+        pokemon_name,
+        flags=re.IGNORECASE,
+    )
+    normalized_name = normalize_pokemon_alias(pokemon_name).replace("’", "'")
+    if normalized_name in NORMAL_STARBOARD_POKEMON_NAMES:
+        return True
+    return any(
+        pokemon_matches_all_forms_reservation(pokemon_name, species_name)
+        for species_name in NORMAL_STARBOARD_ALL_FORMS
+    )
+
+
 def starboard_art_url(details: CatchDetails) -> str | None:
     pokemon_name = details.pokemon
     base_name = re.sub(
@@ -1145,6 +1353,7 @@ def format_starboard_embed(
         "low_iv": "📉 Low-IV Capture",
         "missingno": "❔ MissingNo. Capture",
         "gigantamax": "🌟 Gigantamax Capture",
+        "normal_pokemon": "⭐ Pokémon Spotlight",
     }
     embed = discord.Embed(
         title=titles[category],
@@ -1153,7 +1362,10 @@ def format_starboard_embed(
     )
     embed.add_field(name="Caught by", value=f"<@{details.user_id}>", inline=False)
     embed.add_field(name="Pokémon", value=details.pokemon, inline=True)
-    if category in {"shiny", "missingno", "high_iv", "low_iv"}:
+    if category == "normal_pokemon":
+        embed.add_field(name="Level", value=details.level, inline=True)
+        embed.add_field(name="IV", value=details.iv, inline=True)
+    elif category in {"shiny", "missingno", "high_iv", "low_iv"}:
         if category in {"high_iv", "low_iv"}:
             embed.add_field(name="IV", value=details.iv, inline=True)
             embed.add_field(name="Level", value=details.level, inline=True)
@@ -1170,7 +1382,10 @@ def format_starboard_embed(
     embed.set_footer(text="Caught at")
     image_url = starboard_art_url(details)
     if image_url:
-        embed.set_image(url=image_url)
+        if category == "normal_pokemon":
+            embed.set_thumbnail(url=image_url)
+        else:
+            embed.set_image(url=image_url)
     return embed
 
 
@@ -2595,7 +2810,7 @@ class ServerSettingsView(discord.ui.LayoutView):
             discord.ui.Section(
                 discord.ui.TextDisplay(
                     "### ⭐ Starboard\n"
-                    "Main starboard and the separate shinyboard."
+                    "Vivillon, Shiny, and Normal Starboard channels."
                 ),
                 accessory=StarboardSectionButton(bot, guild_id),
             ),
@@ -2638,13 +2853,14 @@ async def starboard_settings_guard(
 
 class StarboardChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, bot: "NamingBot", guild_id: int, board: str) -> None:
+        placeholders = {
+            "normal": "Choose the Vivillon Starboard channel",
+            "shiny": "Choose the shinyboard channel",
+            "normal_pokemon": "Choose the Normal Starboard channel",
+        }
         super().__init__(
             channel_types=[discord.ChannelType.text],
-            placeholder=(
-                "Choose the main starboard channel"
-                if board == "normal"
-                else "Choose the shinyboard channel"
-            ),
+            placeholder=placeholders[board],
             custom_id=f"server_settings:starboard:select:{board}",
         )
         self.bot = bot
@@ -2662,7 +2878,12 @@ class StarboardChannelSelect(discord.ui.ChannelSelect):
             )
             return
         try:
-            self.bot.set_starboard_channel(self.guild_id, self.board, channel.id)
+            self.bot.set_starboard_channel(
+                self.guild_id,
+                self.board,
+                channel.id,
+                getattr(channel, "name", None),
+            )
         except ValueError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
@@ -2673,9 +2894,13 @@ class StarboardChannelSelect(discord.ui.ChannelSelect):
 
 class StarboardClearButton(discord.ui.Button):
     def __init__(self, bot: "NamingBot", guild_id: int, board: str) -> None:
-        label = "Clear Main" if board == "normal" else "Clear Shiny"
+        labels = {
+            "normal": "Clear Vivillon",
+            "shiny": "Clear Shiny",
+            "normal_pokemon": "Clear Normal",
+        }
         super().__init__(
-            label=label,
+            label=labels[board],
             style=discord.ButtonStyle.secondary,
             custom_id=f"server_settings:starboard:clear:{board}",
         )
@@ -2722,10 +2947,15 @@ class StarboardSettingsView(discord.ui.LayoutView):
     def __init__(self, bot: "NamingBot", guild_id: int) -> None:
         super().__init__(timeout=None)
         settings = bot.starboard_settings_for_guild(guild_id)
-        main_channel = settings["normal_channel"]
+        vivillon_channel = settings["normal_channel"]
         shiny_channel = settings["shiny_channel"]
-        main_text = f"<#{main_channel}>" if main_channel else "`Not set`"
+        normal_channel = settings["normal_pokemon_channel"]
+        shiny_count = settings["shiny_count"]
+        vivillon_text = (
+            f"<#{vivillon_channel}>" if vivillon_channel else "`Not set`"
+        )
         shiny_text = f"<#{shiny_channel}>" if shiny_channel else "`Not set`"
+        normal_text = f"<#{normal_channel}>" if normal_channel else "`Not set`"
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 "# ⭐ Catch Starboards\n"
@@ -2733,8 +2963,8 @@ class StarboardSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
-                "### Main Starboard\n"
-                f"Current channel: {main_text}\n"
+                "### Vivillon Starboard\n"
+                f"Current channel: {vivillon_text}\n"
                 "Receives shiny, high-IV (90%+), low-IV (under 10%), "
                 "MissingNo., and Gigantamax catches."
             ),
@@ -2743,15 +2973,28 @@ class StarboardSettingsView(discord.ui.LayoutView):
             ),
             discord.ui.TextDisplay(
                 "### Shinyboard\n"
-                f"Current channel: {shiny_text}\n"
-                "Receives shiny catches. A shiny catch is also posted to the main starboard."
+                f"Current channel: {shiny_text} · Caught shinies: {shiny_count}\n"
+                "Receives shiny catches and increments the channel suffix "
+                "(for example, `shiny-board-1`). The bot needs Manage Channels "
+                "permission to rename it. A shiny catch is also posted to the "
+                "Vivillon Starboard."
             ),
             discord.ui.ActionRow(
                 StarboardChannelSelect(bot, guild_id, "shiny")
             ),
+            discord.ui.TextDisplay(
+                "### Normal Starboard\n"
+                f"Current channel: {normal_text}\n"
+                "Receives catches for the configured regional forms and "
+                "featured Pokémon."
+            ),
+            discord.ui.ActionRow(
+                StarboardChannelSelect(bot, guild_id, "normal_pokemon")
+            ),
             discord.ui.ActionRow(
                 StarboardClearButton(bot, guild_id, "normal"),
                 StarboardClearButton(bot, guild_id, "shiny"),
+                StarboardClearButton(bot, guild_id, "normal_pokemon"),
             ),
             discord.ui.Separator(),
             discord.ui.ActionRow(StarboardBackButton(bot, guild_id)),
@@ -3417,14 +3660,31 @@ def save_server_settings(
         raise ValueError(f"Could not save server settings to {path}") from error
 
 
-STARBOARD_DEFAULTS: Final[dict[str, int | None]] = {
+STARBOARD_DEFAULTS: Final[dict[str, int | str | None]] = {
     "normal_channel": None,
     "shiny_channel": None,
+    "normal_pokemon_channel": None,
+    "shiny_base_name": None,
+    "shiny_count": 0,
 }
 STARBOARD_SETTING_KEYS: Final[frozenset[str]] = frozenset(STARBOARD_DEFAULTS)
+STARBOARD_CHANNEL_SETTING_KEYS: Final[dict[str, str]] = {
+    "normal": "normal_channel",
+    "shiny": "shiny_channel",
+    "normal_pokemon": "normal_pokemon_channel",
+}
 
 
-def load_starboard_settings(path: Path) -> dict[str, dict[str, int | None]]:
+def split_channel_counter(channel_name: str) -> tuple[str, int]:
+    match = re.fullmatch(r"(.+)-(\d+)", channel_name.strip())
+    if match is None:
+        return channel_name.strip(), 0
+    return match.group(1), int(match.group(2))
+
+
+def load_starboard_settings(
+    path: Path,
+) -> dict[str, dict[str, int | str | None]]:
     if not path.exists():
         return {}
     try:
@@ -3434,22 +3694,14 @@ def load_starboard_settings(path: Path) -> dict[str, dict[str, int | None]]:
     if not isinstance(data, dict):
         raise ValueError(f"Starboard settings in {path} have an invalid format")
 
-    settings: dict[str, dict[str, int | None]] = {}
+    settings: dict[str, dict[str, int | str | None]] = {}
     for guild_id, guild_settings in data.items():
         if (
             not isinstance(guild_id, str)
             or not guild_id.isdecimal()
             or not isinstance(guild_settings, dict)
             or any(
-                key not in STARBOARD_SETTING_KEYS
-                or (
-                    value is not None
-                    and (
-                        isinstance(value, bool)
-                        or not isinstance(value, int)
-                        or value <= 0
-                    )
-                )
+                key not in STARBOARD_SETTING_KEYS or not valid_starboard_setting(key, value)
                 for key, value in guild_settings.items()
             )
         ):
@@ -3463,7 +3715,7 @@ def load_starboard_settings(path: Path) -> dict[str, dict[str, int | None]]:
 
 def save_starboard_settings(
     path: Path,
-    settings: dict[str, dict[str, int | None]],
+    settings: dict[str, dict[str, int | str | None]],
 ) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -3475,6 +3727,20 @@ def save_starboard_settings(
         temporary_path.replace(path)
     except OSError as error:
         raise ValueError(f"Could not save starboard settings to {path}") from error
+
+
+def valid_starboard_setting(key: str, value: object) -> bool:
+    if key in STARBOARD_CHANNEL_SETTING_KEYS.values():
+        return value is None or (
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+        )
+    if key == "shiny_base_name":
+        return value is None or (
+            isinstance(value, str) and bool(value.strip()) and len(value) <= 100
+        )
+    if key == "shiny_count":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    return False
 
 
 AFK_DEFAULTS: Final[dict[str, bool]] = {
@@ -3709,7 +3975,9 @@ class NamingBot(discord.Client):
             **self.server_settings.get(str(guild_id), {}),
         }
 
-    def starboard_settings_for_guild(self, guild_id: int) -> dict[str, int | None]:
+    def starboard_settings_for_guild(
+        self, guild_id: int
+    ) -> dict[str, int | str | None]:
         return {
             **STARBOARD_DEFAULTS,
             **self.starboard_settings.get(str(guild_id), {}),
@@ -3720,9 +3988,10 @@ class NamingBot(discord.Client):
         guild_id: int,
         board: str,
         channel_id: int | None,
-    ) -> dict[str, int | None]:
-        setting_key = f"{board}_channel"
-        if setting_key not in STARBOARD_SETTING_KEYS:
+        channel_name: str | None = None,
+    ) -> dict[str, int | str | None]:
+        setting_key = STARBOARD_CHANNEL_SETTING_KEYS.get(board)
+        if setting_key is None:
             raise ValueError(f"Unknown starboard: {board}")
         if channel_id is not None and (
             isinstance(channel_id, bool)
@@ -3735,11 +4004,60 @@ class NamingBot(discord.Client):
         }
         guild_key = str(guild_id)
         guild_settings = self.starboard_settings_for_guild(guild_id)
+        previous_channel_id = guild_settings[setting_key]
         guild_settings[setting_key] = channel_id
+        if board == "shiny":
+            if channel_id is None:
+                guild_settings["shiny_base_name"] = None
+                guild_settings["shiny_count"] = 0
+            elif channel_id != previous_channel_id:
+                base_name, initial_count = (
+                    split_channel_counter(channel_name)
+                    if channel_name
+                    else (None, 0)
+                )
+                guild_settings["shiny_base_name"] = base_name
+                guild_settings["shiny_count"] = initial_count
+            elif (
+                guild_settings["shiny_base_name"] is None
+                and channel_name
+            ):
+                base_name, initial_count = split_channel_counter(channel_name)
+                guild_settings["shiny_base_name"] = base_name
+                guild_settings["shiny_count"] = max(
+                    int(guild_settings["shiny_count"]),
+                    initial_count,
+                )
         updated_settings[guild_key] = guild_settings
         save_starboard_settings(self.starboard_settings_path, updated_settings)
         self.starboard_settings = updated_settings
         return guild_settings
+
+    def increment_shinyboard_count(
+        self,
+        guild_id: int,
+        channel_name: str | None,
+    ) -> str | None:
+        updated_settings = {
+            key: dict(settings) for key, settings in self.starboard_settings.items()
+        }
+        guild_key = str(guild_id)
+        guild_settings = self.starboard_settings_for_guild(guild_id)
+        base_name = guild_settings["shiny_base_name"]
+        count = int(guild_settings["shiny_count"])
+        if base_name is None and channel_name:
+            base_name, current_name_count = split_channel_counter(channel_name)
+            count = max(count, current_name_count)
+        count += 1
+        guild_settings["shiny_base_name"] = base_name
+        guild_settings["shiny_count"] = count
+        updated_settings[guild_key] = guild_settings
+        save_starboard_settings(self.starboard_settings_path, updated_settings)
+        self.starboard_settings = updated_settings
+        if base_name is None:
+            return None
+        suffix = f"-{count}"
+        return f"{base_name[: 100 - len(suffix)]}{suffix}"
 
     def toggle_naming_setting(self, guild_id: int, setting: str) -> dict[str, bool]:
         if setting not in SERVER_NAMING_SETTING_KEYS:
@@ -5224,15 +5542,18 @@ class NamingBot(discord.Client):
         if details is None:
             return
         category = starboard_category(details)
-        if category is None:
+        normal_pokemon_catch = is_normal_starboard_pokemon(details.pokemon)
+        if category is None and not normal_pokemon_catch:
             return
 
         settings = self.starboard_settings_for_guild(message.guild.id)
         posts: dict[int, str] = {}
-        if settings["normal_channel"] is not None:
+        if category is not None and settings["normal_channel"] is not None:
             posts[settings["normal_channel"]] = category
         if details.shiny and settings["shiny_channel"] is not None:
             posts.setdefault(settings["shiny_channel"], "shiny")
+        if normal_pokemon_catch and settings["normal_pokemon_channel"] is not None:
+            posts.setdefault(settings["normal_pokemon_channel"], "normal_pokemon")
         if not posts:
             return
 
@@ -5269,6 +5590,50 @@ class NamingBot(discord.Client):
                     message.id,
                     channel_id,
                 )
+
+        shiny_channel_id = settings["shiny_channel"]
+        if details.shiny and shiny_channel_id is not None:
+            shiny_channel = self.get_channel(shiny_channel_id)
+            if shiny_channel is None:
+                try:
+                    shiny_channel = await self.fetch_channel(shiny_channel_id)
+                except discord.HTTPException:
+                    logger.exception(
+                        "Could not load shinyboard channel %s in guild %s",
+                        shiny_channel_id,
+                        message.guild.id,
+                    )
+            channel_name = getattr(shiny_channel, "name", None)
+            if not isinstance(channel_name, str):
+                channel_name = None
+            try:
+                updated_name = self.increment_shinyboard_count(
+                    message.guild.id,
+                    channel_name,
+                )
+            except ValueError:
+                logger.exception(
+                    "Could not save shinyboard catch count for guild %s",
+                    message.guild.id,
+                )
+                return
+            if (
+                shiny_channel is not None
+                and updated_name is not None
+                and updated_name != channel_name
+            ):
+                try:
+                    await shiny_channel.edit(
+                        name=updated_name,
+                        reason="Update shiny catch count",
+                    )
+                except discord.HTTPException:
+                    logger.warning(
+                        "Could not rename shinyboard channel %s to %s",
+                        shiny_channel_id,
+                        updated_name,
+                        exc_info=True,
+                    )
 
     async def handle_spawn(
         self, message: discord.Message, *, test_mode: bool = False

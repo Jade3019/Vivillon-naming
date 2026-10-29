@@ -105,6 +105,7 @@ from bot import (
     AFKSettingsView,
     load_afk_settings,
     load_profile_data,
+    ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     save_profile_data,
     render_profile_image,
@@ -845,6 +846,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         (
             self.bot.profiles,
             self.bot.profile_stats,
+            self.bot.profile_records,
             self.bot.profile_seen_catch_ids,
         ) = load_profile_data(self.bot.profile_data_path)
 
@@ -969,10 +971,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
             1,
         )
-        _, profile_stats, seen_catch_ids = load_profile_data(
+        _, profile_stats, profile_records, seen_catch_ids = load_profile_data(
             self.bot.profile_data_path
         )
         self.assertEqual(profile_stats[f"{SERVER_ID}:123"]["total"], 1)
+        highest_iv = profile_records[f"{SERVER_ID}:123"]["highest_iv"]
+        self.assertEqual((highest_iv.pokemon, highest_iv.iv), ("Bagon", 50.54))
         self.assertEqual(seen_catch_ids, [message.id])
 
     async def test_each_application_webhook_catch_increments_total(self) -> None:
@@ -1051,6 +1055,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 "Congratulations <@123>! You caught a Level 1 Missingno!",
             ),
             (
+                1005,
+                SERVER_ID,
+                "Congratulations <@123>! You caught a Level 10 Pikachu! "
+                "(45.00%)! These colors seem unusual... ✨",
+            ),
+            (
                 1004,
                 SERVER_ID + 1,
                 "Congratulations <@123>! You caught a Level 20 Bagon! (99.00%)!",
@@ -1068,14 +1078,29 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.bot.profile_stats_for_user(SERVER_ID, 123),
             {
-                "total": 3,
-                "shiny": 1,
+                "total": 4,
+                "shiny": 2,
                 "low_iv": 1,
                 "high_iv": 1,
                 "gmax": 1,
                 "missingno": 1,
             },
         )
+        records = self.bot.profile_records_for_user(SERVER_ID, 123)
+        self.assertEqual(
+            {
+                name: (record.pokemon, record.iv)
+                for name, record in records.items()
+            },
+            {
+                "highest_iv": ("Gigantamax Bagon", 95.0),
+                "lowest_iv": ("Eevee", 9.99),
+                "highest_shiny_iv": ("Gigantamax Bagon", 95.0),
+                "lowest_shiny_iv": ("Pikachu", 45.0),
+            },
+        )
+        _, _, profile_records, _ = load_profile_data(self.bot.profile_data_path)
+        self.assertEqual(profile_records[f"{SERVER_ID}:123"], records)
 
     def test_profile_card_keeps_default_backgrounds(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
@@ -1087,6 +1112,28 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(image.getpixel((1300, 800)), (41, 42, 47))
         self.assertNotEqual(image.getpixel((81, 375)), (41, 42, 47))
         self.assertEqual(image.getpixel((380, 375)), (41, 42, 47))
+
+    def test_profile_card_renders_iv_records_on_the_right(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        blank = Image.open(render_profile_image(settings, stats))
+        with_records = Image.open(
+            render_profile_image(
+                settings,
+                stats,
+                records={
+                    "highest_iv": ProfileIvRecord(
+                        pokemon="Gliscor",
+                        iv=98.25,
+                    )
+                },
+            )
+        )
+
+        self.assertNotEqual(
+            blank.crop((950, 200, 1400, 800)).tobytes(),
+            with_records.crop((950, 200, 1400, 800)).tobytes(),
+        )
 
     def test_profile_stat_emojis_use_the_requested_symbols(self) -> None:
         self.assertEqual(
@@ -1113,10 +1160,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 }
             },
             {},
+            {},
             [],
         )
 
-        profiles, _, _ = load_profile_data(self.bot.profile_data_path)
+        profiles, _, _, _ = load_profile_data(self.bot.profile_data_path)
 
         self.assertEqual(profiles["123"]["background"], "default")
         self.assertEqual(profiles["123"]["middle_background"], "white")

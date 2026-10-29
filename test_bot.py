@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 from bot import (
     add_shinyhunter,
@@ -982,15 +982,19 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[1].options],
-            ["Default"],
+            ["Default background", "Cosmog"],
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
-            ["White", "Cosmog"],
+            ["Default middle background", "Cosmog"],
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
             ["No frame"],
+        )
+        self.assertEqual(
+            editor.children[0].options[0].label,
+            "Default text color",
         )
 
     async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
@@ -1273,6 +1277,29 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             actual = image.crop((430, 0, 950, 825))
 
         self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_profile_card_uses_blurred_background_behind_text(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["background"] = "cosmog"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(Path(__file__).with_name("background") / "cosmog.png") as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        settings["text_color"] = "white"
+        with Image.open(render_profile_image(settings, stats)) as white_text:
+            actual_background_pixel = white_text.getpixel((400, 800))
+            self.assertEqual(actual_background_pixel, expected.getpixel((400, 800)))
+            self.assertEqual(white_text.getpixel((700, 400)), (255, 255, 255))
+            white_text_crop = white_text.crop((64, 245, 430, 700)).tobytes()
+
+        settings["text_color"] = "black"
+        with Image.open(render_profile_image(settings, stats)) as black_text:
+            self.assertNotEqual(
+                white_text_crop,
+                black_text.crop((64, 245, 430, 700)).tobytes(),
+            )
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

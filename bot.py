@@ -19,7 +19,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from image_match import (
     CUSTOM_FORM_SPECIES,
     FORM_DISPLAY_NAMES,
@@ -134,17 +134,21 @@ class ProfileIvRecord:
 
 
 PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
-    "white": ("White", "#FFFFFF"),
+    "white": ("Default text color", "#FFFFFF"),
     "black": ("Black", "#171717"),
     "pink": ("Pink", "#F3A6C8"),
     "blue": ("Blue", "#9BD8F2"),
     "gold": ("Gold", "#F4D06F"),
 }
 PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
-    "default": ("Default", "#292A2F"),
+    "default": ("Default background", "#292A2F"),
+    "cosmog": ("Cosmog", "Cosmog blurred profile background"),
+}
+PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
+    "cosmog": Path(__file__).with_name("background") / "cosmog.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
-    "white": ("White", "#FFFFFF"),
+    "white": ("Default middle background", "#FFFFFF"),
     "cosmog": ("Cosmog", "Cosmog middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
@@ -4735,10 +4739,22 @@ def render_profile_image(
     background_key = str(settings["background"])
     middle_key = str(settings["middle_background"])
     text_color_key = str(settings["text_color"])
-    background = PROFILE_BACKGROUNDS[background_key][1]
     text_color = PROFILE_TEXT_COLORS[text_color_key][1]
 
-    image = Image.new("RGB", (width, height), background)
+    background_image_path = PROFILE_BACKGROUND_IMAGES.get(background_key)
+    if background_image_path is None:
+        image = Image.new(
+            "RGB",
+            (width, height),
+            PROFILE_BACKGROUNDS[background_key][1],
+        )
+    else:
+        with Image.open(background_image_path) as background_image:
+            image = ImageOps.fit(
+                background_image.convert("RGB"),
+                (width, height),
+            )
+        image = image.filter(ImageFilter.GaussianBlur(radius=12))
     draw = ImageDraw.Draw(image)
     middle_background_image_path = PROFILE_MIDDLE_BACKGROUND_IMAGES.get(
         middle_key

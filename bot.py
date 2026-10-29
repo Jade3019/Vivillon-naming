@@ -636,6 +636,7 @@ def format_spawn_reply(
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
     collection_user_ids: list[int] | None = None,
+    type_ping_user_ids: list[int] | None = None,
     *,
     assisted: bool = True,
     guess_name: str | None = None,
@@ -647,6 +648,7 @@ def format_spawn_reply(
             reserved_user_ids,
             shinyhunter_user_ids,
             collection_user_ids,
+            type_ping_user_ids,
         )
     )
     if assisted:
@@ -791,11 +793,13 @@ def format_custom_type_spawn_reply(
     include_ice: bool = False,
     assisted: bool = True,
     guess_name: str | None = None,
+    type_ping_user_ids: list[int] | None = None,
 ) -> str:
     lines = format_spawn_mention_lines(
         reserved_user_ids,
         shinyhunter_user_ids,
         collection_user_ids,
+        type_ping_user_ids,
     )
     emoji_by_type = {
         "fire": "<:fire:1560301436074729532>",
@@ -865,6 +869,7 @@ def format_spawn_mention_lines(
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
     collection_user_ids: list[int] | None = None,
+    type_ping_user_ids: list[int] | None = None,
 ) -> list[str]:
     if reserved_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in reserved_user_ids)
@@ -876,6 +881,9 @@ def format_spawn_mention_lines(
     if collection_user_ids:
         mentions = ", ".join(f"<@{user_id}>" for user_id in collection_user_ids)
         lines.append(f"Collection: {mentions}")
+    if type_ping_user_ids:
+        mentions = ", ".join(f"<@{user_id}>" for user_id in type_ping_user_ids)
+        lines.append(f"Typeping: {mentions}")
     return lines
 
 
@@ -985,12 +993,16 @@ def format_typed_spawn_reply(
     reserved_user_ids: list[int] | None = None,
     shinyhunter_user_ids: list[int] | None = None,
     collection_user_ids: list[int] | None = None,
+    type_ping_user_ids: list[int] | None = None,
     *,
     assisted: bool = True,
     guess_name: str | None = None,
 ) -> str:
     lines = format_spawn_mention_lines(
-        reserved_user_ids, shinyhunter_user_ids, collection_user_ids
+        reserved_user_ids,
+        shinyhunter_user_ids,
+        collection_user_ids,
+        type_ping_user_ids,
     )
     lines.append(f"{type_emojis} {format_guess(name, confidence, guess_name)}")
     if assisted:
@@ -5459,10 +5471,6 @@ class NamingBot(discord.Client):
         if any(
             key.startswith(guild_prefix)
             and enabled_types
-            and self.afk_settings_for_user(
-                guild_id,
-                int(key.removeprefix(guild_prefix)),
-            )["collection"]
             for key, enabled_types in self.type_pings.items()
         ):
             return True
@@ -7406,15 +7414,16 @@ class NamingBot(discord.Client):
             if message.guild
             else []
         )
-        if message.guild:
-            type_ping_user_ids = type_ping_user_ids_for_pokemon(
+        type_ping_user_ids = (
+            type_ping_user_ids_for_pokemon(
                 self.type_pings,
                 message.guild.id,
                 pokemon_types_for(thumbnail_name, name),
             )
-            collection_user_ids = sorted(
-                set(collection_user_ids).union(type_ping_user_ids)
-            )
+            if message.guild
+            else []
+        )
+        if message.guild:
             shinyhunter_user_ids = [
                 user_id
                 for user_id in shinyhunter_user_ids
@@ -7436,13 +7445,21 @@ class NamingBot(discord.Client):
         )
         if test_mode:
             # Show the full spawn message, without pinging anyone.
-            reserved_user_ids, shinyhunter_user_ids, collection_user_ids = [], [], []
+            (
+                reserved_user_ids,
+                shinyhunter_user_ids,
+                collection_user_ids,
+                type_ping_user_ids,
+            ) = [], [], [], []
             assisted = True
         else:
             if not naming_settings["enabled"]:
                 return
             if naming_settings["pings"] and not (
-                reserved_user_ids or shinyhunter_user_ids or collection_user_ids
+                reserved_user_ids
+                or shinyhunter_user_ids
+                or collection_user_ids
+                or type_ping_user_ids
             ):
                 return
             assisted = naming_settings["assisted"]
@@ -7475,6 +7492,7 @@ class NamingBot(discord.Client):
                     reserved_user_ids,
                     shinyhunter_user_ids,
                     collection_user_ids,
+                    type_ping_user_ids,
                     assisted=assisted,
                     guess_name=guess_name,
                 ),
@@ -7513,6 +7531,7 @@ class NamingBot(discord.Client):
                 include_ice=is_ice_spawn,
                 assisted=assisted,
                 guess_name=guess_name,
+                type_ping_user_ids=type_ping_user_ids,
             )
             companion_icon_filename = (
                 fire_companion_icon_filename_for_pokemon(name)
@@ -7554,6 +7573,7 @@ class NamingBot(discord.Client):
                 reserved_user_ids,
                 shinyhunter_user_ids,
                 collection_user_ids,
+                type_ping_user_ids,
             )
             embeds = [type_embed]
             files = [
@@ -7581,6 +7601,7 @@ class NamingBot(discord.Client):
                     reserved_user_ids,
                     shinyhunter_user_ids,
                     collection_user_ids,
+                    type_ping_user_ids,
                     assisted=assisted,
                     guess_name=guess_name,
                 ),

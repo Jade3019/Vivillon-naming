@@ -1667,8 +1667,9 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             recognize.assert_awaited_once()
             message.reply.assert_awaited_once()
             content = message.reply.await_args.args[0]
-            self.assertIn("Collection: <@123>, <@456>", content)
-            self.assertEqual(content.count("<@123>"), 1)
+            self.assertIn("Collection: <@123>", content)
+            self.assertIn("Typeping: <@123>, <@456>", content)
+            self.assertEqual(content.count("<@123>"), 2)
 
 
 class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
@@ -3050,6 +3051,20 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "<:fire:1560301436074729532> Vulpix: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c vulpix`",
         )
+        self.assertEqual(
+            format_custom_type_spawn_reply(
+                "Vulpix",
+                87.5,
+                789,
+                collection_user_ids=[456],
+                include_fire=True,
+                type_ping_user_ids=[123],
+            ),
+            "Collection: <@456>\n"
+            "Typeping: <@123>\n"
+            "<:fire:1560301436074729532> Vulpix: 87.50%\n"
+            "**Copy Here >** `@Pokétwo#8236 c vulpix`",
+        )
         self.assertTrue(is_fire_icon_pokemon("Vulpix"))
         self.assertTrue(is_fire_icon_pokemon("Litleo"))
         self.assertFalse(is_fire_icon_pokemon("Charizard"))
@@ -3386,9 +3401,35 @@ class GuessFormatTests(unittest.TestCase):
             "**Copy Here >** `@Pokétwo#8236 c pikachu`",
         )
 
-    def test_reservation_overrides_shinyhunt_and_collection_pings(self) -> None:
+    def test_typeping_has_its_own_line_after_collection(self) -> None:
         self.assertEqual(
-            format_spawn_reply("Pikachu", 95, 789, [111], [123], [456]),
+            format_spawn_reply(
+                "Pikachu",
+                95,
+                789,
+                [],
+                [123],
+                [456],
+                [789, 101],
+            ),
+            "Pikachu: 95.00%\n"
+            "Shinyhunt: <@123>\n"
+            "Collection: <@456>\n"
+            "Typeping: <@789>, <@101>\n"
+            "**Copy Here >** `@Pokétwo#8236 c pikachu`",
+        )
+
+    def test_reservation_overrides_all_other_ping_categories(self) -> None:
+        self.assertEqual(
+            format_spawn_reply(
+                "Pikachu",
+                95,
+                789,
+                [111],
+                [123],
+                [456],
+                [789],
+            ),
             "Pikachu: 95.00%\n"
             "Reserved: <@111>\n"
             "**Copy Here >** `@Pokétwo#8236 c pikachu`",

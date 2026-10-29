@@ -98,10 +98,11 @@ inline with the guessed name and no embed. Configured paired types that include
 any of those types show both corresponding custom emojis inline. Other
 configured type matches show their icons beside the guessed name in an embed,
 with the catch command in the embed description when Assisted mode is on. Other
-dual-type Pokémon keep the regular text reply. Reservation, shinyhunt, and
-collection mentions remain active for both reply styles. Pokétwo or Discord may ignore or restrict commands sent by
-another bot account. If the prediction is `Missingno.` or `???`, the bot sends
-asks for a staff member; it does not send a catch command for that spawn.
+dual-type Pokémon keep the regular text reply. Reservation, shinyhunt,
+collection, and type-ping mentions remain active for both reply styles.
+Pokétwo or Discord may ignore or restrict commands sent by another bot account.
+If the prediction is `Missingno.` or `???`, the bot asks for a staff member; it
+does not send a catch command for that spawn.
 
 This application does not bypass those restrictions.
 
@@ -109,10 +110,11 @@ Use `v!settings` to configure naming separately for each server. Members with
 Manage Server permission can turn naming on or off, disable Assisted mode to
 remove catch-command copy messages while keeping Pokémon names, and enable
 Pings mode to name only Pokémon with a matching reserve, shinyhunt, or collection
-member. With Pings mode on, Vivillon skips image analysis if the server has no
-active ping targets; when targets exist, it still has to identify each spawn to
-check for a match. Settings are saved to `server_settings.json` by default; set
-`SERVER_SETTINGS_FILE` to use another path.
+or type-ping member. With Pings mode on, Vivillon skips image analysis if the
+server has no active targets in those categories; when targets exist, it still
+has to identify each spawn to check for a match. Settings are saved to
+`server_settings.json` by default; set `SERVER_SETTINGS_FILE` to use another
+path.
 
 Open **Starboard** from `v!settings` to choose separate **Vivillon Starboard**,
 **Shinyboard**, and **Normal Starboard** channels. The Vivillon Starboard posts
@@ -235,15 +237,15 @@ reports that it is already added and does not create a duplicate. Collection
 entries are stored in `collections.json`
 by default; set `COLLECTIONS_FILE` to use a different path. The list is
 paginated at 20 Pokémon per page with previous/next buttons. On a spawn, a
-reservation takes precedence over shinyhunt and collection mentions. Otherwise,
-the bot shows a `Shinyhunt:` line and/or a `Collection:` line only for groups
-with matching members. If no one matches, it shows the normal naming reply
-without empty mention lines.
+reservation takes precedence over shinyhunt, collection, and type-ping mentions.
+Otherwise, the bot shows `Shinyhunt:`, `Collection:`, and `Typeping:` lines only
+for groups with matching members. If no one matches, it shows the normal naming
+reply without empty mention lines.
 
 Use `v!tp` or `v!typeping` to choose one or more Pokémon types for spawn pings.
 A Pokémon matches each of its types, so enabling Normal also matches a
-dual-type Pokémon that has Normal as either type. Type pings are included with
-collection mentions and can be muted with the **Collection** button in `v!afk`.
+dual-type Pokémon that has Normal as either type. Matching members are
+mentioned on a separate `Typeping:` line.
 Selections are saved per member and server in `type_pings.json` by default; set
 `TYPE_PINGS_FILE` to use a different path.
 

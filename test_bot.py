@@ -1331,6 +1331,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (frame.width - base.width) // 2,
             (frame.height - base.height) // 2,
         )
+        self.assertEqual(frame.size, (1467, 868))
+        self.assertEqual(profile_position, (33, 21))
         expected.alpha_composite(base.convert("RGBA"), dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:

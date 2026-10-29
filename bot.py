@@ -165,7 +165,7 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
 }
-PROFILE_FRAME_SCALE: Final[float] = 0.92
+PROFILE_FRAME_SCALE: Final[float] = 0.9
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
 PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "text_color": PROFILE_TEXT_COLORS,

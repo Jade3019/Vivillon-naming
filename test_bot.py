@@ -109,6 +109,8 @@ from bot import (
     load_profile_data,
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
+    PROFILE_FRAME_ALPHA_GAMMA,
+    PROFILE_FRAME_OVERSCALE,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1308,10 +1310,39 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         unframed_settings = {**settings, "frame": "none"}
 
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
-            base = unframed.convert("RGBA")
+            base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
-            frame = ImageOps.fit(source.convert("RGBA"), (1400, 825))
-        expected = Image.alpha_composite(base, frame).convert("RGB")
+            oversized_frame = ImageOps.fit(
+                source.convert("RGBA"),
+                (
+                    round(1400 * PROFILE_FRAME_OVERSCALE),
+                    round(825 * PROFILE_FRAME_OVERSCALE),
+                ),
+            )
+        left = (oversized_frame.width - 1400) // 2
+        top = (oversized_frame.height - 825) // 2
+        frame = oversized_frame.crop((left, top, left + 1400, top + 825))
+        frame.putalpha(
+            frame.getchannel("A").point(
+                lambda alpha: round(
+                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
+                )
+            )
+        )
+        self.assertGreaterEqual(
+            min(
+                frame.getpixel(point)[3]
+                for point in (
+                    (0, 0),
+                    (1399, 0),
+                    (0, 824),
+                    (1399, 824),
+                )
+            ),
+            200,
+        )
+        expected = base.copy()
+        expected.paste(frame, (0, 0), frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
             self.assertEqual(actual.tobytes(), expected.tobytes())
 

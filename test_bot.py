@@ -110,7 +110,6 @@ from bot import (
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     PROFILE_FRAME_ALPHA_GAMMA,
-    PROFILE_FRAME_OVERSCALE,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1312,16 +1311,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
-            oversized_frame = ImageOps.fit(
-                source.convert("RGBA"),
-                (
-                    round(1400 * PROFILE_FRAME_OVERSCALE),
-                    round(825 * PROFILE_FRAME_OVERSCALE),
-                ),
-            )
-        left = (oversized_frame.width - 1400) // 2
-        top = (oversized_frame.height - 825) // 2
-        frame = oversized_frame.crop((left, top, left + 1400, top + 825))
+            frame = source.convert("RGBA")
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(
@@ -1329,21 +1319,16 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 )
             )
         )
-        self.assertGreaterEqual(
-            min(
-                frame.getpixel(point)[3]
-                for point in (
-                    (0, 0),
-                    (1399, 0),
-                    (0, 824),
-                    (1399, 824),
-                )
-            ),
-            200,
+        expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_position = (
+            (frame.width - base.width) // 2,
+            (frame.height - base.height) // 2,
         )
-        expected = base.copy()
-        expected.paste(frame, (0, 0), frame)
+        expected.alpha_composite(base.convert("RGBA"), dest=profile_position)
+        expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.size, (1630, 965))
+            self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:

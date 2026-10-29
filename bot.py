@@ -165,7 +165,6 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
 }
-PROFILE_FRAME_OVERSCALE: Final[float] = 1.08
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
 PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "text_color": PROFILE_TEXT_COLORS,
@@ -4851,16 +4850,7 @@ def render_profile_image(
     frame_image_path = PROFILE_FRAME_IMAGES.get(str(settings["frame"]))
     if frame_image_path is not None:
         with Image.open(frame_image_path) as frame_image:
-            oversized_frame = ImageOps.fit(
-                frame_image.convert("RGBA"),
-                (
-                    round(width * PROFILE_FRAME_OVERSCALE),
-                    round(height * PROFILE_FRAME_OVERSCALE),
-                ),
-            )
-        left = (oversized_frame.width - width) // 2
-        top = (oversized_frame.height - height) // 2
-        frame = oversized_frame.crop((left, top, left + width, top + height))
+            frame = frame_image.convert("RGBA")
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(
@@ -4868,7 +4858,14 @@ def render_profile_image(
                 )
             )
         )
-        image.paste(frame, (0, 0), frame)
+        framed_image = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_position = (
+            (frame.width - width) // 2,
+            (frame.height - height) // 2,
+        )
+        framed_image.alpha_composite(image.convert("RGBA"), dest=profile_position)
+        framed_image.alpha_composite(frame)
+        image = framed_image
 
     output = BytesIO()
     image.save(output, format="PNG")

@@ -4822,9 +4822,9 @@ class NamingBot(discord.Client):
             or isinstance(message_id, bool)
             or not isinstance(message_id, int)
             or message_id <= 0
-            or message_id in self.profile_seen_catch_ids
         ):
             return
+        already_seen = message_id in self.profile_seen_catch_ids
         user_id = profile_catch_user_id(message)
         details = parse_catch_details(
             message_text(message),
@@ -4835,6 +4835,10 @@ class NamingBot(discord.Client):
         if user_id is None and details is not None:
             user_id = details.user_id
         if user_id is None:
+            return
+        if already_seen and (
+            details is None or details.iv_value is None
+        ):
             return
 
         profile_stats = {
@@ -4848,19 +4852,21 @@ class NamingBot(discord.Client):
             f"{SERVER_ID}:{user_id}",
             dict(PROFILE_STAT_DEFAULTS),
         )
-        user_stats["total"] += 1
+        if not already_seen:
+            user_stats["total"] += 1
         user_records = profile_records.setdefault(f"{SERVER_ID}:{user_id}", {})
         if details is not None:
-            if details.shiny:
-                user_stats["shiny"] += 1
-            if details.iv_value is not None and details.iv_value < 10:
-                user_stats["low_iv"] += 1
-            if details.iv_value is not None and details.iv_value >= 90:
-                user_stats["high_iv"] += 1
-            if details.gigantamax:
-                user_stats["gmax"] += 1
-            if details.missingno:
-                user_stats["missingno"] += 1
+            if not already_seen:
+                if details.shiny:
+                    user_stats["shiny"] += 1
+                if details.iv_value is not None and details.iv_value < 10:
+                    user_stats["low_iv"] += 1
+                if details.iv_value is not None and details.iv_value >= 90:
+                    user_stats["high_iv"] += 1
+                if details.gigantamax:
+                    user_stats["gmax"] += 1
+                if details.missingno:
+                    user_stats["missingno"] += 1
             if details.iv_value is not None:
                 record_candidates = (
                     ("highest_iv", False, True),
@@ -4881,7 +4887,11 @@ class NamingBot(discord.Client):
                             pokemon=details.pokemon,
                             iv=details.iv_value,
                         )
-        seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
+        seen_catch_ids = (
+            self.profile_seen_catch_ids
+            if already_seen
+            else [*self.profile_seen_catch_ids, message_id][-10000:]
+        )
         try:
             save_profile_data(
                 self.profile_data_path,

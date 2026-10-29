@@ -1022,6 +1022,61 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             ("Gliscor", 53.23),
         )
 
+    def test_iv_records_track_extrema_and_enrich_edited_catches(self) -> None:
+        message = Mock()
+        message.id = 987660
+        message.guild.id = SERVER_ID
+        message.embeds = []
+        message.content = (
+            "Congratulations <@123>! You caught a Level 40 Rolycoly!"
+        )
+        self.bot.track_profile_catch(message)
+
+        message.content = (
+            "Congratulations <@123>! You caught a Level 40 "
+            "Rolycoly![:male:](70.43%)!"
+        )
+        self.bot.track_profile_catch(message)
+        records = self.bot.profile_records_for_user(SERVER_ID, 123)
+        self.assertEqual(
+            (records["highest_iv"].pokemon, records["highest_iv"].iv),
+            ("Rolycoly", 70.43),
+        )
+        self.assertEqual(
+            (records["lowest_iv"].pokemon, records["lowest_iv"].iv),
+            ("Rolycoly", 70.43),
+        )
+
+        catches = (
+            (987661, "Bramblin", 56.45),
+            (987662, "Pikachu", 75.0),
+            (987663, "Eevee", 50.0),
+        )
+        for message_id, pokemon, iv in catches:
+            message = Mock()
+            message.id = message_id
+            message.guild.id = SERVER_ID
+            message.embeds = []
+            message.content = (
+                f"Congratulations <@123>! You caught a Level 25 "
+                f"{pokemon}!({iv:.2f}%)!"
+            )
+            self.bot.track_profile_catch(message)
+
+        records = self.bot.profile_records_for_user(SERVER_ID, 123)
+        self.assertEqual(
+            (records["highest_iv"].pokemon, records["highest_iv"].iv),
+            ("Pikachu", 75.0),
+        )
+        self.assertEqual(
+            (records["lowest_iv"].pokemon, records["lowest_iv"].iv),
+            ("Eevee", 50.0),
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
+            4,
+        )
+
     def test_total_uses_catch_announcement_prefix_not_spawn_or_species_parse(
         self,
     ) -> None:

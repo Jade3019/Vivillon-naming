@@ -289,6 +289,8 @@ class VivillonTests(unittest.TestCase):
             "Gliding Build Koraidon": "Koraidon",
             "Zenith Marshadow": "Marshadow",
             "Galarian Zen Darmanitan": "Darmanitan",
+            "Zygarde Cell": "Zygarde",
+            "Combat Breed Tauros": "Tauros",
         }
         for form, species in forms.items():
             with self.subTest(form=form):
@@ -316,6 +318,8 @@ class CustomFormRecognitionTests(unittest.TestCase):
             "Gliding Build Koraidon",
             "Zenith Marshadow",
             "Galarian Zen Darmanitan",
+            "Zygarde Cell",
+            "Combat Breed Tauros",
         )
         for form in forms:
             with self.subTest(form=form):
@@ -328,6 +332,41 @@ class CustomFormRecognitionTests(unittest.TestCase):
 
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)
+
+    def test_all_vivillon_forms_match_their_reference_images(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        for form in image_match.VIVILLON_FORMS:
+            with self.subTest(form=form):
+                result = matcher.match(groups[form][0].read_bytes())
+
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], form)
+
+    def test_zygarde_cell_matches_when_rendered_in_a_scene(self) -> None:
+        import cv2
+        import numpy as np
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Zygarde Cell"
+            / "image.png"
+        )
+        source = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+        canvas = np.full((420, 420, 3), (70, 105, 45), dtype=np.uint8)
+        pokemon = cv2.resize(source, (250, 250))
+        alpha = pokemon[..., 3:4] / 255.0
+        region = canvas[85:335, 85:335]
+        canvas[85:335, 85:335] = (
+            pokemon[..., :3] * alpha + region * (1 - alpha)
+        ).astype(np.uint8)
+        data = cv2.imencode(".png", canvas)[1].tobytes()
+
+        result = matcher.match(data)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Zygarde Cell")
 
 
 class ArceusTests(unittest.TestCase):

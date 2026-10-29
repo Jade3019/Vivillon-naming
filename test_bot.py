@@ -1569,6 +1569,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "Rapid Strike Urshifu",
             "Zenith Marshadow",
             "Partner Pikachu",
+            "Zygarde Cell",
             "Gigantamax Urshifu",
         ):
             with self.subTest(pokemon_name=pokemon_name):
@@ -1576,10 +1577,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_normal_starboard_pokemon("Pikachu"))
 
     def test_alternate_forms_use_species_artwork_thumbnail(self) -> None:
-        examples = (
-            ("Zygarde Cell", "10118"),
-            ("Flying Silvally", "773"),
-        )
+        examples = (("Flying Silvally", "773"),)
         for pokemon, sprite_id in examples:
             with self.subTest(pokemon=pokemon):
                 details = parse_catch_details(
@@ -1603,6 +1601,26 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                     "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
                     f"sprites/pokemon/other/home/{sprite_id}.png",
                 )
+
+        zygarde_details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 22 Zygarde Cell! "
+            "(51.08%)!"
+        )
+        self.assertIsNotNone(zygarde_details)
+        self.assertEqual(
+            starboard_art_url(zygarde_details),
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            "sprites/pokemon/other/home/10118.png",
+        )
+        zygarde_embed = format_starboard_embed(
+            zygarde_details,
+            "normal_pokemon",
+            discord.utils.utcnow(),
+        )
+        self.assertEqual(
+            zygarde_embed.thumbnail.url,
+            "attachment://zygardecell.png",
+        )
 
     def test_categorizes_high_iv_low_iv_missingno_and_gigantamax(self) -> None:
         examples = (
@@ -1898,8 +1916,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             message.author.id = self.bot.config.poketwo_bot_id
             message.created_at = discord.utils.utcnow()
             message.content = (
-                "Congratulations <@123>! You caught a Level 22 "
-                "Galarian Zen Darmanitan! (51.08%)!"
+                "Congratulations <@123>! You caught a Level 22 Zygarde Cell! "
+                "(51.08%)!"
             )
             message.embeds = []
 
@@ -1909,11 +1927,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             send_kwargs = normal_channel.send.await_args.kwargs
             self.assertEqual(
                 send_kwargs["embed"].thumbnail.url,
-                "attachment://galarianzendarmanitan.png",
+                "attachment://zygardecell.png",
             )
             self.assertEqual(
                 send_kwargs["file"].filename,
-                "galarianzendarmanitan.png",
+                "zygardecell.png",
             )
             send_kwargs["file"].close()
 
@@ -2732,6 +2750,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ("Gliding Build Koraidon", "Koraidon"),
             ("Zenith Marshadow", "Marshadow"),
             ("Galarian Zen Darmanitan", "Darmanitan"),
+            ("Zygarde Cell", "Zygarde"),
+            ("Combat Breed Tauros", "Tauros"),
         )
         for form, species in forms:
             with self.subTest(form=form):
@@ -2766,6 +2786,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Gliding Build Koraidon",
             "Zenith Marshadow",
             "Galarian Zen Darmanitan",
+            "Zygarde Cell",
+            "Combat Breed Tauros",
         )
         for form in forms:
             with self.subTest(form=form):

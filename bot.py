@@ -122,6 +122,8 @@ PROFILE_RECORD_LABELS: Final[dict[str, tuple[str, str]]] = {
 class ProfileIvRecord:
     pokemon: str
     iv: float
+    level: str = "???"
+    gender: str | None = None
 
 
 PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
@@ -1181,10 +1183,10 @@ def parse_catch_details(
         ).strip()
 
     gender = None
-    if re.search(r"(?:♀|\bfemale\b)", pokemon_text, re.IGNORECASE):
+    if re.search(r"(?:♀|\bfemale\b)", body, re.IGNORECASE):
         gender = "Female"
         pokemon_text = re.sub(r"(?:♀|\bfemale\b)", "", pokemon_text, flags=re.IGNORECASE)
-    elif re.search(r"(?:♂|\bmale\b)", pokemon_text, re.IGNORECASE):
+    elif re.search(r"(?:♂|\bmale\b)", body, re.IGNORECASE):
         gender = "Male"
         pokemon_text = re.sub(r"(?:♂|\bmale\b)", "", pokemon_text, flags=re.IGNORECASE)
     pokemon_text = pokemon_text.replace("’", "'").replace("‘", "'")
@@ -4304,17 +4306,33 @@ def load_profile_data(
             if (
                 record_name not in PROFILE_RECORD_LABELS
                 or not isinstance(record, dict)
-                or set(record) != {"pokemon", "iv"}
+                or set(record) not in (
+                    {"pokemon", "iv"},
+                    {"pokemon", "iv", "level", "gender"},
+                )
                 or not isinstance(record["pokemon"], str)
                 or not record["pokemon"]
                 or isinstance(record["iv"], bool)
                 or not isinstance(record["iv"], (int, float))
                 or not 0 <= record["iv"] <= 100
+                or (
+                    "level" in record
+                    and (
+                        not isinstance(record["level"], str)
+                        or not record["level"]
+                    )
+                )
+                or (
+                    "gender" in record
+                    and record["gender"] not in (None, "Male", "Female")
+                )
             ):
                 raise ValueError(f"Profile data in {path} has an invalid IV record")
             records[record_name] = ProfileIvRecord(
                 pokemon=record["pokemon"],
                 iv=float(record["iv"]),
+                level=record.get("level", "???"),
+                gender=record.get("gender"),
             )
         profile_records[user_key] = records
 
@@ -4341,7 +4359,12 @@ def save_profile_data(
         "server_stats": profile_stats,
         "server_records": {
             user_key: {
-                name: {"pokemon": record.pokemon, "iv": record.iv}
+                name: {
+                    "pokemon": record.pokemon,
+                    "iv": record.iv,
+                    "level": record.level,
+                    "gender": record.gender,
+                }
                 for name, record in records.items()
             }
             for user_key, records in profile_records.items()
@@ -4430,6 +4453,13 @@ def draw_profile_stat_icon(
         draw.text((x + 8, y + 3), "?", font=profile_font(27, bold=True), fill="#FFFFFF")
 
 
+def format_profile_iv_record(record: ProfileIvRecord) -> tuple[str, str]:
+    return (
+        f"Level {record.level} {record.pokemon}",
+        f"{record.gender or 'Gender unknown'} | {record.iv:.2f}%",
+    )
+
+
 def render_profile_image(
     settings: dict[str, int | str],
     stats: dict[str, int],
@@ -4477,7 +4507,7 @@ def render_profile_image(
         )
 
     record_label_font = profile_font(27, bold=True)
-    record_value_font = profile_font(22)
+    record_value_font = profile_font(18)
     for index, (record_name, (label, icon)) in enumerate(
         PROFILE_RECORD_LABELS.items()
     ):
@@ -4496,17 +4526,27 @@ def render_profile_image(
             fill=text_color,
         )
         record = (records or {}).get(record_name)
-        value = (
-            f"{record.pokemon} ({record.iv:.2f}%)"
-            if record is not None
-            else "None yet"
-        )
-        draw.text(
-            (1025, y + 42),
-            value,
-            font=record_value_font,
-            fill=text_color,
-        )
+        if record is None:
+            draw.text(
+                (1025, y + 42),
+                "None yet",
+                font=record_value_font,
+                fill=text_color,
+            )
+        else:
+            pokemon_line, details_line = format_profile_iv_record(record)
+            draw.text(
+                (1025, y + 42),
+                pokemon_line,
+                font=record_value_font,
+                fill=text_color,
+            )
+            draw.text(
+                (1025, y + 64),
+                details_line,
+                font=record_value_font,
+                fill=text_color,
+            )
 
     output = BytesIO()
     image.save(output, format="PNG")
@@ -4886,6 +4926,8 @@ class NamingBot(discord.Client):
                         user_records[record_name] = ProfileIvRecord(
                             pokemon=details.pokemon,
                             iv=details.iv_value,
+                            level=details.level,
+                            gender=details.gender,
                         )
         seen_catch_ids = (
             self.profile_seen_catch_ids

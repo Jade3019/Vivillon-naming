@@ -251,9 +251,10 @@ shinies, catches below 10% IV, catches at or above 90% IV, Gigantamax catches,
 and Missingno catches seen by Vivillon from now on. Each
 `Congratulations @user! You caught a` message adds one to Total; a spawn by
 itself does not count, and the total has no cap. Earlier catches cannot be
-recovered. The card's right side shows the Pokémon and IV percentage for the
-highest and lowest IV catches, plus the highest and lowest IV among shiny
-catches. The profile card is public. Its
+recovered. The card's right side shows each record's level, Pokémon, gender
+(when provided in the catch message), and IV percentage for the highest and
+lowest IV catches, plus the highest and lowest IV among shiny catches. The
+profile card is public. Its
 public **Edit** menu appears only after the owner presses **Edit**; changing a
 setting updates the card without a confirmation reply. The card has the normal
 gray background on its left and right sides, with the blank middle column

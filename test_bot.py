@@ -103,6 +103,7 @@ from bot import (
     Config,
     NamingBot,
     AFKSettingsView,
+    format_profile_iv_record,
     load_afk_settings,
     load_profile_data,
     ProfileIvRecord,
@@ -1039,38 +1040,58 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.bot.track_profile_catch(message)
         records = self.bot.profile_records_for_user(SERVER_ID, 123)
         self.assertEqual(
-            (records["highest_iv"].pokemon, records["highest_iv"].iv),
-            ("Rolycoly", 70.43),
+            (
+                records["highest_iv"].level,
+                records["highest_iv"].pokemon,
+                records["highest_iv"].gender,
+                records["highest_iv"].iv,
+            ),
+            ("40", "Rolycoly", "Male", 70.43),
         )
         self.assertEqual(
-            (records["lowest_iv"].pokemon, records["lowest_iv"].iv),
-            ("Rolycoly", 70.43),
+            (
+                records["lowest_iv"].level,
+                records["lowest_iv"].pokemon,
+                records["lowest_iv"].gender,
+                records["lowest_iv"].iv,
+            ),
+            ("40", "Rolycoly", "Male", 70.43),
         )
 
         catches = (
-            (987661, "Bramblin", 56.45),
-            (987662, "Pikachu", 75.0),
-            (987663, "Eevee", 50.0),
+            (987661, "Bramblin", 56.45, "female"),
+            (987662, "Pikachu", 75.0, "male"),
+            (987663, "Eevee", 50.0, "female"),
         )
-        for message_id, pokemon, iv in catches:
+        for message_id, pokemon, iv, gender in catches:
             message = Mock()
             message.id = message_id
             message.guild.id = SERVER_ID
             message.embeds = []
             message.content = (
                 f"Congratulations <@123>! You caught a Level 25 "
-                f"{pokemon}!({iv:.2f}%)!"
+                f"{pokemon}![:{gender}:]({iv:.2f}%)!"
             )
             self.bot.track_profile_catch(message)
 
         records = self.bot.profile_records_for_user(SERVER_ID, 123)
         self.assertEqual(
-            (records["highest_iv"].pokemon, records["highest_iv"].iv),
-            ("Pikachu", 75.0),
+            (
+                records["highest_iv"].level,
+                records["highest_iv"].pokemon,
+                records["highest_iv"].gender,
+                records["highest_iv"].iv,
+            ),
+            ("25", "Pikachu", "Male", 75.0),
         )
         self.assertEqual(
-            (records["lowest_iv"].pokemon, records["lowest_iv"].iv),
-            ("Eevee", 50.0),
+            (
+                records["lowest_iv"].level,
+                records["lowest_iv"].pokemon,
+                records["lowest_iv"].gender,
+                records["lowest_iv"].iv,
+            ),
+            ("25", "Eevee", "Female", 50.0),
         )
         self.assertEqual(
             self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
@@ -1155,14 +1176,14 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         records = self.bot.profile_records_for_user(SERVER_ID, 123)
         self.assertEqual(
             {
-                name: (record.pokemon, record.iv)
+                name: (record.level, record.pokemon, record.gender, record.iv)
                 for name, record in records.items()
             },
             {
-                "highest_iv": ("Gigantamax Bagon", 95.0),
-                "lowest_iv": ("Eevee", 9.99),
-                "highest_shiny_iv": ("Gigantamax Bagon", 95.0),
-                "lowest_shiny_iv": ("Pikachu", 45.0),
+                "highest_iv": ("20", "Gigantamax Bagon", None, 95.0),
+                "lowest_iv": ("4", "Eevee", None, 9.99),
+                "highest_shiny_iv": ("20", "Gigantamax Bagon", None, 95.0),
+                "lowest_shiny_iv": ("10", "Pikachu", None, 45.0),
             },
         )
         _, _, profile_records, _ = load_profile_data(self.bot.profile_data_path)
@@ -1180,6 +1201,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(image.getpixel((380, 375)), (41, 42, 47))
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
+        self.assertEqual(
+            format_profile_iv_record(
+                ProfileIvRecord(
+                    pokemon="Rolycoly",
+                    iv=70.43,
+                    level="40",
+                    gender="Male",
+                )
+            ),
+            ("Level 40 Rolycoly", "Male | 70.43%"),
+        )
         settings = self.bot.profile_settings_for_user(123)
         stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
         blank = Image.open(render_profile_image(settings, stats))
@@ -1191,6 +1223,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                     "highest_iv": ProfileIvRecord(
                         pokemon="Gliscor",
                         iv=98.25,
+                        level="36",
+                        gender="Male",
                     )
                 },
             )

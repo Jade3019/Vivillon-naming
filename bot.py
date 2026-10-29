@@ -110,6 +110,20 @@ PROFILE_STAT_DEFAULTS: Final[dict[str, int]] = {
     "gmax": 0,
     "missingno": 0,
 }
+PROFILE_RECORD_LABELS: Final[dict[str, tuple[str, str]]] = {
+    "highest_iv": ("Highest IV", "high_iv"),
+    "lowest_iv": ("Lowest IV", "low_iv"),
+    "highest_shiny_iv": ("Highest Shiny IV", "shiny"),
+    "lowest_shiny_iv": ("Lowest Shiny IV", "shiny"),
+}
+
+
+@dataclass(frozen=True)
+class ProfileIvRecord:
+    pokemon: str
+    iv: float
+
+
 PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
     "white": ("White", "#FFFFFF"),
     "black": ("Black", "#171717"),
@@ -4192,24 +4206,30 @@ def load_profile_data(
 ) -> tuple[
     dict[str, dict[str, int | str]],
     dict[str, dict[str, int]],
+    dict[str, dict[str, ProfileIvRecord]],
     list[int],
 ]:
     if not path.exists():
-        return {}, {}, []
+        return {}, {}, {}, []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"Could not read profile data from {path}") from error
     legacy_keys = {"users", "seen_catch_message_ids"}
     current_keys = legacy_keys | {"server_stats"}
+    record_keys = current_keys | {"server_records"}
     if (
         not isinstance(data, dict)
-        or set(data) not in (legacy_keys, current_keys)
+        or set(data) not in (legacy_keys, current_keys, record_keys)
         or not isinstance(data["users"], dict)
         or not isinstance(data["seen_catch_message_ids"], list)
         or (
             "server_stats" in data
             and not isinstance(data["server_stats"], dict)
+        )
+        or (
+            "server_records" in data
+            and not isinstance(data["server_records"], dict)
         )
     ):
         raise ValueError(f"Profile data in {path} has an invalid format")
@@ -4261,6 +4281,34 @@ def load_profile_data(
             **stored_stats,
         }
 
+    profile_records: dict[str, dict[str, ProfileIvRecord]] = {}
+    for user_key, stored_records in data.get("server_records", {}).items():
+        ids = user_key.split(":") if isinstance(user_key, str) else []
+        if (
+            len(ids) != 2
+            or any(not identifier.isdecimal() for identifier in ids)
+            or not isinstance(stored_records, dict)
+        ):
+            raise ValueError(f"Profile data in {path} has an invalid server record")
+        records: dict[str, ProfileIvRecord] = {}
+        for record_name, record in stored_records.items():
+            if (
+                record_name not in PROFILE_RECORD_LABELS
+                or not isinstance(record, dict)
+                or set(record) != {"pokemon", "iv"}
+                or not isinstance(record["pokemon"], str)
+                or not record["pokemon"]
+                or isinstance(record["iv"], bool)
+                or not isinstance(record["iv"], (int, float))
+                or not 0 <= record["iv"] <= 100
+            ):
+                raise ValueError(f"Profile data in {path} has an invalid IV record")
+            records[record_name] = ProfileIvRecord(
+                pokemon=record["pokemon"],
+                iv=float(record["iv"]),
+            )
+        profile_records[user_key] = records
+
     seen_catch_ids = data["seen_catch_message_ids"]
     if any(
         isinstance(message_id, bool)
@@ -4269,18 +4317,26 @@ def load_profile_data(
         for message_id in seen_catch_ids
     ):
         raise ValueError(f"Profile data in {path} has invalid catch message IDs")
-    return profiles, profile_stats, seen_catch_ids[-10000:]
+    return profiles, profile_stats, profile_records, seen_catch_ids[-10000:]
 
 
 def save_profile_data(
     path: Path,
     profiles: dict[str, dict[str, int | str]],
     profile_stats: dict[str, dict[str, int]],
+    profile_records: dict[str, dict[str, ProfileIvRecord]],
     seen_catch_ids: list[int],
 ) -> None:
     data = {
         "users": profiles,
         "server_stats": profile_stats,
+        "server_records": {
+            user_key: {
+                name: {"pokemon": record.pokemon, "iv": record.iv}
+                for name, record in records.items()
+            }
+            for user_key, records in profile_records.items()
+        },
         "seen_catch_message_ids": seen_catch_ids[-10000:],
     }
     try:
@@ -4369,6 +4425,7 @@ def render_profile_image(
     settings: dict[str, int | str],
     stats: dict[str, int],
     emoji_assets: dict[str, bytes] | None = None,
+    records: dict[str, ProfileIvRecord] | None = None,
 ) -> BytesIO:
     width, height = 1400, 825
     background_key = str(settings["background"])
@@ -4407,6 +4464,38 @@ def render_profile_image(
             (text_x, y),
             f"{label}: {stats[stat]:,}",
             font=stat_font,
+            fill=text_color,
+        )
+
+    record_label_font = profile_font(27, bold=True)
+    record_value_font = profile_font(22)
+    for index, (record_name, (label, icon)) in enumerate(
+        PROFILE_RECORD_LABELS.items()
+    ):
+        y = 245 + index * 135
+        draw_profile_stat_icon(
+            image,
+            draw,
+            icon,
+            (980, y - 2),
+            emoji_assets or {},
+        )
+        draw.text(
+            (1025, y),
+            f"{label}:",
+            font=record_label_font,
+            fill=text_color,
+        )
+        record = (records or {}).get(record_name)
+        value = (
+            f"{record.pokemon} ({record.iv:.2f}%)"
+            if record is not None
+            else "None yet"
+        )
+        draw.text(
+            (1025, y + 42),
+            value,
+            font=record_value_font,
             fill=text_color,
         )
 
@@ -4535,11 +4624,17 @@ class ProfileView(discord.ui.View):
             return
         settings = self.bot.profile_settings_for_user(self.user_id)
         stats = self.bot.profile_stats_for_user(self.guild_id, self.user_id)
+        records = self.bot.profile_records_for_user(self.guild_id, self.user_id)
         emoji_assets = await self.bot.load_profile_emoji_assets()
         await self.message.edit(
             attachments=[
                 discord.File(
-                    render_profile_image(settings, stats, emoji_assets),
+                    render_profile_image(
+                        settings,
+                        stats,
+                        emoji_assets,
+                        records,
+                    ),
                     filename="profile.png",
                 )
             ],
@@ -4618,6 +4713,7 @@ class NamingBot(discord.Client):
         (
             self.profiles,
             self.profile_stats,
+            self.profile_records,
             self.profile_seen_catch_ids,
         ) = load_profile_data(
             self.profile_data_path
@@ -4653,6 +4749,15 @@ class NamingBot(discord.Client):
         return {
             **PROFILE_STAT_DEFAULTS,
             **self.profile_stats.get(f"{guild_id}:{user_id}", {}),
+        }
+
+    def profile_records_for_user(
+        self,
+        guild_id: int,
+        user_id: int,
+    ) -> dict[str, ProfileIvRecord]:
+        return {
+            **self.profile_records.get(f"{guild_id}:{user_id}", {})
         }
 
     async def load_profile_emoji_assets(self) -> dict[str, bytes]:
@@ -4694,6 +4799,7 @@ class NamingBot(discord.Client):
             self.profile_data_path,
             profiles,
             self.profile_stats,
+            self.profile_records,
             self.profile_seen_catch_ids,
         )
         self.profiles = profiles
@@ -4722,11 +4828,16 @@ class NamingBot(discord.Client):
         profile_stats = {
             key: dict(stats) for key, stats in self.profile_stats.items()
         }
+        profile_records: dict[str, dict[str, ProfileIvRecord]] = {
+            key: dict(records)
+            for key, records in self.profile_records.items()
+        }
         user_stats = profile_stats.setdefault(
             f"{SERVER_ID}:{user_id}",
             dict(PROFILE_STAT_DEFAULTS),
         )
         user_stats["total"] += 1
+        user_records = profile_records.setdefault(f"{SERVER_ID}:{user_id}", {})
         if details is not None:
             if details.shiny:
                 user_stats["shiny"] += 1
@@ -4738,12 +4849,33 @@ class NamingBot(discord.Client):
                 user_stats["gmax"] += 1
             if details.missingno:
                 user_stats["missingno"] += 1
+            if details.iv_value is not None:
+                record_candidates = (
+                    ("highest_iv", False, True),
+                    ("lowest_iv", False, False),
+                    ("highest_shiny_iv", True, True),
+                    ("lowest_shiny_iv", True, False),
+                )
+                for record_name, shiny_only, highest in record_candidates:
+                    if shiny_only and not details.shiny:
+                        continue
+                    existing = user_records.get(record_name)
+                    if existing is None or (
+                        details.iv_value > existing.iv
+                        if highest
+                        else details.iv_value < existing.iv
+                    ):
+                        user_records[record_name] = ProfileIvRecord(
+                            pokemon=details.pokemon,
+                            iv=details.iv_value,
+                        )
         seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
         try:
             save_profile_data(
                 self.profile_data_path,
                 self.profiles,
                 profile_stats,
+                profile_records,
                 seen_catch_ids,
             )
         except ValueError:
@@ -4754,6 +4886,7 @@ class NamingBot(discord.Client):
             )
             return
         self.profile_stats = profile_stats
+        self.profile_records = profile_records
         self.profile_seen_catch_ids = seen_catch_ids
 
     def update_appearance(self, guild_id: int, **changes) -> None:
@@ -5444,11 +5577,17 @@ class NamingBot(discord.Client):
         user_id = int(match.group(1)) if match.group(1) else message.author.id
         settings = self.profile_settings_for_user(user_id)
         stats = self.profile_stats_for_user(message.guild.id, user_id)
+        records = self.profile_records_for_user(message.guild.id, user_id)
         emoji_assets = await self.load_profile_emoji_assets()
         view = ProfileView(self, user_id, message.guild.id)
         response = await message.reply(
             file=discord.File(
-                render_profile_image(settings, stats, emoji_assets),
+                render_profile_image(
+                    settings,
+                    stats,
+                    emoji_assets,
+                    records,
+                ),
                 filename="profile.png",
             ),
             view=view,

@@ -203,6 +203,34 @@ class ConfigTests(unittest.TestCase):
 
 
 class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_inconclusive_local_match_uses_vision_prediction(self) -> None:
+        import bot
+
+        image_bytes = b"spawn image"
+        matcher = Mock(entries=["Finizen"])
+        client = Mock()
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(image_bytes, "image/png")),
+            ),
+            patch("bot.asyncio.to_thread", new=AsyncMock(return_value=None)),
+            patch(
+                "bot.request_prediction",
+                new=AsyncMock(return_value=("Palafin", 97.0)),
+            ) as request_prediction,
+        ):
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=client,
+                http=Mock(),
+                model="test-model",
+                matcher=matcher,
+            )
+
+        self.assertEqual(result, ("Palafin", 97.0))
+        request_prediction.assert_awaited_once()
+
     async def test_unverified_vision_vivillon_prediction_is_rejected(self) -> None:
         import bot
 

@@ -203,6 +203,32 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertEqual(result, ("Milcery", 46))
         mask.assert_not_called()
 
+    def test_palafin_finizen_match_requires_a_detected_belly_patch(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.zeros(len(descriptors), dtype=np.int32),
+                names=np.array(["Finizen", "Palafin"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch.object(
+                    matcher,
+                    "_match",
+                    side_effect=[("Finizen", 20), ("Finizen", 18)],
+                ),
+                patch("image_match.has_belly_patch", return_value=False),
+            ):
+                result = matcher.match(b"ambiguous spawn image")
+
+        self.assertIsNone(result)
+
     def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
         np = image_match.np
         descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)

@@ -598,9 +598,9 @@ class ImageMatcher:
         else:
             return None
         if name in ("Palafin", "Finizen"):
-            patch = has_belly_patch(data)
-            if patch is not None:
-                name = "Palafin" if patch else "Finizen"
+            if has_belly_patch(data) is not True:
+                return None
+            name = "Palafin"
         if name in SILVALLY_FORMS:
             name = silvally_form_by_color(data) or name
         if name in ARCEUS_FORM_SET:

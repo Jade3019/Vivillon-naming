@@ -127,7 +127,8 @@ low-IV, MissingNo., and Gigantamax reports use the Vivillon Starboard, with
 shiny catches also posted to the shinyboard
 when configured. Shiny posts include the catcher, Pokémon, level, IV, gender
 when Pokétwo provides it, and a chain only when the catch message identifies
-one. Starboard channel choices and the shiny count are saved in
+one. Normal Starboard Pokémon Spotlight embeds use the same static 2D artwork
+as naming thumbnails. Starboard channel choices and the shiny count are saved in
 `starboard_settings.json` by default; set `STARBOARD_SETTINGS_FILE` to use
 another path. Each caught shiny increments the saved shiny count and renames
 the shinyboard with a numeric suffix (for example, `shiny-board-1`, then

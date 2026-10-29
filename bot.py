@@ -1160,18 +1160,10 @@ def custom_thumbnail_path(name: str) -> Path | None:
     return path if path.is_file() else None
 
 
-CUSTOM_FORM_NAME_KEYS: Final[frozenset[str]] = frozenset(
-    normalize_pokemon_alias(name) for name in CUSTOM_FORM_SPECIES
-)
-
-
 def custom_normal_starboard_thumbnail_path(
     details: "CatchDetails", category: str
 ) -> Path | None:
-    if (
-        category != "normal_pokemon"
-        or normalize_pokemon_alias(details.pokemon) not in CUSTOM_FORM_NAME_KEYS
-    ):
+    if category != "normal_pokemon":
         return None
     return custom_thumbnail_path(details.pokemon)
 
@@ -1707,11 +1699,7 @@ def catch_starboard_destinations(
     return posts
 
 
-def starboard_art_url(
-    details: CatchDetails,
-    *,
-    use_3d_shiny_model: bool = False,
-) -> str | None:
+def starboard_sprite_names(details: CatchDetails) -> tuple[str, str]:
     base_name = re.sub(
         r"^(?:gigantamax|gmax)\s+",
         "",
@@ -1732,6 +1720,16 @@ def starboard_art_url(
     sprite_name = f"Gmax {base_name}" if details.gigantamax else base_name
     if sprite_name not in sprite_ids:
         sprite_name = base_name
+    return base_name, sprite_name
+
+
+def starboard_art_url(
+    details: CatchDetails,
+    *,
+    use_3d_shiny_model: bool = False,
+) -> str | None:
+    base_name, sprite_name = starboard_sprite_names(details)
+    sprite_ids = load_sprite_ids()
     sprite_id = sprite_ids.get(sprite_name)
     regional_form = re.match(
         r"^(?:Alolan|Galarian|Hisuian|Paldean)\s+(.+)$",
@@ -1843,10 +1841,14 @@ def format_starboard_embed(
         color=discord.Color(DEFAULT_EMBED_COLOR),
         timestamp=caught_at,
     )
-    image_url = starboard_art_url(
-        details,
-        use_3d_shiny_model=use_3d_shiny_model,
-    )
+    if category == "normal_pokemon":
+        _, sprite_name = starboard_sprite_names(details)
+        image_url = sprite_url_for_pokemon(sprite_name)
+    else:
+        image_url = starboard_art_url(
+            details,
+            use_3d_shiny_model=use_3d_shiny_model,
+        )
     footer_text = (
         "Test preview — not an actual catch" if test_preview else "Caught at"
     )

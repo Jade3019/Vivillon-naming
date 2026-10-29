@@ -1750,7 +1750,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(is_normal_starboard_pokemon(pokemon_name))
         self.assertFalse(is_normal_starboard_pokemon("Pikachu"))
 
-    def test_alternate_forms_use_species_artwork_thumbnail(self) -> None:
+    def test_normal_starboard_uses_naming_thumbnails_for_forms(self) -> None:
         examples = (("Flying Silvally", "773"),)
         for pokemon, sprite_id in examples:
             with self.subTest(pokemon=pokemon):
@@ -1772,8 +1772,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(
                     embed.thumbnail.url,
-                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-                    f"sprites/pokemon/other/home/{sprite_id}.png",
+                    "attachment://flyingsilvally.png",
                 )
 
         zygarde_details = parse_catch_details(
@@ -2062,7 +2061,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 embed.thumbnail.url,
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
-                "sprites/pokemon/other/home/862.png",
+                "sprites/pokemon/other/official-artwork/862.png",
             )
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from bot import (
     add_shinyhunter,
@@ -110,6 +110,7 @@ from bot import (
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     PROFILE_FRAME_ALPHA_GAMMA,
+    PROFILE_FRAME_CORNER_RADIUS,
     PROFILE_FRAME_SCALE,
     save_profile_data,
     save_type_pings,
@@ -1333,7 +1334,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(frame.size, (1467, 868))
         self.assertEqual(profile_position, (33, 21))
-        expected.alpha_composite(base.convert("RGBA"), dest=profile_position)
+        profile_card = base.convert("RGBA")
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        self.assertEqual(profile_card.getpixel((0, 0))[3], 0)
+        self.assertEqual(profile_card.getpixel((0, 412))[3], 255)
+        expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
             self.assertEqual(base.size, (1400, 825))

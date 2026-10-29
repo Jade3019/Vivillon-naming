@@ -167,6 +167,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
 }
 PROFILE_FRAME_SCALE: Final[float] = 0.9
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
+PROFILE_FRAME_CORNER_RADIUS: Final[int] = 72
 PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "text_color": PROFILE_TEXT_COLORS,
     "background": PROFILE_BACKGROUNDS,
@@ -4870,7 +4871,15 @@ def render_profile_image(
             (frame.width - width) // 2,
             (frame.height - height) // 2,
         )
-        framed_image.alpha_composite(image.convert("RGBA"), dest=profile_position)
+        profile_card = image.convert("RGBA")
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, width - 1, height - 1),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        framed_image.alpha_composite(profile_card, dest=profile_position)
         framed_image.alpha_composite(frame)
         image = framed_image
 

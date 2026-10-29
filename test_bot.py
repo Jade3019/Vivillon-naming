@@ -987,20 +987,22 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.bot.daycare.handle_message = AsyncMock(return_value=False)
 
         catches = (
-            (987655, "Gliscor", ""),
-            (987656, "Unknownmon", "˚"),
+            (987655, "Gliscor", "", False),
+            (987656, "Unknownmon", "˚", True),
         )
-        for message_id, pokemon, suffix in catches:
+        for message_id, pokemon, suffix, display_name_mention in catches:
             message = Mock()
             message.id = message_id
             message.author.bot = False
             message.author.id = 456
             message.guild.id = SERVER_ID
             message.channel.guild.id = SERVER_ID
+            catcher = "@Trainer" if display_name_mention else "<@123>"
             message.content = (
-                f"Congratulations <@123>{suffix}! You caught a Level 36 {pokemon} "
+                f"Congratulations {catcher}{suffix}! You caught a Level 36 {pokemon} "
                 "♂ (53.23%)!"
             )
+            message.mentions = [Mock(id=123)] if display_name_mention else []
             message.embeds = []
             message.webhook_id = 789
             message.application_id = 789
@@ -1009,6 +1011,15 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
             2,
+        )
+        records = self.bot.profile_records_for_user(SERVER_ID, 123)
+        self.assertEqual(
+            (records["highest_iv"].pokemon, records["highest_iv"].iv),
+            ("Gliscor", 53.23),
+        )
+        self.assertEqual(
+            (records["lowest_iv"].pokemon, records["lowest_iv"].iv),
+            ("Gliscor", 53.23),
         )
 
     def test_total_uses_catch_announcement_prefix_not_spawn_or_species_parse(

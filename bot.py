@@ -1130,7 +1130,11 @@ class CatchDetails:
     trainer: str | None = None
 
 
-def parse_catch_details(text: str) -> CatchDetails | None:
+def parse_catch_details(
+    text: str,
+    *,
+    user_id: int | None = None,
+) -> CatchDetails | None:
     catch_match = re.search(r"\byou caught\b(?P<body>[^\n]*)", text, re.IGNORECASE)
     if catch_match is None:
         return None
@@ -1140,7 +1144,12 @@ def parse_catch_details(text: str) -> CatchDetails | None:
         text[: catch_match.start()],
         re.IGNORECASE,
     )
-    if user_match is None:
+    if user_match is None and user_id is None:
+        return None
+    caught_user_id = (
+        int(user_match.group(1)) if user_match is not None else user_id
+    )
+    if caught_user_id is None:
         return None
 
     body = catch_match.group("body").strip()
@@ -1218,7 +1227,7 @@ def parse_catch_details(text: str) -> CatchDetails | None:
         pokemon_text = f"Gigantamax {pokemon_text}"
 
     return CatchDetails(
-        user_id=int(user_match.group(1)),
+        user_id=caught_user_id,
         pokemon=display_pokemon_name(pokemon_text),
         level=level,
         iv=iv,
@@ -4816,10 +4825,13 @@ class NamingBot(discord.Client):
             or message_id in self.profile_seen_catch_ids
         ):
             return
-        details = parse_catch_details(message_text(message))
+        user_id = profile_catch_user_id(message)
+        details = parse_catch_details(
+            message_text(message),
+            user_id=user_id,
+        )
         if details is None:
             details = parse_catch_detection_details(message)
-        user_id = profile_catch_user_id(message)
         if user_id is None and details is not None:
             user_id = details.user_id
         if user_id is None:

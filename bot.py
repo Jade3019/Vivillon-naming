@@ -95,6 +95,10 @@ COLLECTION_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!cl\s+remove\s+(.+?)\s*$",
     re.IGNORECASE,
 )
+TYPE_PING_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!(?:tp|typeping)\s*$",
+    re.IGNORECASE,
+)
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 CHAT_EVENT_EMOJI: Final[str] = "⏲️"
 CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
@@ -895,6 +899,18 @@ TYPE_EMOJIS: Final[dict[str, str]] = {
     "rock": "<:rock:1564789532384174100>",
     "steel": "<:Steel:1564789710440898610>",
 }
+TYPE_PING_TYPES: Final[tuple[str, ...]] = tuple(sorted(TYPE_EMOJIS))
+
+
+def format_type_ping_embed(enabled_types: list[str]) -> discord.Embed:
+    enabled = set(enabled_types)
+    embed = discord.Embed(title="Type Pings", color=discord.Color.blurple())
+    embed.description = "\n".join(
+        f"{TYPE_EMOJIS[type_name]} {type_name.title()} "
+        f"{'✅' if type_name in enabled else '❌'}"
+        for type_name in TYPE_PING_TYPES
+    )
+    return embed
 
 
 def _type_key(name: str) -> str:
@@ -941,6 +957,24 @@ def pokemon_types_for(*names: str | None) -> list[str]:
 
 def type_emoji_text(*names: str | None) -> str:
     return "".join(TYPE_EMOJIS[t] for t in pokemon_types_for(*names))
+
+
+def type_ping_user_ids_for_pokemon(
+    type_pings: dict[str, list[str]],
+    guild_id: int,
+    pokemon_types: list[str],
+) -> list[int]:
+    matching_types = set(pokemon_types)
+    matching_user_ids = []
+    for key, enabled_types in type_pings.items():
+        stored_guild_id, separator, stored_user_id = key.partition(":")
+        if (
+            separator
+            and stored_guild_id == str(guild_id)
+            and matching_types.intersection(enabled_types)
+        ):
+            matching_user_ids.append(int(stored_user_id))
+    return sorted(matching_user_ids)
 
 
 def format_typed_spawn_reply(
@@ -2867,6 +2901,136 @@ class ReservationPagesView(discord.ui.View):
         )
 
 
+class TypePingSelect(discord.ui.Select):
+    def __init__(self, type_ping_view: "TypePingView") -> None:
+        self.type_ping_view = type_ping_view
+        enabled_types = type_ping_view.bot.type_pings_for_user(
+            type_ping_view.guild_id,
+            type_ping_view.user_id,
+        )
+        super().__init__(
+            placeholder="Select type(s) to receive pings...",
+            options=[
+                discord.SelectOption(
+                    label=type_name.title(),
+                    value=type_name,
+                    emoji=TYPE_EMOJIS[type_name],
+                    default=type_name in enabled_types,
+                )
+                for type_name in TYPE_PING_TYPES
+            ],
+            min_values=0,
+            max_values=len(TYPE_PING_TYPES),
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.type_ping_view.update_type_pings(interaction, self.values)
+
+
+class TypePingView(discord.ui.View):
+    def __init__(self, bot: "NamingBot", guild_id: int, user_id: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.user_id = user_id
+        enabled_types = bot.type_pings_for_user(guild_id, user_id)
+        self.add_item(TypePingSelect(self))
+        self.embed = format_type_ping_embed(enabled_types)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "These type pings can only be used in their original server.",
+                ephemeral=True,
+            )
+            return False
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the member who opened these type pings can edit them.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def update_type_pings(
+        self,
+        interaction: discord.Interaction,
+        enabled_types: list[str],
+    ) -> None:
+        try:
+            saved_types = self.bot.set_type_pings(
+                self.guild_id,
+                self.user_id,
+                enabled_types,
+            )
+        except ValueError:
+            logger.exception(
+                "Could not save type pings for user %s in guild %s",
+                self.user_id,
+                self.guild_id,
+            )
+            await interaction.response.send_message(
+                "I couldn't save your type pings. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        updated_view = TypePingView(self.bot, self.guild_id, self.user_id)
+        try:
+            await interaction.response.edit_message(
+                embed=updated_view.embed,
+                view=updated_view,
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Could not refresh type pings for user %s in guild %s",
+                self.user_id,
+                self.guild_id,
+            )
+            await interaction.followup.send(
+                "Your type pings were saved, but I couldn't refresh the display.",
+                ephemeral=True,
+            )
+            return
+
+        if len(saved_types) == len(TYPE_PING_TYPES):
+            confirmation = "All type pings enabled."
+        elif not saved_types:
+            confirmation = "All type pings disabled."
+        else:
+            labels = " and ".join(type_name.title() for type_name in saved_types)
+            confirmation = f"Type pings updated for {labels}."
+        await interaction.followup.send(confirmation, ephemeral=True)
+
+    @discord.ui.button(
+        label="All On",
+        style=discord.ButtonStyle.success,
+        custom_id="type_pings:all_on",
+        row=1,
+    )
+    async def enable_all(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await self.update_type_pings(interaction, list(TYPE_PING_TYPES))
+
+    @discord.ui.button(
+        label="All Off",
+        style=discord.ButtonStyle.danger,
+        custom_id="type_pings:all_off",
+        row=1,
+    )
+    async def disable_all(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await self.update_type_pings(interaction, [])
+
+
 @dataclass
 class ChatEventSession:
     host_id: int
@@ -4239,6 +4403,47 @@ def save_afk_settings(
         raise ValueError(f"Could not save AFK settings to {path}") from error
 
 
+def load_type_pings(path: Path) -> dict[str, list[str]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read type ping settings from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Type ping settings in {path} have an invalid format")
+
+    type_pings: dict[str, list[str]] = {}
+    for user_key, enabled_types in data.items():
+        ids = user_key.split(":") if isinstance(user_key, str) else []
+        if (
+            len(ids) != 2
+            or any(not identifier.isdecimal() for identifier in ids)
+            or not isinstance(enabled_types, list)
+            or any(
+                not isinstance(type_name, str)
+                or type_name not in TYPE_PING_TYPES
+                for type_name in enabled_types
+            )
+        ):
+            raise ValueError(f"Type ping settings in {path} have an invalid entry")
+        type_pings[user_key] = list(dict.fromkeys(enabled_types))
+    return type_pings
+
+
+def save_type_pings(path: Path, type_pings: dict[str, list[str]]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(type_pings, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save type ping settings to {path}") from error
+
+
 def valid_profile_setting(setting: str, value: object) -> bool:
     if setting == "catches":
         return isinstance(value, int) and not isinstance(value, bool) and value >= 0
@@ -4781,6 +4986,10 @@ class NamingBot(discord.Client):
         self.collections = migrate_legacy_all_keys(
             load_reservations(self.collection_path)
         )
+        self.type_ping_path = Path(
+            os.environ.get("TYPE_PINGS_FILE", "type_pings.json")
+        )
+        self.type_pings = load_type_pings(self.type_ping_path)
         self.server_settings_path = Path(
             os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
         )
@@ -5200,6 +5409,32 @@ class NamingBot(discord.Client):
             **self.afk_settings.get(f"{guild_id}:{user_id}", {}),
         }
 
+    def type_pings_for_user(self, guild_id: int, user_id: int) -> list[str]:
+        return list(self.type_pings.get(f"{guild_id}:{user_id}", []))
+
+    def set_type_pings(
+        self,
+        guild_id: int,
+        user_id: int,
+        enabled_types: list[str],
+    ) -> list[str]:
+        if any(type_name not in TYPE_PING_TYPES for type_name in enabled_types):
+            raise ValueError("Type ping settings contain an unknown Pokémon type")
+        selected_types = [
+            type_name
+            for type_name in TYPE_PING_TYPES
+            if type_name in enabled_types
+        ]
+        updated_type_pings = dict(self.type_pings)
+        user_key = f"{guild_id}:{user_id}"
+        if selected_types:
+            updated_type_pings[user_key] = selected_types
+        else:
+            updated_type_pings.pop(user_key, None)
+        save_type_pings(self.type_ping_path, updated_type_pings)
+        self.type_pings = updated_type_pings
+        return selected_types
+
     def has_active_ping_targets(self, guild_id: int) -> bool:
         guild_prefix = f"{guild_id}:"
         if any(
@@ -5221,6 +5456,16 @@ class NamingBot(discord.Client):
                 for key, user_ids in registrations.items()
             ):
                 return True
+        if any(
+            key.startswith(guild_prefix)
+            and enabled_types
+            and self.afk_settings_for_user(
+                guild_id,
+                int(key.removeprefix(guild_prefix)),
+            )["collection"]
+            for key, enabled_types in self.type_pings.items()
+        ):
+            return True
         return False
 
     def toggle_afk_setting(
@@ -5537,6 +5782,9 @@ class NamingBot(discord.Client):
                 return
             if re.match(r"^v!sh(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_shinyhunt_command(message)
+                return
+            if re.match(r"^v!(?:tp|typeping)(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_type_ping_command(message)
                 return
             if re.match(r"^v!cl(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_collection_command(message)
@@ -6274,6 +6522,27 @@ class NamingBot(discord.Client):
             mention_author=False,
         )
 
+    async def handle_type_ping_command(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Type pings can only be used in a server.",
+                mention_author=False,
+            )
+            return
+        if TYPE_PING_COMMAND_PATTERN.fullmatch(message.content) is None:
+            await message.reply(
+                "Usage: `v!tp` or `v!typeping`",
+                mention_author=False,
+            )
+            return
+
+        view = TypePingView(self, message.guild.id, message.author.id)
+        await message.reply(
+            embed=view.embed,
+            view=view,
+            mention_author=False,
+        )
+
     async def handle_collection_command(self, message: discord.Message) -> None:
         if message.guild is None:
             await message.reply(
@@ -6980,6 +7249,7 @@ class NamingBot(discord.Client):
                 self.collections = migrate_legacy_all_keys(
                     load_reservations(self.collection_path)
                 )
+                self.type_pings = load_type_pings(self.type_ping_path)
             except ValueError:
                 logger.exception("Could not refresh spawn ping registrations")
                 await message.reply(
@@ -7137,6 +7407,14 @@ class NamingBot(discord.Client):
             else []
         )
         if message.guild:
+            type_ping_user_ids = type_ping_user_ids_for_pokemon(
+                self.type_pings,
+                message.guild.id,
+                pokemon_types_for(thumbnail_name, name),
+            )
+            collection_user_ids = sorted(
+                set(collection_user_ids).union(type_ping_user_ids)
+            )
             shinyhunter_user_ids = [
                 user_id
                 for user_id in shinyhunter_user_ids

@@ -240,6 +240,13 @@ the bot shows a `Shinyhunt:` line and/or a `Collection:` line only for groups
 with matching members. If no one matches, it shows the normal naming reply
 without empty mention lines.
 
+Use `v!tp` or `v!typeping` to choose one or more Pokémon types for spawn pings.
+A Pokémon matches each of its types, so enabling Normal also matches a
+dual-type Pokémon that has Normal as either type. Type pings are included with
+collection mentions and can be muted with the **Collection** button in `v!afk`.
+Selections are saved per member and server in `type_pings.json` by default; set
+`TYPE_PINGS_FILE` to use a different path.
+
 Use `v!afk` to open your personal ping settings. The **Shiny Hunt** and
 **Collection** buttons independently turn those notifications on or off; the
 settings are saved per member and server in `afk_settings.json` by default

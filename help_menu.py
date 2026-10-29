@@ -34,6 +34,10 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
             ("v!cl remove <pokemon, ...>", "Remove Pokémon from your collection."),
             ("v!cl list", "Show your collection."),
             ("v!cl clear / clear all", "Clear your collection, or the whole server's."),
+            (
+                "v!tp / v!typeping",
+                "Choose Pokémon types to get pinged for, including dual-type spawns.",
+            ),
         ],
     ),
     (

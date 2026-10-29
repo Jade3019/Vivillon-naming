@@ -105,10 +105,15 @@ from bot import (
     AFKSettingsView,
     format_profile_iv_record,
     load_afk_settings,
+    load_type_pings,
     load_profile_data,
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     save_profile_data,
+    save_type_pings,
+    type_ping_user_ids_for_pokemon,
+    TYPE_PING_TYPES,
+    TypePingView,
     render_profile_image,
     ProfileView,
     ProfileEditView,
@@ -1498,6 +1503,172 @@ class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
                 content="Everyone's Pokémon collection in this server has been cleared.",
                 view=None,
             )
+
+
+class TypePingTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.bot = NamingBot(ConfigTests().load_config())
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+
+    def test_selected_types_match_either_pokemon_type(self) -> None:
+        type_pings = {
+            f"{SERVER_ID}:123": ["normal"],
+            f"{SERVER_ID}:456": ["fire"],
+            f"{SERVER_ID}:789": ["normal", "fire"],
+            f"{SERVER_ID + 1}:999": ["normal"],
+        }
+
+        self.assertEqual(
+            type_ping_user_ids_for_pokemon(
+                type_pings,
+                SERVER_ID,
+                ["fire", "normal"],
+            ),
+            [123, 456, 789],
+        )
+
+    async def test_type_ping_commands_edit_and_persist_multiple_selections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.type_ping_path = Path(directory) / "type_pings.json"
+            for content in ("v!tp", "v!typeping"):
+                message = Mock()
+                message.author.bot = False
+                message.author.id = 123
+                message.guild.id = SERVER_ID
+                message.channel.guild.id = SERVER_ID
+                message.content = content
+                message.embeds = []
+                message.attachments = []
+                message.reply = AsyncMock()
+
+                await self.bot.on_message(message)
+
+                message.reply.assert_awaited_once()
+                view = message.reply.await_args.kwargs["view"]
+                self.assertIsInstance(view, TypePingView)
+                self.assertEqual(
+                    message.reply.await_args.kwargs["embed"].title,
+                    "Type Pings",
+                )
+                type_select = next(
+                    child
+                    for child in view.children
+                    if isinstance(child, discord.ui.Select)
+                )
+                self.assertEqual(len(type_select.options), len(TYPE_PING_TYPES))
+                self.assertEqual(type_select.max_values, len(TYPE_PING_TYPES))
+                self.assertEqual(type_select.min_values, 0)
+                self.assertFalse(any(option.default for option in type_select.options))
+
+            interaction = Mock()
+            interaction.guild_id = SERVER_ID
+            interaction.user.id = 123
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+            interaction.followup.send = AsyncMock()
+            view = message.reply.await_args.kwargs["view"]
+            type_select = next(
+                child
+                for child in view.children
+                if isinstance(child, discord.ui.Select)
+            )
+            type_select._values = ["normal", "fire"]
+
+            await type_select.callback(interaction)
+
+            self.assertEqual(
+                self.bot.type_pings,
+                {f"{SERVER_ID}:123": ["fire", "normal"]},
+            )
+            self.assertEqual(
+                load_type_pings(self.bot.type_ping_path),
+                {f"{SERVER_ID}:123": ["fire", "normal"]},
+            )
+            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_select = next(
+                child
+                for child in updated_view.children
+                if isinstance(child, discord.ui.Select)
+            )
+            self.assertEqual(
+                {option.value for option in updated_select.options if option.default},
+                {"normal", "fire"},
+            )
+            interaction.followup.send.assert_awaited_with(
+                "Type pings updated for Fire and Normal.",
+                ephemeral=True,
+            )
+
+            all_on = next(
+                child
+                for child in updated_view.children
+                if isinstance(child, discord.ui.Button) and child.label == "All On"
+            )
+            await all_on.callback(interaction)
+            self.assertEqual(
+                self.bot.type_pings[f"{SERVER_ID}:123"],
+                list(TYPE_PING_TYPES),
+            )
+            all_on_view = interaction.response.edit_message.await_args.kwargs["view"]
+            all_on_select = next(
+                child
+                for child in all_on_view.children
+                if isinstance(child, discord.ui.Select)
+            )
+            self.assertTrue(all(option.default for option in all_on_select.options))
+
+            all_off = next(
+                child
+                for child in all_on_view.children
+                if isinstance(child, discord.ui.Button) and child.label == "All Off"
+            )
+            await all_off.callback(interaction)
+            self.assertEqual(self.bot.type_pings, {})
+            self.assertEqual(load_type_pings(self.bot.type_ping_path), {})
+
+    async def test_type_pings_wake_and_match_dual_type_spawns_in_pings_mode(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": True,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.type_ping_path = Path(directory) / "type_pings.json"
+            self.bot.type_pings = {
+                f"{SERVER_ID}:123": ["normal"],
+                f"{SERVER_ID}:456": ["fire"],
+            }
+            save_type_pings(self.bot.type_ping_path, self.bot.type_pings)
+            self.bot.collections = {
+                reservation_key(SERVER_ID, "Pyroar"): [123]
+            }
+            self.bot.collection_path = Path(directory) / "collections.json"
+            save_reservations(self.bot.collection_path, self.bot.collections)
+
+            message = Mock()
+            message.id = 708
+            message.guild.id = SERVER_ID
+            message.channel.id = 1208
+            message.attachments = [
+                Mock(content_type="image/png", url="https://example.test/spawn.png")
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Pyroar", 99.0)),
+            ) as recognize:
+                await self.bot.handle_spawn(message)
+
+            recognize.assert_awaited_once()
+            message.reply.assert_awaited_once()
+            content = message.reply.await_args.args[0]
+            self.assertIn("Collection: <@123>, <@456>", content)
+            self.assertEqual(content.count("<@123>"), 1)
 
 
 class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):

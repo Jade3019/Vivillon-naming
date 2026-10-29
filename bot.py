@@ -19,7 +19,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from image_match import (
     CUSTOM_FORM_SPECIES,
     FORM_DISPLAY_NAMES,
@@ -145,6 +145,10 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("White", "#FFFFFF"),
+    "cosmog": ("Cosmog", "Cosmog middle background"),
+}
+PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
+    "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),
@@ -4732,12 +4736,25 @@ def render_profile_image(
     middle_key = str(settings["middle_background"])
     text_color_key = str(settings["text_color"])
     background = PROFILE_BACKGROUNDS[background_key][1]
-    middle_background = PROFILE_MIDDLE_BACKGROUNDS[middle_key][1]
     text_color = PROFILE_TEXT_COLORS[text_color_key][1]
 
     image = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(image)
-    draw.rectangle((430, 0, 949, height - 1), fill=middle_background)
+    middle_background_image_path = PROFILE_MIDDLE_BACKGROUND_IMAGES.get(
+        middle_key
+    )
+    if middle_background_image_path is None:
+        draw.rectangle(
+            (430, 0, 949, height - 1),
+            fill=PROFILE_MIDDLE_BACKGROUNDS[middle_key][1],
+        )
+    else:
+        with Image.open(middle_background_image_path) as middle_background_image:
+            middle_background = ImageOps.fit(
+                middle_background_image.convert("RGB"),
+                (520, height),
+            )
+        image.paste(middle_background, (430, 0))
     heading_font = profile_font(36, bold=True)
     stat_font = profile_font(30)
     draw.text((64, 245), "Pokemon Catches", font=heading_font, fill=text_color)

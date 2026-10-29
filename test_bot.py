@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
-from PIL import Image
+from PIL import Image, ImageOps
 
 from bot import (
     add_shinyhunter,
@@ -986,7 +986,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
-            ["White"],
+            ["White", "Cosmog"],
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
@@ -1261,6 +1261,18 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(image.getpixel((1300, 800)), (41, 42, 47))
         self.assertNotEqual(image.getpixel((81, 375)), (41, 42, 47))
         self.assertEqual(image.getpixel((380, 375)), (41, 42, 47))
+
+    def test_profile_card_uses_selected_cosmog_middle_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["middle_background"] = "cosmog"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(Path(__file__).with_name("middle background") / "Cosmog.png") as source:
+            expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

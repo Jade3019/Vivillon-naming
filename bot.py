@@ -165,6 +165,7 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
 }
+PROFILE_FRAME_SCALE: Final[float] = 0.92
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
 PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "text_color": PROFILE_TEXT_COLORS,
@@ -4850,7 +4851,13 @@ def render_profile_image(
     frame_image_path = PROFILE_FRAME_IMAGES.get(str(settings["frame"]))
     if frame_image_path is not None:
         with Image.open(frame_image_path) as frame_image:
-            frame = frame_image.convert("RGBA")
+            frame = frame_image.convert("RGBA").resize(
+                (
+                    round(frame_image.width * PROFILE_FRAME_SCALE),
+                    round(frame_image.height * PROFILE_FRAME_SCALE),
+                ),
+                Image.Resampling.LANCZOS,
+            )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(

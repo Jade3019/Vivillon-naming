@@ -110,6 +110,7 @@ from bot import (
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     PROFILE_FRAME_ALPHA_GAMMA,
+    PROFILE_FRAME_SCALE,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1311,7 +1312,13 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
-            frame = source.convert("RGBA")
+            frame = source.convert("RGBA").resize(
+                (
+                    round(source.width * PROFILE_FRAME_SCALE),
+                    round(source.height * PROFILE_FRAME_SCALE),
+                ),
+                Image.Resampling.LANCZOS,
+            )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(
@@ -1327,7 +1334,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         expected.alpha_composite(base.convert("RGBA"), dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
-            self.assertEqual(actual.size, (1630, 965))
+            self.assertEqual(base.size, (1400, 825))
+            self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
 

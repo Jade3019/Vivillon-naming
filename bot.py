@@ -795,12 +795,6 @@ def format_custom_type_spawn_reply(
     guess_name: str | None = None,
     type_ping_user_ids: list[int] | None = None,
 ) -> str:
-    lines = format_spawn_mention_lines(
-        reserved_user_ids,
-        shinyhunter_user_ids,
-        collection_user_ids,
-        type_ping_user_ids,
-    )
     emoji_by_type = {
         "fire": "<:fire:1560301436074729532>",
         "water": "<:water:1560303864094130357>",
@@ -857,7 +851,17 @@ def format_custom_type_spawn_reply(
         for type_name in type_order
         if type_name in included_types
     ]
-    lines.append(f"{' '.join(type_emojis)} {format_guess(name, confidence, guess_name)}")
+    lines = [
+        f"{' '.join(type_emojis)} {format_guess(name, confidence, guess_name)}"
+    ]
+    lines.extend(
+        format_spawn_mention_lines(
+            reserved_user_ids,
+            shinyhunter_user_ids,
+            collection_user_ids,
+            type_ping_user_ids,
+        )
+    )
     if assisted:
         lines.append(
             f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`"
@@ -998,13 +1002,15 @@ def format_typed_spawn_reply(
     assisted: bool = True,
     guess_name: str | None = None,
 ) -> str:
-    lines = format_spawn_mention_lines(
-        reserved_user_ids,
-        shinyhunter_user_ids,
-        collection_user_ids,
-        type_ping_user_ids,
+    lines = [f"{type_emojis} {format_guess(name, confidence, guess_name)}"]
+    lines.extend(
+        format_spawn_mention_lines(
+            reserved_user_ids,
+            shinyhunter_user_ids,
+            collection_user_ids,
+            type_ping_user_ids,
+        )
     )
-    lines.append(f"{type_emojis} {format_guess(name, confidence, guess_name)}")
     if assisted:
         lines.append(f"**Copy Here >** `{format_catch_command(poketwo_bot_id, name)}`")
     return "\n".join(lines)
@@ -1062,10 +1068,7 @@ def format_type_spawn_embed(
             f"`{format_catch_command(poketwo_bot_id, name)}`" if assisted else None
         )
     )
-    embed.set_author(
-        name=format_guess(name, confidence, guess_name),
-        icon_url=f"attachment://{icon_filename}",
-    )
+    embed.set_thumbnail(url=f"attachment://{icon_filename}")
     return embed
 
 
@@ -7569,11 +7572,14 @@ class NamingBot(discord.Client):
                 assisted=assisted,
                 guess_name=guess_name,
             )
-            content_lines = format_spawn_mention_lines(
-                reserved_user_ids,
-                shinyhunter_user_ids,
-                collection_user_ids,
-                type_ping_user_ids,
+            content_lines = [format_guess(name, confidence, guess_name)]
+            content_lines.extend(
+                format_spawn_mention_lines(
+                    reserved_user_ids,
+                    shinyhunter_user_ids,
+                    collection_user_ids,
+                    type_ping_user_ids,
+                )
             )
             embeds = [type_embed]
             files = [

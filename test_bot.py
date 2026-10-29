@@ -1667,8 +1667,10 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             recognize.assert_awaited_once()
             message.reply.assert_awaited_once()
             content = message.reply.await_args.args[0]
+            self.assertIn("Pyroar: 99.00%", content.splitlines()[0])
             self.assertIn("Collection: <@123>", content)
             self.assertIn("Typeping: <@123>, <@456>", content)
+            self.assertLess(content.index("Pyroar:"), content.index("Collection:"))
             self.assertEqual(content.count("<@123>"), 2)
 
 
@@ -2858,11 +2860,11 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertFalse(is_single_type_fire_pokemon("Charizard"))
         self.assertFalse(is_single_type_fire_pokemon("Rotom Heat"))
 
-    def test_type_spawn_embed_shows_guess_icon_and_catch_command(self) -> None:
+    def test_type_spawn_embed_shows_icon_and_catch_command(self) -> None:
         embed = format_type_spawn_embed("Glaceon", 87.5, 789, "ice_type.png")
 
-        self.assertEqual(embed.author.name, "Glaceon: 87.50%")
-        self.assertEqual(embed.author.icon_url, "attachment://ice_type.png")
+        self.assertNotIn("author", embed.to_dict())
+        self.assertEqual(embed.thumbnail.url, "attachment://ice_type.png")
         self.assertEqual(embed.description, "`@Pokétwo#8236 c glaceon`")
 
     def test_pc_catch_embed_shows_copy_label_and_spawned_pokemon_name(self) -> None:
@@ -3047,8 +3049,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
             format_custom_type_spawn_reply(
                 "Vulpix", 87.5, 789, [123], include_fire=True
             ),
-            "Reserved: <@123>\n"
             "<:fire:1560301436074729532> Vulpix: 87.50%\n"
+            "Reserved: <@123>\n"
             "**Copy Here >** `@Pokétwo#8236 c vulpix`",
         )
         self.assertEqual(
@@ -3060,9 +3062,9 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 include_fire=True,
                 type_ping_user_ids=[123],
             ),
+            "<:fire:1560301436074729532> Vulpix: 87.50%\n"
             "Collection: <@456>\n"
             "Typeping: <@123>\n"
-            "<:fire:1560301436074729532> Vulpix: 87.50%\n"
             "**Copy Here >** `@Pokétwo#8236 c vulpix`",
         )
         self.assertTrue(is_fire_icon_pokemon("Vulpix"))
@@ -4539,10 +4541,26 @@ class TypeEmojiTests(unittest.TestCase):
 
         self.assertEqual(len(bot.TYPE_EMOJIS), 18)
         reply = bot.format_typed_spawn_reply(
-            "Gengar", 100.0, 1, bot.type_emoji_text("Gengar")
+            "Gengar",
+            100.0,
+            1,
+            bot.type_emoji_text("Gengar"),
+            [],
+            [123],
+            [456],
+            [789],
         )
-        self.assertTrue(reply.startswith(bot.TYPE_EMOJIS["ghost"]))
-        self.assertIn("Gengar: 100.00%", reply.splitlines()[0])
+        lines = reply.splitlines()
+        self.assertTrue(lines[0].startswith(bot.TYPE_EMOJIS["ghost"]))
+        self.assertIn("Gengar: 100.00%", lines[0])
+        self.assertEqual(
+            lines[1:4],
+            [
+                "Shinyhunt: <@123>",
+                "Collection: <@456>",
+                "Typeping: <@789>",
+            ],
+        )
 
 
 if __name__ == "__main__":

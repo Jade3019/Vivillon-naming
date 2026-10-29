@@ -40,6 +40,12 @@ DISPLAY_NAMES = {
     "Totem-Busted Mimikyu": "Mimikyu",
     "Totem-Disguised Mimikyu": "Mimikyu",
 }
+CUSTOM_FORM_SPECIES = {
+    "Partner Pikachu": "Pikachu",
+    "Gliding Build Koraidon": "Koraidon",
+    "Zenith Marshadow": "Marshadow",
+    "Galarian Zen Darmanitan": "Darmanitan",
+}
 # Folders like "Unown Variant 3" are learned separately (so each can have its own
 # thumbnail) but the Pokémon is still named after the base species.
 VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.IGNORECASE)
@@ -90,6 +96,7 @@ THUMBNAIL_FORM_SPECIES = {
     "Hangry Morpeko": "Morpeko",
     "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
+    **CUSTOM_FORM_SPECIES,
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
     **{form: "Arceus" for form in ARCEUS_FORMS},
@@ -101,6 +108,7 @@ THUMBNAIL_FORM_SPECIES = {
 FAMILY_OVERRIDES = {
     "Finizen": "Palafin",
     "Hero Palafin": "Palafin",
+    **CUSTOM_FORM_SPECIES,
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
     **{form: "Arceus" for form in ARCEUS_FORMS},
@@ -187,6 +195,7 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
         species, form_data = [], {}
 
     species_by_key = {key(name): name for name in species}
+    custom_forms_by_key = {key(form): form for form in CUSTOM_FORM_SPECIES}
     forms_by_key: dict[str, str] = {}
     for species_name, forms in form_data.items():
         canonical_species = (
@@ -215,6 +224,8 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
     def canonical_name(raw: str) -> str | None:
         raw = raw.strip()
         normalized_key = key(raw)
+        if normalized_key in custom_forms_by_key:
+            return custom_forms_by_key[normalized_key]
         if normalized_key in forms_by_key:
             return forms_by_key[normalized_key]
         if normalized_key in species_by_key:
@@ -568,15 +579,28 @@ class ImageMatcher:
             ]
         if not results:
             return None
-        name, votes = max(results, key=lambda result: result[1])
+        vivillon_form: str | None = None
+        vivillon_checked = False
+        for candidate, votes in sorted(
+            results, key=lambda result: result[1], reverse=True
+        ):
+            if candidate in VIVILLON_FORM_SET:
+                if not vivillon_checked:
+                    vivillon_form = vivillon_form_by_pattern(data)
+                    vivillon_checked = True
+                if vivillon_form is None:
+                    continue
+                candidate = vivillon_form
+            name = candidate
+            break
+        else:
+            return None
         if name in ("Palafin", "Finizen"):
             patch = has_belly_patch(data)
             if patch is not None:
                 name = "Palafin" if patch else "Finizen"
         if name in SILVALLY_FORMS:
             name = silvally_form_by_color(data) or name
-        if name in VIVILLON_FORM_SET:
-            name = vivillon_form_by_pattern(data) or name
         if name in ARCEUS_FORM_SET:
             name = arceus_form_by_color(data) or name
         return name, votes

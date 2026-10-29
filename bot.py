@@ -21,12 +21,15 @@ import discord
 from aiohttp import web
 from PIL import Image, ImageDraw, ImageFont
 from image_match import (
+    CUSTOM_FORM_SPECIES,
     FORM_DISPLAY_NAMES,
     ARCEUS_FORM_SET,
     SILVALLY_FORMS,
     VIVILLON_FORM_SET,
     ImageMatcher,
+    cv2,
     species_display_name,
+    vivillon_form_by_pattern,
 )
 from org_api import OrgReserves, create_app
 import org_rpc
@@ -465,24 +468,37 @@ async def recognize_pokemon(
     if client is None:
         raise NoMatchError("No reference image matched and OpenAI is not configured")
 
+    prediction: tuple[str, float] | None = None
     if downloaded is None:
         # Letting OpenAI fetch the image skips our own download and base64 step.
         try:
-            return await request_prediction(
+            prediction = await request_prediction(
                 url, client=client, model=model, detail=detail
             )
         except BadRequestError:
             logger.info("OpenAI could not fetch the image URL; uploading it instead")
             downloaded = await download_image(http, url)
+        else:
+            if prediction[0] not in VIVILLON_FORM_SET or cv2 is None:
+                return prediction
+            downloaded = await download_image(http, url)
 
     image_bytes, content_type = downloaded
-    encoded_image = base64.b64encode(image_bytes).decode("ascii")
-    return await request_prediction(
-        f"data:{content_type};base64,{encoded_image}",
-        client=client,
-        model=model,
-        detail=detail,
-    )
+    if prediction is None:
+        encoded_image = base64.b64encode(image_bytes).decode("ascii")
+        prediction = await request_prediction(
+            f"data:{content_type};base64,{encoded_image}",
+            client=client,
+            model=model,
+            detail=detail,
+        )
+    if prediction[0] in VIVILLON_FORM_SET and cv2 is not None:
+        matched_form = await asyncio.to_thread(vivillon_form_by_pattern, image_bytes)
+        if matched_form is None:
+            logger.info("Rejected an unverified Vivillon vision prediction")
+            raise NoMatchError("Vision prediction of Vivillon was not image-verified")
+        prediction = matched_form, prediction[1]
+    return prediction
 
 
 async def request_prediction(
@@ -593,6 +609,8 @@ def format_guess(
 
 def shown_form_name(name: str, form_name: str | None) -> str:
     """Silvally types, Vivillon patterns and Arceus types are shown by form, but caught and reserved as the species."""
+    if form_name in CUSTOM_FORM_SPECIES:
+        return form_name
     if (
         form_name in SILVALLY_FORMS
         or form_name in VIVILLON_FORM_SET
@@ -1093,6 +1111,22 @@ def custom_thumbnail_path(name: str) -> Path | None:
     return path if path.is_file() else None
 
 
+CUSTOM_FORM_NAME_KEYS: Final[frozenset[str]] = frozenset(
+    normalize_pokemon_alias(name) for name in CUSTOM_FORM_SPECIES
+)
+
+
+def custom_normal_starboard_thumbnail_path(
+    details: "CatchDetails", category: str
+) -> Path | None:
+    if (
+        category != "normal_pokemon"
+        or normalize_pokemon_alias(details.pokemon) not in CUSTOM_FORM_NAME_KEYS
+    ):
+        return None
+    return custom_thumbnail_path(details.pokemon)
+
+
 def catch_card_files(name: str, thumbnail_name: str | None = None) -> list[discord.File]:
     path = custom_thumbnail_path(thumbnail_name or name)
     return [discord.File(path, filename=path.name)] if path else []
@@ -1421,6 +1455,7 @@ Galarian Stunfisk
 Galarian Darmanitan
 Galarian Zen Darmanitan
 Darmanitan Galar Zen
+Partner Pikachu
 Obstagoon
 Sirfetch'd
 Cursola
@@ -1634,6 +1669,7 @@ def starboard_art_url(
         details.pokemon,
         flags=re.IGNORECASE,
     )
+    base_name = CUSTOM_FORM_SPECIES.get(base_name, base_name)
     sprite_ids = load_sprite_ids()
     if base_name not in sprite_ids:
         base_name = next(
@@ -1778,7 +1814,10 @@ def format_starboard_embed(
     ):
         footer_text += " · Animated sprite via Pokémon Showdown"
     embed.set_footer(text=footer_text)
-    if image_url:
+    custom_thumbnail = custom_normal_starboard_thumbnail_path(details, category)
+    if custom_thumbnail:
+        embed.set_thumbnail(url=f"attachment://{custom_thumbnail.name}")
+    elif image_url:
         embed.set_thumbnail(url=image_url)
     return embed
 
@@ -6738,11 +6777,25 @@ class NamingBot(discord.Client):
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
-                await channel.send(
-                    embed=embed,
-                    view=starboard_jump_view(jump_url),
-                    allowed_mentions=discord.AllowedMentions.none(),
+                custom_thumbnail = custom_normal_starboard_thumbnail_path(
+                    details, post_category
                 )
+                if custom_thumbnail:
+                    await channel.send(
+                        embed=embed,
+                        file=discord.File(
+                            custom_thumbnail,
+                            filename=custom_thumbnail.name,
+                        ),
+                        view=starboard_jump_view(jump_url),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                else:
+                    await channel.send(
+                        embed=embed,
+                        view=starboard_jump_view(jump_url),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
                 logger.info(
                     "Posted catch message %s to starboard channel %s as %s",
                     message.id,
@@ -6806,6 +6859,7 @@ class NamingBot(discord.Client):
         pokemon_name: str,
         *,
         category: str,
+        form_name: str | None = None,
     ) -> None:
         if message.guild is None:
             return
@@ -6813,7 +6867,7 @@ class NamingBot(discord.Client):
         settings = self.starboard_settings_for_guild(message.guild.id)
         details = CatchDetails(
             user_id=message.author.id,
-            pokemon=display_pokemon_name(pokemon_name),
+            pokemon=display_pokemon_name(form_name or pokemon_name),
             level="Unknown",
             iv="Unknown",
             iv_value=None,
@@ -6870,11 +6924,25 @@ class NamingBot(discord.Client):
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
-                await channel.send(
-                    embed=embed,
-                    view=starboard_jump_view(jump_url),
-                    allowed_mentions=discord.AllowedMentions.none(),
+                custom_thumbnail = custom_normal_starboard_thumbnail_path(
+                    details, post_category
                 )
+                if custom_thumbnail:
+                    await channel.send(
+                        embed=embed,
+                        file=discord.File(
+                            custom_thumbnail,
+                            filename=custom_thumbnail.name,
+                        ),
+                        view=starboard_jump_view(jump_url),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                else:
+                    await channel.send(
+                        embed=embed,
+                        view=starboard_jump_view(jump_url),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
                 logger.info(
                     "Posted v!test preview for %s to starboard channel %s as %s",
                     pokemon_name,
@@ -6984,7 +7052,7 @@ class NamingBot(discord.Client):
                 return
             except NoMatchError:
                 self.failed_recognition_count += 1
-                logger.info("No reference image matched spawn %s", message.id)
+                logger.info("No Pokémon match was verified for spawn %s", message.id)
                 if test_mode:
                     await message.reply(
                         "I couldn't match that test image to a reference Pokémon.",
@@ -7103,12 +7171,18 @@ class NamingBot(discord.Client):
 
         if test_mode:
             if shiny_test_mode:
-                await self.post_test_starboard(message, name, category="shiny")
-            elif is_normal_starboard_pokemon(name):
+                await self.post_test_starboard(
+                    message,
+                    name,
+                    category="shiny",
+                    form_name=thumbnail_name,
+                )
+            elif is_normal_starboard_pokemon(thumbnail_name):
                 await self.post_test_starboard(
                     message,
                     name,
                     category="normal_pokemon",
+                    form_name=thumbnail_name,
                 )
 
         type_emojis = type_emoji_text(thumbnail_name, name)

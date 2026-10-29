@@ -203,6 +203,54 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertEqual(result, ("Milcery", 46))
         mask.assert_not_called()
 
+    def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.zeros(len(descriptors), dtype=np.int32),
+                names=np.array(["Vivillon"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch.object(matcher, "_match", side_effect=[("Vivillon", 20), None]),
+                patch("image_match.vivillon_form_by_pattern", return_value=None),
+            ):
+                result = matcher.match(b"unrelated spawn image")
+
+        self.assertIsNone(result)
+
+    def test_invalid_vivillon_match_does_not_hide_a_second_species_match(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(25).random((8, 128), dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.zeros(len(descriptors), dtype=np.int32),
+                names=np.array(["Vivillon", "Milcery"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch.object(
+                    matcher,
+                    "_match",
+                    side_effect=[("Vivillon", 20), ("Milcery", 16)],
+                ),
+                patch("image_match.vivillon_form_by_pattern", return_value=None),
+            ):
+                result = matcher.match(b"milcery spawn image")
+
+        self.assertEqual(result, ("Milcery", 16))
+
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
 class SilvallyTests(unittest.TestCase):
@@ -234,6 +282,20 @@ class VivillonTests(unittest.TestCase):
         self.assertEqual(image_match.species_display_name("Polar Vivillon"), "Vivillon")
         self.assertEqual(image_match.family_name("Fancy Vivillon"), "Vivillon")
 
+    def test_custom_reference_forms_resolve_to_their_species(self) -> None:
+        groups = reference_images(Path(__file__).with_name("pokemon_images"))
+        forms = {
+            "Partner Pikachu": "Pikachu",
+            "Gliding Build Koraidon": "Koraidon",
+            "Zenith Marshadow": "Marshadow",
+            "Galarian Zen Darmanitan": "Darmanitan",
+        }
+        for form, species in forms.items():
+            with self.subTest(form=form):
+                self.assertIn(form, groups)
+                self.assertEqual(image_match.species_display_name(form), species)
+                self.assertEqual(image_match.family_name(form), species)
+
     def test_pattern_is_chosen_by_appearance_even_mirrored(self) -> None:
         import cv2
 
@@ -243,6 +305,29 @@ class VivillonTests(unittest.TestCase):
             image = cv2.flip(cv2.imread(str(image_match.form_thumbnail_path(form))), 1)
             mirrored = cv2.imencode(".png", image)[1].tobytes()
             self.assertEqual(image_match.vivillon_form_by_pattern(mirrored), form)
+
+
+@unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
+class CustomFormRecognitionTests(unittest.TestCase):
+    def test_supplied_form_images_match_their_named_forms(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        forms = (
+            "Partner Pikachu",
+            "Gliding Build Koraidon",
+            "Zenith Marshadow",
+            "Galarian Zen Darmanitan",
+        )
+        for form in forms:
+            with self.subTest(form=form):
+                image_path = (
+                    Path(__file__).with_name("pokemon_images")
+                    / form
+                    / "image.png"
+                )
+                result = matcher.match(image_path.read_bytes())
+
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], form)
 
 
 class ArceusTests(unittest.TestCase):

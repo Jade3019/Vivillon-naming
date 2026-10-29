@@ -85,7 +85,8 @@ probability. The vision model
 compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
-before relying on them. It then posts the
+before relying on them. Vivillon predictions are checked against a known
+pattern, and unverified Vivillon guesses are rejected. It then posts the
 matching Pokétwo catch command as inline code for easier copying, preceded by a
 bold “Copy Here >” label, when Assisted mode is on. A separate desktop copy card
 below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
@@ -354,6 +355,12 @@ curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
 Put each Pokémon's spawn pictures in its own folder inside `pokemon_images/`, named exactly like the Pokémon (`pokemon_images/Abomasnow/`, `pokemon_images/Mega Absol/`). The file names inside don't matter. Use real spawn images Pokétwo posts, ideally with different backgrounds (about 10 to 25 each).
 
 You can place a bulk archive of per-Pokémon image folders anywhere under `pokemon_images/` (for example `pokemon_images/archive/`). The builder searches recursively, merges duplicate folders, skips ambiguous composite images, and recognizes species, known forms, regional forms and event-costume names. Raw archive images are git-ignored; only upload the generated bank.
+
+Hand-added special forms can use a folder named for the form, such as
+`pokemon_images/Gliding Build Koraidon/image.png`. Add its form-to-species entry
+to `CUSTOM_FORM_SPECIES` in `image_match.py` when catch commands should use the
+base species. A matching alphanumeric filename in `assets/thumbnails/` supplies
+the catch-card and normal-starboard artwork.
 
 Build the feature file after adding images:
 

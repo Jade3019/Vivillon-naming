@@ -154,6 +154,7 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.max_concurrent_vision_requests, 8)
 
+
     def test_defaults_to_200_concurrent_vision_requests(self) -> None:
         self.assertEqual(
             self.load_config().max_concurrent_vision_requests,
@@ -194,6 +195,34 @@ class ConfigTests(unittest.TestCase):
         with patch.dict("os.environ", {"SERVER_PORT": "invalid"}, clear=True):
             with self.assertRaisesRegex(ValueError, "SERVER_PORT"):
                 _org_api_port_from_environment()
+
+
+class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unverified_vision_vivillon_prediction_is_rejected(self) -> None:
+        import bot
+
+        image_bytes = b"spawn image"
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(image_bytes, "image/png")),
+            ),
+            patch("bot.asyncio.to_thread", new=AsyncMock(return_value=None)),
+            patch(
+                "bot.request_prediction",
+                new=AsyncMock(return_value=("Vivillon", 99.0)),
+            ),
+            patch("bot.vivillon_form_by_pattern", return_value=None),
+        ):
+            with self.assertRaisesRegex(
+                bot.NoMatchError, "was not image-verified"
+            ):
+                await bot.recognize_pokemon(
+                    "https://example.test/spawn.png",
+                    client=Mock(),
+                    http=Mock(),
+                    model="test-model",
+                )
 
 
 class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
@@ -1539,6 +1568,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "Wellspring-Mask Ogerpon",
             "Rapid Strike Urshifu",
             "Zenith Marshadow",
+            "Partner Pikachu",
             "Gigantamax Urshifu",
         ):
             with self.subTest(pokemon_name=pokemon_name):
@@ -1852,6 +1882,41 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 f"https://discord.com/channels/{SERVER_ID}/304/{message.id}",
             )
 
+    async def test_normal_starboard_attaches_custom_form_thumbnail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            message = Mock()
+            message.id = 462
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.bot = True
+            message.author.id = self.bot.config.poketwo_bot_id
+            message.created_at = discord.utils.utcnow()
+            message.content = (
+                "Congratulations <@123>! You caught a Level 22 "
+                "Galarian Zen Darmanitan! (51.08%)!"
+            )
+            message.embeds = []
+
+            await self.bot.on_message(message)
+
+            normal_channel.send.assert_awaited_once()
+            send_kwargs = normal_channel.send.await_args.kwargs
+            self.assertEqual(
+                send_kwargs["embed"].thumbnail.url,
+                "attachment://galarianzendarmanitan.png",
+            )
+            self.assertEqual(
+                send_kwargs["file"].filename,
+                "galarianzendarmanitan.png",
+            )
+            send_kwargs["file"].close()
+
     async def test_normal_starboard_accepts_catch_text_from_other_bot_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"
@@ -1997,6 +2062,49 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 f"https://discord.com/channels/{SERVER_ID}/304/474",
             )
             message.reply.assert_awaited_once()
+
+    async def test_vtest_uses_custom_form_name_and_thumbnail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(SERVER_ID, "normal_pokemon", 303)
+            normal_channel = Mock(send=AsyncMock())
+            self.bot.get_channel = Mock(return_value=normal_channel)
+            self.bot.image_http = Mock(close=AsyncMock())
+            message = Mock()
+            message.id = 475
+            message.guild.id = SERVER_ID
+            message.channel.id = 304
+            message.channel.guild.id = SERVER_ID
+            message.author.id = 123
+            message.created_at = discord.utils.utcnow()
+            message.attachments = [
+                Mock(
+                    content_type="image/png",
+                    url="https://example.test/partner-pikachu.png",
+                )
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Partner Pikachu", 100.0)),
+            ):
+                await self.bot.handle_spawn(message, test_mode=True)
+
+            normal_channel.send.assert_awaited_once()
+            send_kwargs = normal_channel.send.await_args.kwargs
+            self.assertIn(
+                "**Pokémon:** Partner Pikachu",
+                send_kwargs["embed"].description,
+            )
+            self.assertEqual(
+                send_kwargs["embed"].thumbnail.url,
+                "attachment://partnerpikachu.png",
+            )
+            self.assertEqual(send_kwargs["file"].filename, "partnerpikachu.png")
+            send_kwargs["file"].close()
 
     async def test_vtest_shiny_posts_preview_to_shinyboard_and_vivillon_only(
         self,
@@ -2617,6 +2725,73 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 self.assertEqual(embed.thumbnail.url, f"attachment://{filename}")
                 self.assertEqual([file.filename for file in files], [filename])
         self.assertEqual(catch_card_files("Pikachu"), [])
+
+    def test_custom_form_catch_cards_show_form_but_copy_species_name(self) -> None:
+        forms = (
+            ("Partner Pikachu", "Pikachu"),
+            ("Gliding Build Koraidon", "Koraidon"),
+            ("Zenith Marshadow", "Marshadow"),
+            ("Galarian Zen Darmanitan", "Darmanitan"),
+        )
+        for form, species in forms:
+            with self.subTest(form=form):
+                embed = format_pc_catch_embed(species, form)
+                files = catch_card_files(species, form)
+                reply = format_spawn_reply(
+                    species,
+                    100,
+                    POKETWO_COMMAND_BOT_ID,
+                    guess_name=form,
+                )
+                filename = "".join(
+                    character for character in form.casefold()
+                    if character.isalnum()
+                ) + ".png"
+
+                self.assertEqual(embed.title, f"Catch {form}")
+                self.assertEqual(
+                    embed.description,
+                    f"Copy Below\n```\n@Pokétwo#8236 c {species.casefold()}\n```",
+                )
+                self.assertEqual(embed.thumbnail.url, f"attachment://{filename}")
+                self.assertEqual([file.filename for file in files], [filename])
+                self.assertTrue(reply.startswith(f"{form}: 100.00%"))
+                self.assertIn(f"c {species.casefold()}", reply)
+                for file in files:
+                    file.close()
+
+    def test_custom_form_uses_its_artwork_on_normal_starboard(self) -> None:
+        forms = (
+            "Partner Pikachu",
+            "Gliding Build Koraidon",
+            "Zenith Marshadow",
+            "Galarian Zen Darmanitan",
+        )
+        for form in forms:
+            with self.subTest(form=form):
+                details = parse_catch_details(
+                    f"Congratulations <@123>! You caught a Level 22 {form}! "
+                    "(51.08%)!"
+                )
+                self.assertIsNotNone(details)
+                embed = format_starboard_embed(
+                    details,
+                    "normal_pokemon",
+                    discord.utils.utcnow(),
+                )
+                filename = "".join(
+                    character for character in form.casefold()
+                    if character.isalnum()
+                ) + ".png"
+
+                self.assertEqual(
+                    embed.thumbnail.url,
+                    f"attachment://{filename}",
+                )
+                self.assertTrue(
+                    (Path(__file__).with_name("assets") / "thumbnails" / filename)
+                    .is_file()
+                )
 
     def test_unown_variant_thumbnail_is_chosen_by_variant(self) -> None:
         self.assertEqual(image_match.base_pokemon_name("Unown Variant 3"), "Unown")

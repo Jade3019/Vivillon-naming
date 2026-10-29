@@ -990,7 +990,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
-            ["No frame"],
+            ["No frame", "Mystic"],
         )
         self.assertEqual(
             editor.children[0].options[0].label,
@@ -1300,6 +1300,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 white_text_crop,
                 black_text.crop((64, 245, 430, 700)).tobytes(),
             )
+
+    def test_profile_card_renders_selected_mystic_frame_over_contents(self) -> None:
+        self.bot.set_profile_setting(123, "frame", "mystic")
+        settings = self.bot.profile_settings_for_user(123)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        unframed_settings = {**settings, "frame": "none"}
+
+        with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
+            base = unframed.convert("RGBA")
+        with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
+            frame = ImageOps.fit(source.convert("RGBA"), (1400, 825))
+        expected = Image.alpha_composite(base, frame).convert("RGB")
+        with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

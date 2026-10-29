@@ -160,6 +160,10 @@ PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
 }
 PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "none": ("No frame", "No frame selected"),
+    "mystic": ("Mystic", "Mystic profile frame"),
+}
+PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
+    "mystic": Path(__file__).with_name("Frames") / "mystic.png",
 }
 PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "text_color": PROFILE_TEXT_COLORS,
@@ -4841,6 +4845,15 @@ def render_profile_image(
                 font=record_value_font,
                 fill=text_color,
             )
+
+    frame_image_path = PROFILE_FRAME_IMAGES.get(str(settings["frame"]))
+    if frame_image_path is not None:
+        with Image.open(frame_image_path) as frame_image:
+            frame = ImageOps.fit(
+                frame_image.convert("RGBA"),
+                (width, height),
+            )
+        image.paste(frame, (0, 0), frame)
 
     output = BytesIO()
     image.save(output, format="PNG")

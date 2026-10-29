@@ -272,8 +272,8 @@ gray background on its left and right sides by default. The background picker
 also offers a blurred Cosmog image; the middle column defaults to white and can
 also use the Cosmog image. Text is drawn above both background layers. The
 default picker choices are labeled **Default text color**, **Default
-background**, and **Default middle background**. The frame picker has no frame
-options yet.
+background**, and **Default middle background**. The frame picker offers
+**No frame** and the **Mystic** transparent overlay.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 

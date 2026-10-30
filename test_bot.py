@@ -128,8 +128,8 @@ from bot import (
     ProfileIvRecord,
     PROFILE_EMOJI_URLS,
     PROFILE_FRAME_ALPHA_GAMMA,
+    PROFILE_FRAME_CANVAS_SIZE,
     PROFILE_FRAME_CORNER_RADIUS,
-    PROFILE_FRAME_SCALE,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1693,12 +1693,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
-            frame = source.convert("RGBA").resize(
-                (
-                    round(source.width * PROFILE_FRAME_SCALE),
-                    round(source.height * PROFILE_FRAME_SCALE),
-                ),
-                Image.Resampling.LANCZOS,
+            frame = ImageOps.pad(
+                source.convert("RGBA"),
+                PROFILE_FRAME_CANVAS_SIZE,
+                method=Image.Resampling.LANCZOS,
+                color=(0, 0, 0, 0),
             )
         frame.putalpha(
             frame.getchannel("A").point(
@@ -1741,12 +1740,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "gem.png") as source:
-            frame = source.convert("RGBA").resize(
-                (
-                    round(source.width * PROFILE_FRAME_SCALE),
-                    round(source.height * PROFILE_FRAME_SCALE),
-                ),
-                Image.Resampling.LANCZOS,
+            frame = ImageOps.pad(
+                source.convert("RGBA"),
+                PROFILE_FRAME_CANVAS_SIZE,
+                method=Image.Resampling.LANCZOS,
+                color=(0, 0, 0, 0),
             )
         frame.putalpha(
             frame.getchannel("A").point(
@@ -1760,6 +1758,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (frame.width - base.width) // 2,
             (frame.height - base.height) // 2,
         )
+        self.assertEqual(frame.size, PROFILE_FRAME_CANVAS_SIZE)
+        self.assertEqual(profile_position, (33, 21))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(

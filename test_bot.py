@@ -131,7 +131,6 @@ from bot import (
     PROFILE_FRAME_CANVAS_SIZE,
     PROFILE_FRAME_CORNER_RADIUS,
     PROFILE_FRAME_SCALES,
-    PROFILE_CARD_SCALES,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1707,24 +1706,18 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-        profile_width = round(frame.width * PROFILE_CARD_SCALES["mystic"])
-        base = base.resize(
-            (profile_width, round(base.height * profile_width / base.width)),
-            Image.Resampling.LANCZOS,
+        profile_position = (
+            (frame.width - base.width) // 2,
+            (frame.height - base.height) // 2,
         )
-        crop_top = max((base.height - frame.height) // 2, 0)
-        base = base.crop(
-            (0, crop_top, frame.width, min(crop_top + frame.height, base.height))
-        )
-        profile_position = (0, (frame.height - base.height) // 2)
         self.assertEqual(frame.size, (1467, 868))
-        self.assertEqual(base.size, (1467, 864))
-        self.assertEqual(profile_position, (0, 2))
+        self.assertEqual(base.size, (1400, 825))
+        self.assertEqual(profile_position, (33, 21))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
             (0, 0, profile_card.width - 1, profile_card.height - 1),
-            radius=round(PROFILE_FRAME_CORNER_RADIUS * frame.width / 1400),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
             fill=255,
         )
         profile_card.putalpha(card_mask)
@@ -1733,7 +1726,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
-            self.assertEqual(base.size, (1467, 864))
+            self.assertEqual(base.size, (1400, 825))
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
@@ -1764,36 +1757,25 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-        profile_width = round(frame.width * PROFILE_CARD_SCALES["gem"])
-        base = base.resize(
-            (profile_width, round(base.height * profile_width / base.width)),
-            Image.Resampling.LANCZOS,
+        profile_position = (
+            (frame.width - base.width) // 2,
+            (frame.height - base.height) // 2,
         )
-        crop_left = max((base.width - frame.width) // 2, 0)
-        crop_top = max((base.height - frame.height) // 2, 0)
-        base = base.crop(
-            (
-                crop_left,
-                crop_top,
-                min(crop_left + frame.width, base.width),
-                min(crop_top + frame.height, base.height),
-            )
-        )
-        profile_position = (0, (frame.height - base.height) // 2)
         self.assertEqual(frame.size, (1540, 911))
-        self.assertEqual(base.size, (1540, 908))
-        self.assertEqual(profile_position, (0, 1))
+        self.assertEqual(base.size, (1400, 825))
+        self.assertEqual(profile_position, (70, 43))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
             (0, 0, profile_card.width - 1, profile_card.height - 1),
-            radius=round(PROFILE_FRAME_CORNER_RADIUS * profile_width / 1400),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
             fill=255,
         )
         profile_card.putalpha(card_mask)
         expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(base.size, (1400, 825))
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())

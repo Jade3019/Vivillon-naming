@@ -1773,8 +1773,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (frame.height - base.height) // 2,
         )
         self.assertEqual(frame.size, (1540, 911))
-        self.assertEqual(base.size, (1470, 866))
-        self.assertEqual(profile_position, (35, 22))
+        self.assertEqual(base.size, (1400, 825))
+        self.assertEqual(profile_position, (70, 43))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
@@ -1786,7 +1786,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
-            self.assertEqual(base.size, (1470, 866))
+            self.assertEqual(base.size, (1400, 825))
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())

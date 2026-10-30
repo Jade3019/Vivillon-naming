@@ -201,7 +201,7 @@ PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
 }
 PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
-    "gem": 1.05,
+    "gem": 1.0,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6

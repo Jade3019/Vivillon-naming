@@ -98,6 +98,25 @@ THUMBNAIL_FORM_SPECIES = {
     "Hangry Morpeko": "Morpeko",
     "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
+    **{
+        form: "Minior"
+        for form in (
+            "Blue-Meteor Minior",
+            "Blue Minior",
+            "Green-Meteor Minior",
+            "Green Minior",
+            "Indigo-Meteor Minior",
+            "Indigo Minior",
+            "Orange-Meteor Minior",
+            "Orange Minior",
+            "Red-Meteor Minior",
+            "Red Minior",
+            "Violet-Meteor Minior",
+            "Violet Minior",
+            "Yellow-Meteor Minior",
+            "Yellow Minior",
+        )
+    },
     **CUSTOM_FORM_SPECIES,
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},

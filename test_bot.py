@@ -3406,6 +3406,31 @@ class FireSpawnFormattingTests(unittest.TestCase):
         self.assertEqual([file.filename for file in files], ["hangrymorpeko.png"])
         self.assertEqual(catch_card_files("Morpeko"), [])
 
+    def test_minior_forms_use_species_name_in_spawn_suggestions(self) -> None:
+        for form_name in (
+            "Blue-Meteor Minior",
+            "Blue Minior",
+            "Green-Meteor Minior",
+            "Green Minior",
+            "Indigo-Meteor Minior",
+            "Indigo Minior",
+            "Orange-Meteor Minior",
+            "Orange Minior",
+            "Red-Meteor Minior",
+            "Red Minior",
+            "Violet-Meteor Minior",
+            "Violet Minior",
+            "Yellow-Meteor Minior",
+            "Yellow Minior",
+        ):
+            with self.subTest(form_name=form_name):
+                species_name = image_match.species_display_name(form_name)
+                self.assertEqual(
+                    format_spawn_reply(species_name, 100, POKETWO_COMMAND_BOT_ID),
+                    "Minior: 100.00%\n"
+                    "**Copy Here >** `@Pokétwo#8236 c minior`",
+                )
+
     def test_collection_all_pokemon_lists_every_form_and_matches_spawns(self) -> None:
         collections = add_collection_pokemon({}, 1, ["all deerling", "pikachu"], 5)
 

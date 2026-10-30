@@ -5,25 +5,12 @@ from collections import defaultdict
 from pathlib import Path
 
 
-REGIONAL_MARKERS = frozenset(
-    {"alola", "alolan", "galar", "galarian", "hisui", "hisuian", "paldea", "paldean"}
-)
-
-
 def read_csv(path: Path) -> list[dict[str, str]]:
     try:
         with path.open(encoding="utf-8", newline="") as source:
             return list(csv.DictReader(source))
     except OSError as error:
         raise ValueError(f"Could not read Pokémon form source file {path}") from error
-
-
-def is_regional_form(identifier: str, form_identifier: str) -> bool:
-    identifier_parts = set(identifier.casefold().split("-"))
-    form_parts = set(form_identifier.casefold().split("-"))
-    if "cap" in identifier_parts or "cap" in form_parts:
-        return False
-    return bool(REGIONAL_MARKERS.intersection(identifier_parts | form_parts))
 
 
 def format_display_name(species_name: str, form_identifier: str) -> str:
@@ -89,7 +76,6 @@ def generate_form_catalog(data_directory: Path) -> dict[str, list[dict[str, str]
         if (
             form_identifier.casefold() == "unknown"
             or identifier.casefold() == "arceus-unknown"
-            or is_regional_form(identifier, form_identifier)
         ):
             continue
 
@@ -129,7 +115,7 @@ def generate_form_catalog(data_directory: Path) -> dict[str, list[dict[str, str]
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate the non-regional Pokémon alternate-form catalog."
+        description="Generate the Pokémon alternate-form catalog."
     )
     parser.add_argument(
         "data_directory",
@@ -171,7 +157,7 @@ def main() -> None:
             "PokeAPI CSV: pokemon_forms.csv, pokemon.csv, pokemon_species.csv, "
             "pokemon_types.csv"
         ),
-        "_regional_forms_excluded": True,
+        "_regional_forms_excluded": False,
         "forms": catalog,
         "single_type_fire_aliases": single_type_fire,
         "single_type_normal_aliases": single_type_normal,

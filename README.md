@@ -199,7 +199,7 @@ Pokémon with `v!r search pikachu`, or see one member's reserved Pokémon with
 `v!r search @member`. Use `v!r search all arceus` to list Arceus by type
 (for example, `fairy arceus @member`) and show the reservers for each type.
 Use `v!r search all pichu` for its regular and spiky-eared forms. This catalog
-covers alternate forms across Pokémon and excludes regional variants. Results
+covers alternate and regional forms across Pokémon. Results
 with multiple pages show previous/next arrow buttons beneath the embed. The
 catalog in `pokemon_forms.json` is a static snapshot based on the
 [PokeAPI CSV data](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv).
@@ -241,7 +241,8 @@ for confirmation with Yes and No buttons; Yes clears the server's reservations,
 and No cancels the command.
 
 Any server member can select one Pokémon to shinyhunt with `v!sh absol`, or
-track every non-regional form with `v!sh all arceus`. A new selection replaces
+track every form with `v!sh all arceus`. `Riffex` is accepted as an alias for
+Toxtricity. A new selection replaces
 their previous shinyhunt in that server. Running `v!sh` without a Pokémon name
 reports their current selection. Use `v!sh remove absol` to remove your own
 shinyhunt for that Pokémon, or `v!sh remove all arceus` to remove your all-forms
@@ -256,8 +257,10 @@ Shiny-hunt registrations are stored in `shinyhunts.json` by default; set
 
 Any server member can add Pokémon to their collection with
 `v!cl add pikachu, eevee`, remove one or more with `v!cl remove pikachu, eevee`,
-clear their own collection in the current server with `v!cl clear`, and view
-their list with `v!cl list`. Server administrators can use `v!cl clear all` to
+or use `v!cl add all alcremie` and `v!cl remove all alcremie` to add or remove
+every catalogued form at once. They can clear their own collection in the
+current server with `v!cl clear` and view their list with `v!cl list`. Server
+administrators can use `v!cl clear all` to
 clear every member's collection in the current server, after confirming.
 Removing Pokémon from a collection leaves other members' entries intact. Adding
 a Pokémon that is already in your collection
@@ -331,7 +334,7 @@ press the buttons (they appear even when `@owner` has none of the listed Pokémo
 
 In an exchange, `all <pokemon>` moves every form the owner has reserved, including regional forms such as Galarian or Alolan ones, not only the all-forms reservation.
 
-Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an all-forms reservation as each form separately (for example, each Urshifu form) when form data is available. Species without form data still show as "all forms of <pokemon>".
+Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an all-forms reservation as each form separately (for example, each Urshifu form) when form data is available. Species without form data still show as "all forms of <pokemon>". The same `all <pokemon>` prefix works for reserves, collections, and shiny hunts; use `remove all <pokemon>` to remove the matching all-forms entry.
 
 ## Grabbing a list with `v!grab`
 

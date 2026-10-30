@@ -4180,6 +4180,7 @@ class ReservationPersistenceTests(unittest.TestCase):
     def test_reservation_keys_are_case_insensitive(self) -> None:
         self.assertEqual(reservation_key(1, "Pikachu"), reservation_key(1, "PIKACHU"))
         self.assertNotEqual(reservation_key(1, "Pikachu"), reservation_key(2, "Pikachu"))
+        self.assertEqual(reservation_key(1, "Raichu-Alola"), "1:raichu-alola")
 
     def test_all_forms_reservations_match_base_and_named_forms(self) -> None:
         reservations = {all_forms_reservation_key(1, "Arceus"): [123]}
@@ -4198,8 +4199,11 @@ class ReservationPersistenceTests(unittest.TestCase):
             reserved_user_ids_for_pokemon(reservations, 1, "Arceusian"),
             [],
         )
-        self.assertFalse(
+        self.assertTrue(
             pokemon_matches_all_forms_reservation("Raichu-Alola", "Raichu")
+        )
+        self.assertTrue(
+            pokemon_matches_all_forms_reservation("Alolan Raichu", "Raichu")
         )
         self.assertTrue(
             pokemon_matches_all_forms_reservation(
@@ -4217,6 +4221,69 @@ class ReservationPersistenceTests(unittest.TestCase):
             reservation_key_for_command(1, "Arceus"),
             reservation_key(1, "Arceus"),
         )
+
+    def test_all_forms_commands_cover_examples_and_remove_registration(self) -> None:
+        self.assertTrue(is_known_pokemon_name("all Riffex"))
+        self.assertEqual(
+            reservation_key_for_command(1, "all Riffex"),
+            all_forms_reservation_key(1, "Toxtricity"),
+        )
+
+        collections = add_collection_pokemon({}, 1, ["all alcremie"], 123)
+        self.assertEqual(
+            collection_user_ids_for_pokemon(
+                collections,
+                1,
+                "Ruby Cream Strawberry Sweet Alcremie",
+            ),
+            [123],
+        )
+        collections, removed, missing = remove_collection_pokemon(
+            collections,
+            1,
+            ["all alcremie"],
+            123,
+        )
+        self.assertEqual((removed, missing), (["all alcremie"], []))
+        self.assertEqual(collections, {})
+
+        shinyhunters = add_shinyhunter({}, 1, "all vivillon", 456)
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(
+                shinyhunters,
+                1,
+                "Icy Snow Vivillon",
+            ),
+            [456],
+        )
+        shinyhunters, removed = remove_shinyhunter(
+            shinyhunters,
+            1,
+            "all vivillon",
+            456,
+        )
+        self.assertTrue(removed)
+        self.assertEqual(shinyhunters, {})
+
+        reservations = {
+            reservation_key_for_command(1, "all Riffex"): [789]
+        }
+        self.assertEqual(
+            reserved_user_ids_for_pokemon(
+                reservations,
+                1,
+                "Low-Key Toxtricity",
+            ),
+            [789],
+        )
+        reservations, removed = remove_reservation(
+            reservations,
+            1,
+            "all Riffex",
+            789,
+        )
+        self.assertTrue(removed)
+        self.assertEqual(reservations, {})
 
     def test_parses_one_valid_shinyhunt_name(self) -> None:
         self.assertEqual(parse_shinyhunt_command("v!sh Absol"), "Absol")
@@ -4730,7 +4797,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             "pichu <@123>\nspiky-eared pichu <@123>",
         )
 
-    def test_all_forms_search_excludes_regional_forms(self) -> None:
+    def test_all_forms_search_includes_regional_forms(self) -> None:
         embeds = format_all_forms_reservation_embeds(
             {
                 all_forms_reservation_key(1, "Raichu"): [123],
@@ -4743,7 +4810,12 @@ class ReservationPersistenceTests(unittest.TestCase):
         description = "\n".join(embed.description for embed in embeds)
         self.assertIn("raichu <@123>", description)
         self.assertIn("mega-x raichu <@123>", description)
-        self.assertNotIn("alola", description)
+        regional_rows = [
+            row for row in description.splitlines() if "alola" in row
+        ]
+        self.assertTrue(regional_rows)
+        self.assertTrue(any("<@123>" in row for row in regional_rows))
+        self.assertTrue(any("<@456>" in row for row in regional_rows))
 
 
     def test_all_forms_search_paginates_form_entries_at_twenty(self) -> None:

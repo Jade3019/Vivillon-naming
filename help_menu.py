@@ -27,11 +27,11 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
     (
         "✨ Shiny Hunt & Collection",
         [
-            ("v!sh <pokemon>", "Start shiny hunting a Pokémon and get pinged when it spawns."),
-            ("v!sh remove <pokemon>", "Stop hunting a Pokémon."),
+            ("v!sh <pokemon> / v!sh all <pokemon>", "Hunt one Pokémon or every form."),
+            ("v!sh remove <pokemon> / v!sh remove all <pokemon>", "Stop hunting those forms."),
             ("v!sh clear / clear all", "Clear your hunts, or the whole server's."),
-            ("v!cl add <pokemon, ...>", "Add Pokémon to your collection pings."),
-            ("v!cl remove <pokemon, ...>", "Remove Pokémon from your collection."),
+            ("v!cl add <pokemon, ...>", "Add Pokémon or `all <pokemon>` forms to your pings."),
+            ("v!cl remove <pokemon, ...>", "Remove Pokémon or `all <pokemon>` forms."),
             ("v!cl list", "Show your collection."),
             ("v!cl clear / clear all", "Clear your collection, or the whole server's."),
             (

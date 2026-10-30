@@ -1,6 +1,6 @@
 {
   "_source": "PokeAPI CSV: pokemon_forms.csv, pokemon.csv, pokemon_species.csv, pokemon_types.csv",
-  "_regional_forms_excluded": true,
+  "_regional_forms_excluded": false,
   "forms": {
     "venusaur": [
       {
@@ -154,6 +154,10 @@
         "display_name": "raichu"
       },
       {
+        "identifier": "raichu-alola",
+        "display_name": "alola raichu"
+      },
+      {
         "identifier": "raichu-mega-x",
         "display_name": "mega-x raichu"
       },
@@ -180,6 +184,14 @@
       {
         "identifier": "meowth-gmax",
         "display_name": "gmax meowth"
+      },
+      {
+        "identifier": "meowth-alola",
+        "display_name": "alola meowth"
+      },
+      {
+        "identifier": "meowth-galar",
+        "display_name": "galar meowth"
       }
     ],
     "alakazam": [
@@ -220,6 +232,10 @@
       {
         "identifier": "slowbro-mega",
         "display_name": "mega slowbro"
+      },
+      {
+        "identifier": "slowbro-galar",
+        "display_name": "galar slowbro"
       }
     ],
     "gengar": [
@@ -250,6 +266,10 @@
       {
         "identifier": "marowak",
         "display_name": "marowak"
+      },
+      {
+        "identifier": "marowak-alola",
+        "display_name": "alola marowak"
       },
       {
         "identifier": "marowak-totem",
@@ -1220,6 +1240,14 @@
       {
         "identifier": "darmanitan-zen",
         "display_name": "zen darmanitan"
+      },
+      {
+        "identifier": "darmanitan-galar-standard",
+        "display_name": "galar-standard darmanitan"
+      },
+      {
+        "identifier": "darmanitan-galar-zen",
+        "display_name": "galar-zen darmanitan"
       }
     ],
     "scrafty": [
@@ -3176,6 +3204,508 @@
       {
         "identifier": "terapagos-stellar",
         "display_name": "stellar terapagos"
+      }
+    ],
+    "rattata": [
+      {
+        "identifier": "rattata",
+        "display_name": "rattata"
+      },
+      {
+        "identifier": "rattata-alola",
+        "display_name": "alola rattata"
+      }
+    ],
+    "raticate": [
+      {
+        "identifier": "raticate",
+        "display_name": "raticate"
+      },
+      {
+        "identifier": "raticate-alola",
+        "display_name": "alola raticate"
+      },
+      {
+        "identifier": "raticate-totem-alola",
+        "display_name": "totem-alola raticate"
+      }
+    ],
+    "sandshrew": [
+      {
+        "identifier": "sandshrew",
+        "display_name": "sandshrew"
+      },
+      {
+        "identifier": "sandshrew-alola",
+        "display_name": "alola sandshrew"
+      }
+    ],
+    "sandslash": [
+      {
+        "identifier": "sandslash",
+        "display_name": "sandslash"
+      },
+      {
+        "identifier": "sandslash-alola",
+        "display_name": "alola sandslash"
+      }
+    ],
+    "vulpix": [
+      {
+        "identifier": "vulpix",
+        "display_name": "vulpix"
+      },
+      {
+        "identifier": "vulpix-alola",
+        "display_name": "alola vulpix"
+      }
+    ],
+    "ninetales": [
+      {
+        "identifier": "ninetales",
+        "display_name": "ninetales"
+      },
+      {
+        "identifier": "ninetales-alola",
+        "display_name": "alola ninetales"
+      }
+    ],
+    "diglett": [
+      {
+        "identifier": "diglett",
+        "display_name": "diglett"
+      },
+      {
+        "identifier": "diglett-alola",
+        "display_name": "alola diglett"
+      }
+    ],
+    "dugtrio": [
+      {
+        "identifier": "dugtrio",
+        "display_name": "dugtrio"
+      },
+      {
+        "identifier": "dugtrio-alola",
+        "display_name": "alola dugtrio"
+      }
+    ],
+    "persian": [
+      {
+        "identifier": "persian",
+        "display_name": "persian"
+      },
+      {
+        "identifier": "persian-alola",
+        "display_name": "alola persian"
+      }
+    ],
+    "growlithe": [
+      {
+        "identifier": "growlithe",
+        "display_name": "growlithe"
+      },
+      {
+        "identifier": "growlithe-hisui",
+        "display_name": "hisui growlithe"
+      }
+    ],
+    "arcanine": [
+      {
+        "identifier": "arcanine",
+        "display_name": "arcanine"
+      },
+      {
+        "identifier": "arcanine-hisui",
+        "display_name": "hisui arcanine"
+      }
+    ],
+    "geodude": [
+      {
+        "identifier": "geodude",
+        "display_name": "geodude"
+      },
+      {
+        "identifier": "geodude-alola",
+        "display_name": "alola geodude"
+      }
+    ],
+    "graveler": [
+      {
+        "identifier": "graveler",
+        "display_name": "graveler"
+      },
+      {
+        "identifier": "graveler-alola",
+        "display_name": "alola graveler"
+      }
+    ],
+    "golem": [
+      {
+        "identifier": "golem",
+        "display_name": "golem"
+      },
+      {
+        "identifier": "golem-alola",
+        "display_name": "alola golem"
+      }
+    ],
+    "ponyta": [
+      {
+        "identifier": "ponyta",
+        "display_name": "ponyta"
+      },
+      {
+        "identifier": "ponyta-galar",
+        "display_name": "galar ponyta"
+      }
+    ],
+    "rapidash": [
+      {
+        "identifier": "rapidash",
+        "display_name": "rapidash"
+      },
+      {
+        "identifier": "rapidash-galar",
+        "display_name": "galar rapidash"
+      }
+    ],
+    "slowpoke": [
+      {
+        "identifier": "slowpoke",
+        "display_name": "slowpoke"
+      },
+      {
+        "identifier": "slowpoke-galar",
+        "display_name": "galar slowpoke"
+      }
+    ],
+    "farfetchd": [
+      {
+        "identifier": "farfetchd",
+        "display_name": "farfetchd"
+      },
+      {
+        "identifier": "farfetchd-galar",
+        "display_name": "galar farfetchd"
+      }
+    ],
+    "grimer": [
+      {
+        "identifier": "grimer",
+        "display_name": "grimer"
+      },
+      {
+        "identifier": "grimer-alola",
+        "display_name": "alola grimer"
+      }
+    ],
+    "muk": [
+      {
+        "identifier": "muk",
+        "display_name": "muk"
+      },
+      {
+        "identifier": "muk-alola",
+        "display_name": "alola muk"
+      }
+    ],
+    "voltorb": [
+      {
+        "identifier": "voltorb",
+        "display_name": "voltorb"
+      },
+      {
+        "identifier": "voltorb-hisui",
+        "display_name": "hisui voltorb"
+      }
+    ],
+    "electrode": [
+      {
+        "identifier": "electrode",
+        "display_name": "electrode"
+      },
+      {
+        "identifier": "electrode-hisui",
+        "display_name": "hisui electrode"
+      }
+    ],
+    "exeggutor": [
+      {
+        "identifier": "exeggutor",
+        "display_name": "exeggutor"
+      },
+      {
+        "identifier": "exeggutor-alola",
+        "display_name": "alola exeggutor"
+      }
+    ],
+    "weezing": [
+      {
+        "identifier": "weezing",
+        "display_name": "weezing"
+      },
+      {
+        "identifier": "weezing-galar",
+        "display_name": "galar weezing"
+      }
+    ],
+    "mr-mime": [
+      {
+        "identifier": "mr-mime",
+        "display_name": "mr mime"
+      },
+      {
+        "identifier": "mr-mime-galar",
+        "display_name": "galar mr mime"
+      }
+    ],
+    "tauros": [
+      {
+        "identifier": "tauros",
+        "display_name": "tauros"
+      },
+      {
+        "identifier": "tauros-paldea-combat-breed",
+        "display_name": "paldea-combat-breed tauros"
+      },
+      {
+        "identifier": "tauros-paldea-blaze-breed",
+        "display_name": "paldea-blaze-breed tauros"
+      },
+      {
+        "identifier": "tauros-paldea-aqua-breed",
+        "display_name": "paldea-aqua-breed tauros"
+      }
+    ],
+    "articuno": [
+      {
+        "identifier": "articuno",
+        "display_name": "articuno"
+      },
+      {
+        "identifier": "articuno-galar",
+        "display_name": "galar articuno"
+      }
+    ],
+    "zapdos": [
+      {
+        "identifier": "zapdos",
+        "display_name": "zapdos"
+      },
+      {
+        "identifier": "zapdos-galar",
+        "display_name": "galar zapdos"
+      }
+    ],
+    "moltres": [
+      {
+        "identifier": "moltres",
+        "display_name": "moltres"
+      },
+      {
+        "identifier": "moltres-galar",
+        "display_name": "galar moltres"
+      }
+    ],
+    "typhlosion": [
+      {
+        "identifier": "typhlosion",
+        "display_name": "typhlosion"
+      },
+      {
+        "identifier": "typhlosion-hisui",
+        "display_name": "hisui typhlosion"
+      }
+    ],
+    "wooper": [
+      {
+        "identifier": "wooper",
+        "display_name": "wooper"
+      },
+      {
+        "identifier": "wooper-paldea",
+        "display_name": "paldea wooper"
+      }
+    ],
+    "slowking": [
+      {
+        "identifier": "slowking",
+        "display_name": "slowking"
+      },
+      {
+        "identifier": "slowking-galar",
+        "display_name": "galar slowking"
+      }
+    ],
+    "qwilfish": [
+      {
+        "identifier": "qwilfish",
+        "display_name": "qwilfish"
+      },
+      {
+        "identifier": "qwilfish-hisui",
+        "display_name": "hisui qwilfish"
+      }
+    ],
+    "sneasel": [
+      {
+        "identifier": "sneasel",
+        "display_name": "sneasel"
+      },
+      {
+        "identifier": "sneasel-hisui",
+        "display_name": "hisui sneasel"
+      }
+    ],
+    "corsola": [
+      {
+        "identifier": "corsola",
+        "display_name": "corsola"
+      },
+      {
+        "identifier": "corsola-galar",
+        "display_name": "galar corsola"
+      }
+    ],
+    "zigzagoon": [
+      {
+        "identifier": "zigzagoon",
+        "display_name": "zigzagoon"
+      },
+      {
+        "identifier": "zigzagoon-galar",
+        "display_name": "galar zigzagoon"
+      }
+    ],
+    "linoone": [
+      {
+        "identifier": "linoone",
+        "display_name": "linoone"
+      },
+      {
+        "identifier": "linoone-galar",
+        "display_name": "galar linoone"
+      }
+    ],
+    "samurott": [
+      {
+        "identifier": "samurott",
+        "display_name": "samurott"
+      },
+      {
+        "identifier": "samurott-hisui",
+        "display_name": "hisui samurott"
+      }
+    ],
+    "lilligant": [
+      {
+        "identifier": "lilligant",
+        "display_name": "lilligant"
+      },
+      {
+        "identifier": "lilligant-hisui",
+        "display_name": "hisui lilligant"
+      }
+    ],
+    "darumaka": [
+      {
+        "identifier": "darumaka",
+        "display_name": "darumaka"
+      },
+      {
+        "identifier": "darumaka-galar",
+        "display_name": "galar darumaka"
+      }
+    ],
+    "yamask": [
+      {
+        "identifier": "yamask",
+        "display_name": "yamask"
+      },
+      {
+        "identifier": "yamask-galar",
+        "display_name": "galar yamask"
+      }
+    ],
+    "zorua": [
+      {
+        "identifier": "zorua",
+        "display_name": "zorua"
+      },
+      {
+        "identifier": "zorua-hisui",
+        "display_name": "hisui zorua"
+      }
+    ],
+    "zoroark": [
+      {
+        "identifier": "zoroark",
+        "display_name": "zoroark"
+      },
+      {
+        "identifier": "zoroark-hisui",
+        "display_name": "hisui zoroark"
+      }
+    ],
+    "stunfisk": [
+      {
+        "identifier": "stunfisk",
+        "display_name": "stunfisk"
+      },
+      {
+        "identifier": "stunfisk-galar",
+        "display_name": "galar stunfisk"
+      }
+    ],
+    "braviary": [
+      {
+        "identifier": "braviary",
+        "display_name": "braviary"
+      },
+      {
+        "identifier": "braviary-hisui",
+        "display_name": "hisui braviary"
+      }
+    ],
+    "sliggoo": [
+      {
+        "identifier": "sliggoo",
+        "display_name": "sliggoo"
+      },
+      {
+        "identifier": "sliggoo-hisui",
+        "display_name": "hisui sliggoo"
+      }
+    ],
+    "goodra": [
+      {
+        "identifier": "goodra",
+        "display_name": "goodra"
+      },
+      {
+        "identifier": "goodra-hisui",
+        "display_name": "hisui goodra"
+      }
+    ],
+    "avalugg": [
+      {
+        "identifier": "avalugg",
+        "display_name": "avalugg"
+      },
+      {
+        "identifier": "avalugg-hisui",
+        "display_name": "hisui avalugg"
+      }
+    ],
+    "decidueye": [
+      {
+        "identifier": "decidueye",
+        "display_name": "decidueye"
+      },
+      {
+        "identifier": "decidueye-hisui",
+        "display_name": "hisui decidueye"
       }
     ]
   },

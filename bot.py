@@ -1906,16 +1906,21 @@ def starboard_jump_view(jump_url: str) -> discord.ui.View:
 
 
 def reservation_key(guild_id: int, pokemon_name: str) -> str:
-    normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    normalized_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(pokemon_name)
+    ).casefold()
     return f"{guild_id}:{normalized_name}"
 
 
 def all_forms_reservation_key(guild_id: int, pokemon_name: str) -> str:
-    normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    normalized_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(pokemon_name)
+    ).casefold()
     return f"{guild_id}:*:{normalized_name}"
 
 
 def reservation_key_for_command(guild_id: int, pokemon_name: str) -> str:
+    pokemon_name = canonicalize_pokemon_name(pokemon_name)
     all_forms_prefix = "all "
     if pokemon_name.casefold().startswith(all_forms_prefix):
         base_name = pokemon_name[len(all_forms_prefix) :].strip()
@@ -1927,10 +1932,12 @@ def pokemon_matches_all_forms_reservation(
     pokemon_name: str,
     reserved_name: str,
 ) -> bool:
-    pokemon_name = unicodedata.normalize("NFC", pokemon_name).casefold()
-    reserved_name = unicodedata.normalize("NFC", reserved_name).casefold()
-    if is_regional_form_name(pokemon_name):
-        return False
+    pokemon_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(pokemon_name)
+    ).casefold()
+    reserved_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(reserved_name)
+    ).casefold()
     if pokemon_name == reserved_name:
         return True
     for form_index, form in enumerate(POKEMON_FORMS.get(reserved_name, [])):
@@ -2670,7 +2677,9 @@ def format_server_reservation_embeds(
 
 
 def all_forms_display_names(species_name: str) -> list[str]:
-    species_name = unicodedata.normalize("NFC", species_name).casefold()
+    species_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(species_name)
+    ).casefold()
     forms = POKEMON_FORMS.get(species_name, [])
     display_names = [form["display_name"] for form in forms]
     names: list[str] = []
@@ -2685,6 +2694,7 @@ def all_forms_display_names(species_name: str) -> list[str]:
 
 
 def format_reserved_pokemon_names(stored_name: str) -> list[str]:
+    stored_name = canonicalize_pokemon_name(stored_name)
     if stored_name.casefold().startswith("all "):
         stored_name = "*:" + stored_name[4:].strip()
     if stored_name.startswith("*:"):
@@ -2743,7 +2753,9 @@ def format_all_forms_reservation_embeds(
     guild_id: int,
     pokemon_name: str,
 ) -> list[discord.Embed]:
-    base_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+    base_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(pokemon_name)
+    ).casefold()
     guild_prefix = f"{guild_id}:"
     wildcard_key = all_forms_reservation_key(guild_id, base_name)
     wildcard_user_ids = set(reservations.get(wildcard_key, []))
@@ -2780,10 +2792,7 @@ def format_all_forms_reservation_embeds(
         ):
             continue
         reserved_name = key.removeprefix(guild_prefix)
-        if (
-            pokemon_matches_all_forms_reservation(reserved_name, base_name)
-            and not is_regional_form_name(reserved_name)
-        ):
+        if pokemon_matches_all_forms_reservation(reserved_name, base_name):
             entries.extend(
                 f"{reserved_name} <@{user_id}>"
                 for user_id in sorted(set(user_ids) | wildcard_user_ids)
@@ -2842,24 +2851,6 @@ def pokemon_form_reservation_aliases(
     if is_default:
         aliases.add(species_name)
     return aliases
-
-
-def is_regional_form_name(name: str) -> bool:
-    normalized_name = unicodedata.normalize("NFC", name).casefold()
-    name_parts = set(re.split(r"[\s()\-]+", normalized_name))
-    if "cap" in name_parts:
-        name_parts.discard("alola")
-    regional_markers = {
-        "alola",
-        "alolan",
-        "galar",
-        "galarian",
-        "hisui",
-        "hisuian",
-        "paldea",
-        "paldean",
-    }
-    return bool(regional_markers.intersection(name_parts))
 
 
 class ReservationPagesView(discord.ui.View):
@@ -4010,8 +4001,23 @@ NAME_SUGGESTION_PREFIXES: Final[frozenset[str]] = frozenset(
         "gmax", "gigantamax", "primal",
     }
 )
+POKEMON_NAME_ALIASES: Final[dict[str, str]] = {"riffex": "toxtricity"}
 NAME_SUGGESTION_CUTOFF: Final[float] = 0.6
 NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 60
+
+
+def canonicalize_pokemon_name(name: str) -> str:
+    words = normalize_pokemon_alias(name.replace("’", "'")).split()
+    prefix_count = 0
+    while (
+        prefix_count < len(words) - 1
+        and words[prefix_count] in NAME_SUGGESTION_PREFIXES
+    ):
+        prefix_count += 1
+    alias = POKEMON_NAME_ALIASES.get(" ".join(words[prefix_count:]))
+    if alias is None:
+        return name
+    return " ".join((*words[:prefix_count], alias))
 
 
 @lru_cache(maxsize=1)
@@ -4033,6 +4039,7 @@ def strip_name_prefixes(name: str) -> tuple[list[str], list[str]]:
 
 
 def is_known_pokemon_name(name: str) -> bool:
+    name = canonicalize_pokemon_name(name)
     lookup = known_name_lookup()
     if normalize_pokemon_alias(name.replace("’", "'")) in lookup:
         return True
@@ -4047,6 +4054,7 @@ def known_name_word_sets() -> frozenset[tuple[str, ...]]:
 
 
 def is_known_pokemon_name(name: str) -> bool:
+    name = canonicalize_pokemon_name(name)
     lookup = known_name_lookup()
     words = normalize_pokemon_alias(name.replace("’", "'")).split(" ")
     if " ".join(words) in lookup or tuple(sorted(words)) in known_name_word_sets():
@@ -4062,6 +4070,7 @@ def suggest_pokemon_name(name: str) -> str | None:
     """Return a corrected name when `name` looks like a misspelled Pokémon."""
     import difflib
 
+    name = canonicalize_pokemon_name(name)
     lookup = known_name_lookup()
     words = normalize_pokemon_alias(name.replace("’", "'")).split(" ")
     prefix_count = 0
@@ -6670,6 +6679,7 @@ class NamingBot(discord.Client):
 
         Returns None for unknown names or when the user declines or times out.
         """
+        name = canonicalize_pokemon_name(name)
         if is_known_pokemon_name(name):
             return name
         suggestion = suggest_pokemon_name(name)

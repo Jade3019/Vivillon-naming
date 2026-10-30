@@ -1058,11 +1058,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[1].options],
-            ["Default background", "Cosmog"],
+            ["Default background", "Cosmog", "Hisuian Zorua"],
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
-            ["Default middle background", "Cosmog"],
+            ["Default middle background", "Cosmog", "Hisuian Zorua"],
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
@@ -1633,6 +1633,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_uses_selected_hiszorua_middle_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["middle_background"] = "hiszorua"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            Path(__file__).with_name("middle background") / "hiszorua.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
+
     def test_profile_card_uses_blurred_background_behind_text(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
         settings["background"] = "cosmog"
@@ -1655,6 +1669,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 white_text_crop,
                 black_text.crop((64, 245, 430, 700)).tobytes(),
             )
+
+    def test_profile_card_uses_blurred_hiszorua_background_behind_text(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["background"] = "hiszorua"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            Path(__file__).with_name("background") / "hiszorua.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            self.assertEqual(image.getpixel((400, 800)), expected.getpixel((400, 800)))
 
     def test_profile_card_renders_selected_mystic_frame_over_contents(self) -> None:
         self.bot.set_profile_setting(123, "frame", "mystic")

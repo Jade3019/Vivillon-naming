@@ -167,16 +167,20 @@ PROFILE_TEXT_COLORS: Final[dict[str, tuple[str, str]]] = {
 PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "default": ("Default background", "#292A2F"),
     "cosmog": ("Cosmog", "Cosmog blurred profile background"),
+    "hiszorua": ("Hisuian Zorua", "Hisuian Zorua blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
+    "hiszorua": Path(__file__).with_name("background") / "hiszorua.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),
     "cosmog": ("Cosmog", "Cosmog middle background"),
+    "hiszorua": ("Hisuian Zorua", "Hisuian Zorua middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
+    "hiszorua": Path(__file__).with_name("middle background") / "hiszorua.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),

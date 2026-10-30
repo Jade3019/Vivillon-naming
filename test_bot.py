@@ -1781,8 +1781,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         profile_position = (0, (frame.height - base.height) // 2)
         self.assertEqual(frame.size, (1540, 911))
-        self.assertEqual(base.size, (1540, 911))
-        self.assertEqual(profile_position, (0, 0))
+        self.assertEqual(base.size, (1540, 908))
+        self.assertEqual(profile_position, (0, 1))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(

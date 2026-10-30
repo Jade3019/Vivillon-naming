@@ -1,16 +1,18 @@
 # Vivillon-naming
 
-A Discord application bot that recognizes Pokétwo spawn images with OpenAI
-vision and replies with the predicted Pokémon name and confidence percentage.
+A Discord application bot that recognizes Pokétwo spawn images with local
+reference-image matching and an optional OpenAI vision fallback, then replies
+with the predicted Pokémon name and confidence percentage.
 
 ## Requirements
 
 - Python 3.10 or newer
 - A Discord application/bot token
-- An OpenAI API key (vision requests may incur API costs)
+- An OpenAI API key only if you want to enable the optional vision fallback
 - The Pokétwo bot ID for the server where you will use the bot
 
-Spawn images are sent to OpenAI for recognition.
+Without an OpenAI API key, spawn images are checked only against the local
+reference-image bank and are not sent to OpenAI.
 
 This project uses a regular Discord bot account, not a user-account self-bot.
 Enable **Message Content Intent** for your application in the Discord Developer
@@ -55,6 +57,31 @@ approval for privileged intents on larger bots.
    ```sh
    python bot.py
    ```
+
+## Container deployment
+
+For an always-on host or VM, build and run the bot as a container:
+
+```sh
+docker volume create vivillon-data
+docker build -t vivillon-naming .
+docker run -d --name vivillon-naming --restart unless-stopped \
+  --env-file .env \
+  -e PROFILE_DATA_FILE=/data/profile_data.json \
+  -e STARBOARD_SETTINGS_FILE=/data/starboard_settings.json \
+  -e SERVER_SETTINGS_FILE=/data/server_settings.json \
+  -v vivillon-data:/data \
+  vivillon-naming
+```
+
+Create `.env` with `DISCORD_TOKEN` and `POKETWO_BOT_ID`; `OPENAI_API_KEY` is
+optional. Keep this file private and out of GitHub. The Docker image runs
+`python bot.py`. The named volume preserves profile and board settings when
+you recreate the container.
+
+This container is a persistent Discord Gateway bot, not an HTTP service.
+Cloud Run services require an HTTP listener, so this Dockerfile alone does not
+make the bot suitable for a Cloud Run service.
 
 The bot also handles spawns whose image or text Pokétwo adds by editing the message, processes each spawn message once, and retries temporary image-download or recognition failures up to three times before replying with an error.
 
@@ -257,12 +284,15 @@ settings are saved per member and server in `afk_settings.json` by default
 existing notification behavior.
 
 Use `v!profile` to view your catch stats, or `v!profile @user` to view another
-member's stats in server `1530949341013868635`. The card counts total catches,
-shinies, catches below 10% IV, catches at or above 90% IV, Gigantamax catches,
-and Missingno catches seen by Vivillon from now on. Each
-`Congratulations @user! You caught a` message adds one to Total; a spawn by
-itself does not count, and the total has no cap. Earlier catches cannot be
-recovered. The card's right side shows each record's level, Pokémon, gender
+member's stats in the current server where Vivillon is enabled. Profile catch
+totals and records are tracked separately for each server. The card counts
+total catches, shinies, catches below 10% IV, catches at or above 90% IV, Gigantamax catches,
+and Missingno catches. Each `Congratulations @user! You caught a` message
+adds one to Total; a spawn by itself does not count, and the total has no cap.
+Server administrators can run `v!backfill` in that server to scan readable
+text channels and active threads for earlier catches. The bot needs View
+Channel and Read Message History permissions; channels it cannot read are
+reported and excluded. The card's right side shows each record's level, Pokémon, gender
 (when provided in the catch message), and IV percentage for the highest and
 lowest IV catches, plus the highest and lowest IV among shiny catches. The
 profile card is public. Its

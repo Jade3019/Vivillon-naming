@@ -63,6 +63,10 @@ PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
+PROFILE_BACKFILL_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!backfill\s*$",
+    re.IGNORECASE,
+)
 PROFILE_CATCH_PREFIX_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"\bCongratulations\s+(?P<catcher>[^!\n]+)!\s*You caught a\b",
     re.IGNORECASE,
@@ -5106,6 +5110,7 @@ class NamingBot(discord.Client):
         ) = load_profile_data(
             self.profile_data_path
         )
+        self.profile_backfills_in_progress: set[int] = set()
         self.profile_emoji_cache: dict[str, bytes] | None = None
         self.appearance_path = Path(
             os.environ.get("APPEARANCE_FILE", "appearance.json")
@@ -5192,12 +5197,17 @@ class NamingBot(discord.Client):
         )
         self.profiles = profiles
 
-    def track_profile_catch(self, message: discord.Message) -> None:
+    def track_profile_catch(
+        self,
+        message: discord.Message,
+        *,
+        persist: bool = True,
+    ) -> None:
         guild = getattr(message, "guild", None)
         message_id = getattr(message, "id", None)
         if (
             guild is None
-            or getattr(guild, "id", None) != SERVER_ID
+            or getattr(guild, "id", None) not in SERVER_IDS
             or isinstance(message_id, bool)
             or not isinstance(message_id, int)
             or message_id <= 0
@@ -5228,12 +5238,12 @@ class NamingBot(discord.Client):
             for key, records in self.profile_records.items()
         }
         user_stats = profile_stats.setdefault(
-            f"{SERVER_ID}:{user_id}",
+            f"{guild.id}:{user_id}",
             dict(PROFILE_STAT_DEFAULTS),
         )
         if not already_seen:
             user_stats["total"] += 1
-        user_records = profile_records.setdefault(f"{SERVER_ID}:{user_id}", {})
+        user_records = profile_records.setdefault(f"{guild.id}:{user_id}", {})
         if details is not None:
             if not already_seen:
                 if details.shiny:
@@ -5273,21 +5283,22 @@ class NamingBot(discord.Client):
             if already_seen
             else [*self.profile_seen_catch_ids, message_id][-10000:]
         )
-        try:
-            save_profile_data(
-                self.profile_data_path,
-                self.profiles,
-                profile_stats,
-                profile_records,
-                seen_catch_ids,
-            )
-        except ValueError:
-            logger.exception(
-                "Could not record catch %s for profile user %s",
-                message_id,
-                user_id,
-            )
-            return
+        if persist:
+            try:
+                save_profile_data(
+                    self.profile_data_path,
+                    self.profiles,
+                    profile_stats,
+                    profile_records,
+                    seen_catch_ids,
+                )
+            except ValueError:
+                logger.exception(
+                    "Could not record catch %s for profile user %s",
+                    message_id,
+                    user_id,
+                )
+                return
         self.profile_stats = profile_stats
         self.profile_records = profile_records
         self.profile_seen_catch_ids = seen_catch_ids
@@ -5797,6 +5808,9 @@ class NamingBot(discord.Client):
             if PROFILE_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_profile_command(message)
                 return
+            if PROFILE_BACKFILL_COMMAND_PATTERN.fullmatch(message.content):
+                await self.handle_profile_backfill_command(message)
+                return
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
                 await self.handle_event_command(message)
                 return
@@ -6002,13 +6016,149 @@ class NamingBot(discord.Client):
             ),
         )
 
+    async def handle_profile_backfill_command(
+        self,
+        message: discord.Message,
+    ) -> None:
+        guild = message.guild
+        if guild is None or guild.id not in SERVER_IDS:
+            await message.reply(
+                "Profile backfill is only available in servers where Vivillon is enabled.",
+                mention_author=False,
+            )
+            return
+        if not message.author.guild_permissions.administrator:
+            await message.reply(
+                "Only server administrators can backfill profile catches.",
+                mention_author=False,
+            )
+            return
+        if guild.id in self.profile_backfills_in_progress:
+            await message.reply(
+                "A profile backfill is already running.",
+                mention_author=False,
+            )
+            return
+
+        bot_member = guild.me
+        if bot_member is None:
+            await message.reply(
+                "I could not verify my server permissions, so the backfill cannot start.",
+                mention_author=False,
+            )
+            return
+
+        all_channels = [*guild.text_channels, *guild.threads]
+        channels = []
+        skipped_channels = 0
+        for channel in all_channels:
+            permissions = channel.permissions_for(bot_member)
+            if permissions.view_channel and permissions.read_message_history:
+                channels.append(channel)
+            else:
+                skipped_channels += 1
+        if not channels:
+            await message.reply(
+                "I need View Channel and Read Message History permissions "
+                "to backfill catches.",
+                mention_author=False,
+            )
+            return
+
+        guild_key_prefix = f"{guild.id}:"
+        total_before = sum(
+            stats["total"]
+            for key, stats in self.profile_stats.items()
+            if key.startswith(guild_key_prefix)
+        )
+        scanned_messages = 0
+        failed_channels = 0
+        self.profile_backfills_in_progress.add(guild.id)
+        try:
+            progress = await message.reply(
+                f"Backfilling profile catches across {len(channels)} "
+                "readable channels and active threads. This may take a while.",
+                mention_author=False,
+            )
+            for channel_index, channel in enumerate(channels, start=1):
+                try:
+                    async for historical_message in channel.history(
+                        limit=None,
+                        oldest_first=True,
+                    ):
+                        self.track_profile_catch(
+                            historical_message,
+                            persist=False,
+                        )
+                        scanned_messages += 1
+                except discord.Forbidden:
+                    failed_channels += 1
+                    logger.warning(
+                        "Profile backfill cannot read channel %s (%s)",
+                        channel.id,
+                        channel.name,
+                    )
+                except discord.HTTPException as error:
+                    failed_channels += 1
+                    logger.warning(
+                        "Profile backfill failed in channel %s (%s): %s",
+                        channel.id,
+                        channel.name,
+                        error,
+                    )
+                if channel_index % 5 == 0:
+                    await progress.edit(
+                        content=(
+                            f"Backfill scanned {scanned_messages:,} messages "
+                            f"across {channel_index} channels..."
+                        )
+                    )
+
+            try:
+                save_profile_data(
+                    self.profile_data_path,
+                    self.profiles,
+                    self.profile_stats,
+                    self.profile_records,
+                    self.profile_seen_catch_ids,
+                )
+            except ValueError as error:
+                logger.exception("Could not save profile data after backfill")
+                await progress.edit(
+                    content=(
+                        "Backfill could not save profile data. "
+                        f"Check the bot logs. ({error})"
+                    )
+                )
+                return
+
+            total_after = sum(
+                stats["total"]
+                for key, stats in self.profile_stats.items()
+                if key.startswith(guild_key_prefix)
+            )
+            result = (
+                f"Backfill finished: scanned {scanned_messages:,} messages "
+                f"and added {total_after - total_before:,} catches to profiles."
+            )
+            incomplete_channels = skipped_channels + failed_channels
+            if incomplete_channels:
+                result += (
+                    f" I could not read {incomplete_channels} channel(s), "
+                    "so totals may be incomplete. Grant me View Channel and "
+                    "Read Message History permissions, then rerun `v!backfill`."
+                )
+            await progress.edit(content=result)
+        finally:
+            self.profile_backfills_in_progress.discard(guild.id)
+
     async def handle_profile_command(self, message: discord.Message) -> None:
         match = PROFILE_COMMAND_PATTERN.fullmatch(message.content)
         if match is None:
             return
-        if message.guild is None or message.guild.id != SERVER_ID:
+        if message.guild is None or message.guild.id not in SERVER_IDS:
             await message.reply(
-                "Profiles are only available in the configured profile server.",
+                "Profiles are only available in servers where Vivillon is enabled.",
                 mention_author=False,
             )
             return

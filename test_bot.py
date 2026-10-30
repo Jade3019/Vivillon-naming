@@ -99,6 +99,7 @@ from bot import (
     poketwo_incense_action,
     POKETWO_COMMAND_BOT_ID,
     SERVER_ID,
+    SERVER_IDS,
     reservation_key,
     Config,
     NamingBot,
@@ -1049,6 +1050,118 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((highest_iv.pokemon, highest_iv.iv), ("Bagon", 50.54))
         self.assertEqual(seen_catch_ids, [message.id])
 
+    async def test_profile_backfill_counts_each_catcher_and_is_repeatable(self) -> None:
+        backfill_guild_id = next(iter(SERVER_IDS - {SERVER_ID}))
+        guild = Mock()
+        guild.id = backfill_guild_id
+        guild.me = Mock()
+        guild.threads = []
+
+        def make_catch(message_id: int, user_id: int) -> Mock:
+            catch = Mock()
+            catch.id = message_id
+            catch.guild = guild
+            catch.author.bot = True
+            catch.content = (
+                f"Congratulations <@{user_id}>! You caught a Level 20 Bagon! "
+                "(50.54%)!"
+            )
+            catch.embeds = []
+            catch.attachments = []
+            catch.mentions = []
+            return catch
+
+        def make_history(user_id: int, count: int, first_message_id: int):
+            async def history(*, limit: int | None, oldest_first: bool):
+                self.assertIsNone(limit)
+                self.assertTrue(oldest_first)
+                for index in range(count):
+                    yield make_catch(first_message_id + index, user_id)
+
+            return history
+
+        channels = []
+        for channel_id, user_id, count, first_message_id in (
+            (789, 123, 2000, 100000),
+            (790, 456, 5000, 200000),
+        ):
+            channel = Mock()
+            channel.id = channel_id
+            channel.name = f"catches-{channel_id}"
+            channel.permissions_for.return_value.view_channel = True
+            channel.permissions_for.return_value.read_message_history = True
+            channel.history = Mock(
+                side_effect=make_history(user_id, count, first_message_id)
+            )
+            channels.append(channel)
+        guild.text_channels = channels
+
+        progress = Mock()
+        progress.edit = AsyncMock()
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = True
+        command.reply = AsyncMock(return_value=progress)
+
+        await self.bot.handle_profile_backfill_command(command)
+        await self.bot.handle_profile_backfill_command(command)
+
+        self.assertEqual(
+            self.bot.profile_stats_for_user(backfill_guild_id, 123)["total"],
+            2000,
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(backfill_guild_id, 456)["total"],
+            5000,
+        )
+        _, profile_stats, _, seen_catch_ids = load_profile_data(
+            self.bot.profile_data_path
+        )
+        self.assertEqual(profile_stats[f"{backfill_guild_id}:123"]["total"], 2000)
+        self.assertEqual(profile_stats[f"{backfill_guild_id}:456"]["total"], 5000)
+        self.assertEqual(len(seen_catch_ids), 7000)
+        self.assertTrue(all(channel.history.call_count == 2 for channel in channels))
+
+    async def test_profile_backfill_requires_administrator(self) -> None:
+        guild = Mock()
+        guild.id = SERVER_ID
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = False
+        command.reply = AsyncMock()
+
+        await self.bot.handle_profile_backfill_command(command)
+
+        command.reply.assert_awaited_once()
+        self.assertIn(
+            "Only server administrators",
+            command.reply.await_args.args[0],
+        )
+
+    async def test_profile_backfill_command_is_dispatched(self) -> None:
+        self.bot.org_rpc = None
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.daycare.handle_message = AsyncMock(return_value=False)
+        self.bot.handle_profile_backfill_command = AsyncMock()
+
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.guild.id = SERVER_ID
+        message.channel.id = 789
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!backfill"
+        message.embeds = []
+        message.attachments = []
+        message.webhook_id = None
+        message.application_id = None
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_profile_backfill_command.assert_awaited_once_with(message)
+
     async def test_each_application_webhook_catch_increments_total(self) -> None:
         self.bot.handle_catch_starboard = AsyncMock()
         self.bot.track_incense_command = Mock()
@@ -1191,7 +1304,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             1,
         )
 
-    def test_catch_categories_are_counted_only_in_the_profile_server(self) -> None:
+    def test_catch_categories_are_counted_separately_in_enabled_servers(self) -> None:
+        second_server_id = next(iter(SERVER_IDS - {SERVER_ID}))
         catch_messages = (
             (
                 1001,
@@ -1218,6 +1332,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             ),
             (
                 1004,
+                second_server_id,
+                "Congratulations <@123>! You caught a Level 20 Bagon! (99.00%)!",
+            ),
+            (
+                1006,
                 SERVER_ID + 1,
                 "Congratulations <@123>! You caught a Level 20 Bagon! (99.00%)!",
             ),
@@ -1241,6 +1360,21 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 "gmax": 1,
                 "missingno": 1,
             },
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(second_server_id, 123),
+            {
+                "total": 1,
+                "shiny": 0,
+                "low_iv": 0,
+                "high_iv": 1,
+                "gmax": 0,
+                "missingno": 0,
+            },
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID + 1, 123)["total"],
+            0,
         )
         records = self.bot.profile_records_for_user(SERVER_ID, 123)
         self.assertEqual(

@@ -197,7 +197,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
-    "gem": 1.03,
+    "gem": 1.05,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
@@ -5281,16 +5281,7 @@ def render_profile_image(
                 scaled_size,
                 Image.Resampling.LANCZOS,
             )
-        crop_left = (scaled_frame.width - PROFILE_FRAME_CANVAS_SIZE[0]) // 2
-        crop_top = (scaled_frame.height - PROFILE_FRAME_CANVAS_SIZE[1]) // 2
-        frame = scaled_frame.crop(
-            (
-                crop_left,
-                crop_top,
-                crop_left + PROFILE_FRAME_CANVAS_SIZE[0],
-                crop_top + PROFILE_FRAME_CANVAS_SIZE[1],
-            )
-        )
+        frame = scaled_frame
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(

@@ -1744,20 +1744,10 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 round(PROFILE_FRAME_CANVAS_SIZE[0] * scale),
                 round(PROFILE_FRAME_CANVAS_SIZE[1] * scale),
             )
-            scaled_frame = source.convert("RGBA").resize(
+            frame = source.convert("RGBA").resize(
                 scaled_size,
                 Image.Resampling.LANCZOS,
             )
-        crop_left = (scaled_frame.width - PROFILE_FRAME_CANVAS_SIZE[0]) // 2
-        crop_top = (scaled_frame.height - PROFILE_FRAME_CANVAS_SIZE[1]) // 2
-        frame = scaled_frame.crop(
-            (
-                crop_left,
-                crop_top,
-                crop_left + PROFILE_FRAME_CANVAS_SIZE[0],
-                crop_top + PROFILE_FRAME_CANVAS_SIZE[1],
-            )
-        )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(
@@ -1770,8 +1760,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (frame.width - base.width) // 2,
             (frame.height - base.height) // 2,
         )
-        self.assertEqual(frame.size, PROFILE_FRAME_CANVAS_SIZE)
-        self.assertEqual(profile_position, (33, 21))
+        self.assertEqual(frame.size, (1540, 911))
+        self.assertEqual(profile_position, (70, 43))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(

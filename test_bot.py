@@ -1706,17 +1706,19 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-        profile_position = (
-            (frame.width - base.width) // 2,
-            (frame.height - base.height) // 2,
+        base = base.resize(
+            (frame.width, round(base.height * frame.width / base.width)),
+            Image.Resampling.LANCZOS,
         )
+        profile_position = (0, (frame.height - base.height) // 2)
         self.assertEqual(frame.size, (1467, 868))
-        self.assertEqual(profile_position, (33, 21))
+        self.assertEqual(base.size, (1467, 864))
+        self.assertEqual(profile_position, (0, 2))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
             (0, 0, profile_card.width - 1, profile_card.height - 1),
-            radius=PROFILE_FRAME_CORNER_RADIUS,
+            radius=round(PROFILE_FRAME_CORNER_RADIUS * frame.width / 1400),
             fill=255,
         )
         profile_card.putalpha(card_mask)
@@ -1725,7 +1727,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
-            self.assertEqual(base.size, (1400, 825))
+            self.assertEqual(base.size, (1467, 864))
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
@@ -1756,17 +1758,19 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-        profile_position = (
-            (frame.width - base.width) // 2,
-            (frame.height - base.height) // 2,
+        base = base.resize(
+            (frame.width, round(base.height * frame.width / base.width)),
+            Image.Resampling.LANCZOS,
         )
+        profile_position = (0, (frame.height - base.height) // 2)
         self.assertEqual(frame.size, (1540, 911))
-        self.assertEqual(profile_position, (70, 43))
+        self.assertEqual(base.size, (1540, 908))
+        self.assertEqual(profile_position, (0, 1))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
             (0, 0, profile_card.width - 1, profile_card.height - 1),
-            radius=PROFILE_FRAME_CORNER_RADIUS,
+            radius=round(PROFILE_FRAME_CORNER_RADIUS * frame.width / 1400),
             fill=255,
         )
         profile_card.putalpha(card_mask)

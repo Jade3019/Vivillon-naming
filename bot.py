@@ -5290,18 +5290,22 @@ def render_profile_image(
             )
         )
         framed_image = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-        profile_position = (
-            (frame.width - width) // 2,
-            (frame.height - height) // 2,
+        profile_card = image.convert("RGBA").resize(
+            (
+                frame.width,
+                round(height * frame.width / width),
+            ),
+            Image.Resampling.LANCZOS,
         )
-        profile_card = image.convert("RGBA")
+        profile_scale = profile_card.width / width
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
-            (0, 0, width - 1, height - 1),
-            radius=PROFILE_FRAME_CORNER_RADIUS,
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=round(PROFILE_FRAME_CORNER_RADIUS * profile_scale),
             fill=255,
         )
         profile_card.putalpha(card_mask)
+        profile_position = (0, (frame.height - profile_card.height) // 2)
         framed_image.alpha_composite(profile_card, dest=profile_position)
         framed_image.alpha_composite(frame)
         image = framed_image

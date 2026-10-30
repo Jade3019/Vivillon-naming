@@ -339,7 +339,7 @@ also offers blurred Cosmog and Hisuian Zorua images; the middle column defaults
 to white and can also use either image. Text is drawn above both background layers. The
 default picker choices are labeled **Default text color**, **Default
 background**, and **Default middle background**. The frame picker offers
-**No frame** and the **Mystic** transparent overlay.
+**No frame**, the **Mystic** transparent overlay, and the **Gem** frame.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 

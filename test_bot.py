@@ -1066,7 +1066,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
-            ["No frame", "Mystic"],
+            ["No frame", "Mystic", "Gem"],
         )
         self.assertEqual(
             editor.children[0].options[0].label,
@@ -1728,6 +1728,49 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
             self.assertEqual(base.size, (1400, 825))
+            self.assertEqual(actual.size, frame.size)
+            self.assertEqual(actual.mode, "RGBA")
+            self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_profile_card_renders_selected_gem_frame_over_contents(self) -> None:
+        self.bot.set_profile_setting(123, "frame", "gem")
+        settings = self.bot.profile_settings_for_user(123)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        unframed_settings = {**settings, "frame": "none"}
+
+        with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
+            base = unframed.convert("RGB")
+        with Image.open(Path(__file__).with_name("Frames") / "gem.png") as source:
+            frame = source.convert("RGBA").resize(
+                (
+                    round(source.width * PROFILE_FRAME_SCALE),
+                    round(source.height * PROFILE_FRAME_SCALE),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        frame.putalpha(
+            frame.getchannel("A").point(
+                lambda alpha: round(
+                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
+                )
+            )
+        )
+        expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_position = (
+            (frame.width - base.width) // 2,
+            (frame.height - base.height) // 2,
+        )
+        profile_card = base.convert("RGBA")
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        expected.alpha_composite(profile_card, dest=profile_position)
+        expected.alpha_composite(frame)
+        with Image.open(render_profile_image(settings, stats)) as actual:
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())

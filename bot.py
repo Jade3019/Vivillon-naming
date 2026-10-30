@@ -189,9 +189,11 @@ PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
 PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "none": ("No frame", "No frame selected"),
     "mystic": ("Mystic", "Mystic profile frame"),
+    "gem": ("Gem", "Gem profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
+    "gem": Path(__file__).with_name("Frames") / "gem.png",
 }
 PROFILE_FRAME_SCALE: Final[float] = 0.9
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6

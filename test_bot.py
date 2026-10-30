@@ -1693,11 +1693,9 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "mystic.png") as source:
-            frame = ImageOps.pad(
-                source.convert("RGBA"),
+            frame = source.convert("RGBA").resize(
                 PROFILE_FRAME_CANVAS_SIZE,
-                method=Image.Resampling.LANCZOS,
-                color=(0, 0, 0, 0),
+                Image.Resampling.LANCZOS,
             )
         frame.putalpha(
             frame.getchannel("A").point(
@@ -1740,11 +1738,9 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "gem.png") as source:
-            frame = ImageOps.pad(
-                source.convert("RGBA"),
+            frame = source.convert("RGBA").resize(
                 PROFILE_FRAME_CANVAS_SIZE,
-                method=Image.Resampling.LANCZOS,
-                color=(0, 0, 0, 0),
+                Image.Resampling.LANCZOS,
             )
         frame.putalpha(
             frame.getchannel("A").point(

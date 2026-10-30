@@ -5267,11 +5267,9 @@ def render_profile_image(
     frame_image_path = PROFILE_FRAME_IMAGES.get(str(settings["frame"]))
     if frame_image_path is not None:
         with Image.open(frame_image_path) as frame_image:
-            frame = ImageOps.pad(
-                frame_image.convert("RGBA"),
+            frame = frame_image.convert("RGBA").resize(
                 PROFILE_FRAME_CANVAS_SIZE,
-                method=Image.Resampling.LANCZOS,
-                color=(0, 0, 0, 0),
+                Image.Resampling.LANCZOS,
             )
         frame.putalpha(
             frame.getchannel("A").point(

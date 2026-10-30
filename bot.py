@@ -199,6 +199,10 @@ PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.05,
 }
+PROFILE_CARD_SCALES: Final[dict[str, float]] = {
+    "mystic": 1.0,
+    "gem": 1.03,
+}
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
 PROFILE_FRAME_CORNER_RADIUS: Final[int] = 72
@@ -5290,14 +5294,26 @@ def render_profile_image(
             )
         )
         framed_image = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_card_scale = PROFILE_CARD_SCALES[frame_key]
+        profile_card_width = round(frame.width * profile_card_scale)
         profile_card = image.convert("RGBA").resize(
             (
-                frame.width,
-                round(height * frame.width / width),
+                profile_card_width,
+                round(height * profile_card_width / width),
             ),
             Image.Resampling.LANCZOS,
         )
-        profile_scale = profile_card.width / width
+        crop_left = max((profile_card.width - frame.width) // 2, 0)
+        crop_top = max((profile_card.height - frame.height) // 2, 0)
+        profile_card = profile_card.crop(
+            (
+                crop_left,
+                crop_top,
+                min(crop_left + frame.width, profile_card.width),
+                min(crop_top + frame.height, profile_card.height),
+            )
+        )
+        profile_scale = profile_card_width / width
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(
             (0, 0, profile_card.width - 1, profile_card.height - 1),
@@ -5305,7 +5321,10 @@ def render_profile_image(
             fill=255,
         )
         profile_card.putalpha(card_mask)
-        profile_position = (0, (frame.height - profile_card.height) // 2)
+        profile_position = (
+            (frame.width - profile_card.width) // 2,
+            (frame.height - profile_card.height) // 2,
+        )
         framed_image.alpha_composite(profile_card, dest=profile_position)
         framed_image.alpha_composite(frame)
         image = framed_image

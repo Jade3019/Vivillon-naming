@@ -61,7 +61,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
             ("v!lowaccuracy #channel", "Post a link in that channel whenever a spawn scores under 90% (use `off` to disable)."),
             ("v!afk", "Your personal ping settings for shiny hunts and collections."),
             ("v!profile [@user]", "View your or another member's Pokémon catch stats."),
-            ("v!backfill", "Admins: backfill profile catches from readable server history."),
+            ("v!backfill [stop]", "Admins: backfill profile catches or stop an active backfill."),
             ("v!settime @role ...", "Choose the roles pinged for timed spawns."),
             ("v!timereset", "Reset that timer."),
             ("v!event", "Start a chat event."),

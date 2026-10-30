@@ -290,8 +290,9 @@ total catches, shinies, catches below 10% IV, catches at or above 90% IV, Gigant
 and Missingno catches. Each `Congratulations @user! You caught a` message
 adds one to Total; a spawn by itself does not count, and the total has no cap.
 Server administrators can run `v!backfill` in that server to scan readable
-text channels and active threads for earlier catches. The bot needs View
-Channel and Read Message History permissions; channels it cannot read are
+text channels and active threads for earlier catches. Run `v!backfill stop` to
+stop an active scan; catches processed before stopping are saved. The bot needs
+View Channel and Read Message History permissions; channels it cannot read are
 reported and excluded. The card's right side shows each record's level, Pokémon, gender
 (when provided in the catch message), and IV percentage for the highest and
 lowest IV catches, plus the highest and lowest IV among shiny catches. The

@@ -64,7 +64,7 @@ PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 PROFILE_BACKFILL_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"^v!backfill\s*$",
+    r"^v!backfill(?:\s+(stop))?\s*$",
     re.IGNORECASE,
 )
 PROFILE_CATCH_PREFIX_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -5111,6 +5111,7 @@ class NamingBot(discord.Client):
             self.profile_data_path
         )
         self.profile_backfills_in_progress: set[int] = set()
+        self.profile_backfill_stop_requests: set[int] = set()
         self.profile_emoji_cache: dict[str, bytes] | None = None
         self.appearance_path = Path(
             os.environ.get("APPEARANCE_FILE", "appearance.json")
@@ -6020,6 +6021,9 @@ class NamingBot(discord.Client):
         self,
         message: discord.Message,
     ) -> None:
+        command_match = PROFILE_BACKFILL_COMMAND_PATTERN.fullmatch(message.content)
+        if command_match is None:
+            return
         guild = message.guild
         if guild is None or guild.id not in SERVER_IDS:
             await message.reply(
@@ -6030,6 +6034,19 @@ class NamingBot(discord.Client):
         if not message.author.guild_permissions.administrator:
             await message.reply(
                 "Only server administrators can backfill profile catches.",
+                mention_author=False,
+            )
+            return
+        if command_match.group(1) is not None:
+            if guild.id not in self.profile_backfills_in_progress:
+                await message.reply(
+                    "No profile backfill is running.",
+                    mention_author=False,
+                )
+                return
+            self.profile_backfill_stop_requests.add(guild.id)
+            await message.reply(
+                "Backfill stop requested. It will stop as soon as possible.",
                 mention_author=False,
             )
             return
@@ -6073,6 +6090,8 @@ class NamingBot(discord.Client):
         )
         scanned_messages = 0
         failed_channels = 0
+        stopped = False
+        self.profile_backfill_stop_requests.discard(guild.id)
         self.profile_backfills_in_progress.add(guild.id)
         try:
             progress = await message.reply(
@@ -6081,11 +6100,17 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             for channel_index, channel in enumerate(channels, start=1):
+                if guild.id in self.profile_backfill_stop_requests:
+                    stopped = True
+                    break
                 try:
                     async for historical_message in channel.history(
                         limit=None,
                         oldest_first=True,
                     ):
+                        if guild.id in self.profile_backfill_stop_requests:
+                            stopped = True
+                            break
                         self.track_profile_catch(
                             historical_message,
                             persist=False,
@@ -6106,6 +6131,8 @@ class NamingBot(discord.Client):
                         channel.name,
                         error,
                     )
+                if stopped:
+                    break
                 if channel_index % 5 == 0:
                     await progress.edit(
                         content=(
@@ -6113,6 +6140,7 @@ class NamingBot(discord.Client):
                             f"across {channel_index} channels..."
                         )
                     )
+            stopped = stopped or guild.id in self.profile_backfill_stop_requests
 
             try:
                 save_profile_data(
@@ -6138,7 +6166,8 @@ class NamingBot(discord.Client):
                 if key.startswith(guild_key_prefix)
             )
             result = (
-                f"Backfill finished: scanned {scanned_messages:,} messages "
+                f"Backfill {'stopped' if stopped else 'finished'}: "
+                f"scanned {scanned_messages:,} messages "
                 f"and added {total_after - total_before:,} catches to profiles."
             )
             incomplete_channels = skipped_channels + failed_channels
@@ -6150,6 +6179,7 @@ class NamingBot(discord.Client):
                 )
             await progress.edit(content=result)
         finally:
+            self.profile_backfill_stop_requests.discard(guild.id)
             self.profile_backfills_in_progress.discard(guild.id)
 
     async def handle_profile_command(self, message: discord.Message) -> None:

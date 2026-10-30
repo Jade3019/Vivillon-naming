@@ -1101,6 +1101,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         command = Mock()
         command.guild = guild
         command.author.guild_permissions.administrator = True
+        command.content = "v!backfill"
         command.reply = AsyncMock(return_value=progress)
 
         await self.bot.handle_profile_backfill_command(command)
@@ -1122,12 +1123,81 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(seen_catch_ids), 7000)
         self.assertTrue(all(channel.history.call_count == 2 for channel in channels))
 
+    async def test_profile_backfill_stop_saves_partial_results(self) -> None:
+        guild = Mock()
+        guild.id = SERVER_ID
+        guild.me = Mock()
+        guild.threads = []
+
+        def make_catch(message_id: int) -> Mock:
+            catch = Mock()
+            catch.id = message_id
+            catch.guild = guild
+            catch.author.bot = True
+            catch.content = (
+                "Congratulations <@123>! You caught a Level 20 Bagon! "
+                "(50.54%)!"
+            )
+            catch.embeds = []
+            catch.attachments = []
+            catch.mentions = []
+            return catch
+
+        progress = Mock()
+        progress.edit = AsyncMock()
+        start_command = Mock()
+        start_command.guild = guild
+        start_command.author.guild_permissions.administrator = True
+        start_command.content = "v!backfill"
+        start_command.reply = AsyncMock(return_value=progress)
+        stop_command = Mock()
+        stop_command.guild = guild
+        stop_command.author.guild_permissions.administrator = True
+        stop_command.content = "v!backfill stop"
+        stop_command.reply = AsyncMock()
+
+        channel = Mock()
+        channel.name = "catches"
+        channel.permissions_for.return_value.view_channel = True
+        channel.permissions_for.return_value.read_message_history = True
+
+        async def history(*, limit: int | None, oldest_first: bool):
+            self.assertIsNone(limit)
+            self.assertTrue(oldest_first)
+            yield make_catch(100000)
+            await self.bot.handle_profile_backfill_command(stop_command)
+            yield make_catch(100001)
+
+        channel.history = Mock(side_effect=history)
+        guild.text_channels = [channel]
+
+        await self.bot.handle_profile_backfill_command(start_command)
+
+        stop_command.reply.assert_awaited_once()
+        self.assertIn("stop requested", stop_command.reply.await_args.args[0])
+        self.assertIn(
+            "Backfill stopped: scanned 1 messages",
+            progress.edit.await_args.kwargs["content"],
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],
+            1,
+        )
+        _, profile_stats, _, seen_catch_ids = load_profile_data(
+            self.bot.profile_data_path
+        )
+        self.assertEqual(profile_stats[f"{SERVER_ID}:123"]["total"], 1)
+        self.assertEqual(seen_catch_ids, [100000])
+        self.assertNotIn(SERVER_ID, self.bot.profile_backfills_in_progress)
+        self.assertNotIn(SERVER_ID, self.bot.profile_backfill_stop_requests)
+
     async def test_profile_backfill_requires_administrator(self) -> None:
         guild = Mock()
         guild.id = SERVER_ID
         command = Mock()
         command.guild = guild
         command.author.guild_permissions.administrator = False
+        command.content = "v!backfill"
         command.reply = AsyncMock()
 
         await self.bot.handle_profile_backfill_command(command)
@@ -1157,6 +1227,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         message.attachments = []
         message.webhook_id = None
         message.application_id = None
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_profile_backfill_command.assert_awaited_once_with(message)
+        self.bot.handle_profile_backfill_command.reset_mock()
+        message.content = "v!backfill stop"
 
         await self.bot.on_message(message)
 

@@ -59,6 +59,10 @@ API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!api\s*$",
     re.IGNORECASE,
 )
+PERMISSION_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!permission(?:\s+(off|\d+))?\s*$",
+    re.IGNORECASE,
+)
 PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
@@ -462,11 +466,133 @@ def save_low_accuracy_channels(path: Path, channels: dict[str, int]) -> None:
     temporary.replace(path)
 
 
+def load_command_permissions(path: Path) -> dict[str, int]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read command permissions from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Command permissions in {path} have an invalid format")
+
+    permissions: dict[str, int] = {}
+    for guild_id, role_id in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(role_id, int)
+            or isinstance(role_id, bool)
+            or role_id <= 0
+        ):
+            raise ValueError(f"Command permissions in {path} have an invalid entry")
+        permissions[guild_id] = role_id
+    return permissions
+
+
+def save_command_permissions(path: Path, permissions: dict[str, int]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(permissions, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save command permissions to {path}") from error
+
+
 def is_image_test_command(content: str) -> bool:
     return (
         re.fullmatch(r"v!test(?:\s+shiny)?\s*", content, re.IGNORECASE)
         is not None
     )
+
+
+def command_permission_group(content: str) -> str | None:
+    content = content.strip()
+    if re.fullmatch(r"v!grab", content, re.IGNORECASE):
+        return "general"
+    if is_image_test_command(content):
+        return "general"
+    if re.fullmatch(r"v!r(?:\s+.+)?", content, re.IGNORECASE):
+        return "reserves"
+    if re.match(
+        r"^v!(?:addcategory|categorycreate|categorylist|categorydelete|cd)(?:\s|$)",
+        content,
+        re.IGNORECASE,
+    ):
+        return "reserves"
+    if re.fullmatch(r"v!settings", content, re.IGNORECASE):
+        return "settings"
+    if re.match(r"^v!settime(?:\s|$)", content, re.IGNORECASE) or re.fullmatch(
+        r"v!timereset", content, re.IGNORECASE
+    ):
+        return "general"
+    if re.fullmatch(r"v!event", content, re.IGNORECASE):
+        return "general"
+    if re.fullmatch(r"v!backfill(?:\s+stop)?", content, re.IGNORECASE):
+        return "backfill"
+    return None
+
+
+def member_has_role_id(member: object, role_id: int) -> bool:
+    return any(
+        getattr(role, "id", None) == role_id
+        for role in getattr(member, "roles", ())
+    )
+
+
+def command_role_id_for_guild(bot: object, guild_id: int) -> int | None:
+    permissions = getattr(bot, "command_permissions", None)
+    if not isinstance(permissions, dict):
+        return None
+    role_id = permissions.get(str(guild_id))
+    return (
+        role_id
+        if isinstance(role_id, int) and not isinstance(role_id, bool)
+        else None
+    )
+
+
+def member_has_command_role(bot: object, guild_id: int, member: object) -> bool:
+    role_id = command_role_id_for_guild(bot, guild_id)
+    return role_id is not None and member_has_role_id(member, role_id)
+
+
+def has_reserve_manager_access(
+    bot: object, guild_id: int, member: object
+) -> bool:
+    return member_has_role_id(member, RESERVE_ROLE_ID) or member_has_command_role(
+        bot, guild_id, member
+    )
+
+
+def has_manage_server_access(bot: object, guild_id: int, member: object) -> bool:
+    permissions = getattr(member, "guild_permissions", None)
+    return member_has_command_role(bot, guild_id, member) or bool(
+        getattr(permissions, "manage_guild", False)
+    )
+
+
+def can_use_permission_group(
+    bot: object,
+    group: str,
+    guild_id: int,
+    member: object,
+) -> bool:
+    role_id = command_role_id_for_guild(bot, guild_id)
+    if role_id is None or member_has_role_id(member, role_id):
+        return True
+    if group == "reserves":
+        return member_has_role_id(member, RESERVE_ROLE_ID)
+    permissions = getattr(member, "guild_permissions", None)
+    if group == "settings":
+        return bool(getattr(permissions, "manage_guild", False))
+    if group == "backfill":
+        return bool(getattr(permissions, "administrator", False))
+    return False
 
 
 class NoMatchError(Exception):
@@ -3455,10 +3581,15 @@ class NamingSettingToggleButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         if (
             interaction.guild_id != self.guild_id
-            or not interaction.user.guild_permissions.manage_guild
+            or not has_manage_server_access(
+                self.bot,
+                self.guild_id,
+                interaction.user,
+            )
         ):
             await interaction.response.send_message(
-                "Only members with Manage Server permission can change these settings.",
+                "Only members with Manage Server permission or the configured "
+                "command role can change these settings.",
                 ephemeral=True,
             )
             return
@@ -3665,7 +3796,9 @@ class ServerSettingsView(discord.ui.LayoutView):
 
 
 async def starboard_settings_guard(
-    interaction: discord.Interaction, guild_id: int
+    interaction: discord.Interaction,
+    guild_id: int,
+    bot: "NamingBot",
 ) -> bool:
     if interaction.guild_id != guild_id:
         await interaction.response.send_message(
@@ -3673,10 +3806,10 @@ async def starboard_settings_guard(
             ephemeral=True,
         )
         return False
-    permissions = getattr(interaction.user, "guild_permissions", None)
-    if permissions is None or not permissions.manage_guild:
+    if not has_manage_server_access(bot, guild_id, interaction.user):
         await interaction.response.send_message(
-            "You need the Manage Server permission to change starboards.",
+            "You need Manage Server permission or the configured command role "
+            "to change starboards.",
             ephemeral=True,
         )
         return False
@@ -3700,7 +3833,7 @@ class StarboardChannelSelect(discord.ui.ChannelSelect):
         self.board = board
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if not await starboard_settings_guard(interaction, self.guild_id):
+        if not await starboard_settings_guard(interaction, self.guild_id, self.bot):
             return
         channel = self.values[0]
         if getattr(getattr(channel, "guild", None), "id", None) != self.guild_id:
@@ -3741,7 +3874,7 @@ class StarboardClearButton(discord.ui.Button):
         self.board = board
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if not await starboard_settings_guard(interaction, self.guild_id):
+        if not await starboard_settings_guard(interaction, self.guild_id, self.bot):
             return
         try:
             self.bot.set_starboard_channel(self.guild_id, self.board, None)
@@ -3871,7 +4004,9 @@ def parse_hex_color(text: str) -> int | None:
 
 
 async def appearance_guard(
-    interaction: discord.Interaction, guild_id: int
+    interaction: discord.Interaction,
+    guild_id: int,
+    bot: "NamingBot",
 ) -> bool:
     if interaction.guild_id != guild_id:
         await interaction.response.send_message(
@@ -3879,10 +4014,10 @@ async def appearance_guard(
             ephemeral=True,
         )
         return False
-    permissions = getattr(interaction.user, "guild_permissions", None)
-    if permissions is None or not permissions.manage_guild:
+    if not has_manage_server_access(bot, guild_id, interaction.user):
         await interaction.response.send_message(
-            "You need the Manage Server permission to change appearance.",
+            "You need Manage Server permission or the configured command role "
+            "to change appearance.",
             ephemeral=True,
         )
         return False
@@ -3930,7 +4065,7 @@ class AppearanceActionButton(discord.ui.Button):
         self.action = action
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if not await appearance_guard(interaction, self.guild_id):
+        if not await appearance_guard(interaction, self.guild_id, self.bot):
             return
         if self.action == "color":
             await interaction.response.send_modal(
@@ -3967,7 +4102,7 @@ class AppearanceTextModal(discord.ui.Modal):
         self.add_item(self.value)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not await appearance_guard(interaction, self.guild_id):
+        if not await appearance_guard(interaction, self.guild_id, self.bot):
             return
         text = self.value.value.strip()
         if self.field == "color":
@@ -4010,7 +4145,7 @@ class AppearanceUploadModal(discord.ui.Modal):
         )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not await appearance_guard(interaction, self.guild_id):
+        if not await appearance_guard(interaction, self.guild_id, self.bot):
             return
         if not self.upload.values:
             await interaction.response.send_message(
@@ -5367,6 +5502,12 @@ class NamingBot(discord.Client):
             os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
         )
         self.server_settings = load_server_settings(self.server_settings_path)
+        self.command_permissions_path = Path(
+            os.environ.get("COMMAND_PERMISSIONS_FILE", "command_permissions.json")
+        )
+        self.command_permissions = load_command_permissions(
+            self.command_permissions_path
+        )
         self.starboard_settings_path = Path(
             os.environ.get("STARBOARD_SETTINGS_FILE", "starboard_settings.json")
         )
@@ -6084,6 +6225,27 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if re.match(r"^v!permission(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_permission_command(message)
+                return
+            permission_group = command_permission_group(message.content)
+            if (
+                permission_group is not None
+                and message.guild is not None
+                and not can_use_permission_group(
+                    self,
+                    permission_group,
+                    message.guild.id,
+                    message.author,
+                )
+            ):
+                role_id = command_role_id_for_guild(self, message.guild.id)
+                await message.reply(
+                    f"You need the configured role <@&{role_id}> to use this command.",
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                return
             if PROFILE_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_profile_command(message)
                 return
@@ -6316,9 +6478,13 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        if not message.author.guild_permissions.administrator:
+        if (
+            not message.author.guild_permissions.administrator
+            and not member_has_command_role(self, guild.id, message.author)
+        ):
             await message.reply(
-                "Only server administrators can backfill profile catches.",
+                "Only server administrators or members with the configured "
+                "command role can backfill profile catches.",
                 mention_author=False,
             )
             return
@@ -6733,6 +6899,88 @@ class NamingBot(discord.Client):
         await message.reply(
             view=ServerSettingsView(self, message.guild.id),
             mention_author=False,
+        )
+
+    async def handle_permission_command(self, message: discord.Message) -> None:
+        guild = message.guild
+        if guild is None:
+            await message.reply(
+                "Command permissions can only be configured in a server.",
+                mention_author=False,
+            )
+            return
+        permissions = getattr(message.author, "guild_permissions", None)
+        if permissions is None or not permissions.manage_guild:
+            await message.reply(
+                "You need the Manage Server permission to configure command access.",
+                mention_author=False,
+            )
+            return
+        match = PERMISSION_COMMAND_PATTERN.fullmatch(message.content)
+        if match is None:
+            await message.reply(
+                "Usage: `v!permission <role id>`, `v!permission off`, or "
+                "`v!permission` to view the current role.",
+                mention_author=False,
+            )
+            return
+
+        guild_key = str(guild.id)
+        argument = match.group(1)
+        if argument is None:
+            role_id = self.command_permissions.get(guild_key)
+            state = f"<@&{role_id}> (`{role_id}`)" if role_id else "not set"
+            await message.reply(
+                f"Command access role: {state}.",
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+
+        updated_permissions = dict(self.command_permissions)
+        if argument.casefold() == "off":
+            if guild_key not in updated_permissions:
+                await message.reply(
+                    "No command access role is set for this server.",
+                    mention_author=False,
+                )
+                return
+            updated_permissions.pop(guild_key)
+            confirmation = "Command role access turned off."
+        else:
+            role_id = int(argument)
+            role = guild.get_role(role_id)
+            if role is None or role_id == guild.id:
+                await message.reply(
+                    "That role ID is not a role in this server.",
+                    mention_author=False,
+                )
+                return
+            updated_permissions[guild_key] = role_id
+            confirmation = (
+                f"Members with <@&{role_id}> can now use the protected commands."
+            )
+
+        try:
+            save_command_permissions(
+                self.command_permissions_path,
+                updated_permissions,
+            )
+        except ValueError:
+            logger.exception(
+                "Could not save command permissions for guild %s",
+                guild.id,
+            )
+            await message.reply(
+                "I couldn't save command permissions. Check the bot logs.",
+                mention_author=False,
+            )
+            return
+        self.command_permissions = updated_permissions
+        await message.reply(
+            confirmation,
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
         )
 
     async def report_low_accuracy(
@@ -7319,12 +7567,14 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        if not any(
-            role.id == RESERVE_ROLE_ID
-            for role in getattr(message.author, "roles", ())
+        if not has_reserve_manager_access(
+            self,
+            message.guild.id,
+            message.author,
         ):
             await message.reply(
-                "Only reserve managers can manage reserve categories.",
+                "Only reserve managers or members with the configured "
+                "command role can manage reserve categories.",
                 mention_author=False,
             )
             return
@@ -7538,9 +7788,14 @@ class NamingBot(discord.Client):
             await self.handle_reserve_search(message)
             return
 
-        if not any(role.id == RESERVE_ROLE_ID for role in message.author.roles):
+        if not has_reserve_manager_access(
+            self,
+            message.guild.id,
+            message.author,
+        ):
             await message.reply(
-                "Only reserve managers can add, remove, or clear reservations.",
+                "Only reserve managers or members with the configured "
+                "command role can add, remove, or clear reservations.",
                 mention_author=False,
             )
             return
@@ -8486,8 +8741,10 @@ class ExchangeReservesView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not any(
-                role.id == RESERVE_ROLE_ID for role in interaction.user.roles
+            or not has_reserve_manager_access(
+                self.bot,
+                self.guild_id,
+                interaction.user,
             )
         ):
             await interaction.response.send_message(
@@ -8732,8 +8989,13 @@ class GrabListView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         del button
-        if not isinstance(interaction.user, discord.Member) or not any(
-            role.id == RESERVE_ROLE_ID for role in interaction.user.roles
+        if not isinstance(
+            interaction.user,
+            discord.Member,
+        ) or not has_reserve_manager_access(
+            self.bot,
+            self.guild_id,
+            interaction.user,
         ):
             await interaction.response.send_message(
                 "Only reserve managers can add reserves.", ephemeral=True
@@ -8835,8 +9097,10 @@ class ClearReservesView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not any(
-                role.id == RESERVE_ROLE_ID for role in interaction.user.roles
+            or not has_reserve_manager_access(
+                self.bot,
+                self.guild_id,
+                interaction.user,
             )
         ):
             await interaction.response.send_message(

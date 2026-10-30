@@ -143,6 +143,17 @@ has to identify each spawn to check for a match. Settings are saved to
 `server_settings.json` by default; set `SERVER_SETTINGS_FILE` to use another
 path.
 
+Manage Server members can use `v!permission <role id>` to grant that server role
+access to `v!grab`, `v!test`, reserve and category commands, `v!settings`,
+`v!settime`/`v!timereset`, `v!event`, and `v!backfill`. Existing reserve managers,
+Manage Server members, and administrators retain their existing access where
+those commands already require those permissions. For listed commands that were
+previously public, the configured role is required. Commands not listed keep
+their current permissions. Only Manage Server members can configure the role.
+Use `v!permission` to view the configured role or `v!permission off` to remove
+it. The setting is stored in `command_permissions.json` by default; set
+`COMMAND_PERMISSIONS_FILE` to use a different persistent path.
+
 Open **Starboard** from `v!settings` to choose separate **Vivillon Starboard**,
 **Shinyboard**, and **Normal Starboard** channels. The Vivillon Starboard posts
 shiny catches, catches with 90% IV or higher, catches below 10% IV, MissingNo.

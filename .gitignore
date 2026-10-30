@@ -8,6 +8,8 @@ reserve_categories.json
 reserve_categories.json.tmp
 server_settings.json
 server_settings.json.tmp
+command_permissions.json
+command_permissions.json.tmp
 starboard_settings.json
 starboard_settings.json.tmp
 .bank_cache/

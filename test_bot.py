@@ -64,6 +64,9 @@ from bot import (
     format_starboard_embed,
     is_valid_pokemon_name,
     is_image_test_command,
+    command_permission_group,
+    can_use_permission_group,
+    has_manage_server_access,
     is_missingno_name,
     is_normal_starboard_pokemon,
     is_single_type_fire_pokemon,
@@ -74,6 +77,7 @@ from bot import (
     type_icon_filename_for_pokemon,
     load_pokemon_forms,
     load_server_settings,
+    load_command_permissions,
     load_starboard_settings,
     load_reservations,
     load_reserve_categories,
@@ -102,6 +106,7 @@ from bot import (
     reserved_pokemon_for_user,
     reserved_user_ids_for_pokemon,
     save_reservations,
+    save_command_permissions,
     save_reserve_categories,
     shinyhunt_pokemon_for_user,
     shinyhunter_user_ids_for_pokemon,
@@ -494,6 +499,28 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             ]
             self.assertEqual(updated_sections[1].accessory.label, "Name only")
 
+    async def test_naming_settings_button_accepts_configured_role(self) -> None:
+        role_id = 900
+        self.bot.command_permissions = {str(SERVER_ID): role_id}
+        view = NamingSettingsView(self.bot, SERVER_ID)
+        sections = [
+            child
+            for child in view.children[0].children
+            if isinstance(child, discord.ui.Section)
+        ]
+        enabled_button = sections[0].accessory
+        interaction = Mock()
+        interaction.guild_id = SERVER_ID
+        interaction.user.roles = [Mock(id=role_id)]
+        interaction.user.guild_permissions.manage_guild = False
+        interaction.response.edit_message = AsyncMock()
+        interaction.response.send_message = AsyncMock()
+
+        await enabled_button.callback(interaction)
+
+        interaction.response.edit_message.assert_awaited_once()
+        interaction.response.send_message.assert_not_awaited()
+
     async def test_spawn_settings_disable_names_filter_pings_and_remove_copy_text(
         self,
     ) -> None:
@@ -791,6 +818,39 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         channel.send.assert_awaited_once()
         self.assertIn("at least 2 participants", channel.send.await_args.args[0])
         self.assertNotIn(channel.id, self.bot.chat_events)
+
+    async def test_grab_requires_the_configured_role_when_enabled(self) -> None:
+        role_id = 900
+        self.bot.org_rpc = None
+        self.bot.command_permissions = {str(SERVER_ID): role_id}
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.handle_grab_command = AsyncMock()
+
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.author.roles = []
+        message.channel.id = 456
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!grab"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_grab_command.assert_not_awaited()
+        self.assertIn("configured role", message.reply.await_args.args[0])
+
+        message.author.roles = [Mock(id=role_id)]
+        message.reply.reset_mock()
+        await self.bot.on_message(message)
+
+        self.bot.handle_grab_command.assert_awaited_once_with(message)
+        message.reply.assert_not_awaited()
 
     async def test_settings_command_sends_server_settings_layout(self) -> None:
         message = Mock()
@@ -5025,6 +5085,30 @@ class ReserveCategoryTests(unittest.TestCase):
 
 
 class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_configured_role_can_add_reservations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            role_id = 900
+            bot = SimpleNamespace(
+                command_permissions={"1": role_id},
+                reserve_categories={},
+                reservations={},
+                reserve_path=Path(directory) / "reserves.json",
+            )
+            message = Mock()
+            message.guild.id = 1
+            message.author = Mock(spec=discord.Member)
+            message.author.roles = [Mock(id=role_id)]
+            message.content = "v!r add pikachu <@123>"
+            target = Mock()
+            target.id = 123
+            target.mention = "<@123>"
+            message.mentions = [target]
+            message.reply = AsyncMock()
+
+            await NamingBot.handle_reserve_command(bot, message)
+
+            self.assertEqual(bot.reservations, {"1:pikachu": [123]})
+
     async def test_reserve_add_and_remove_expand_category_members(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bot = SimpleNamespace(
@@ -5080,7 +5164,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             await NamingBot.handle_reserve_category_command(bot, message)
 
             message.reply.assert_awaited_once_with(
-                "Only reserve managers can manage reserve categories.",
+                "Only reserve managers or members with the configured "
+                "command role can manage reserve categories.",
                 mention_author=False,
             )
             self.assertEqual(bot.reserve_categories, {})
@@ -5113,6 +5198,203 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             message.content = "v!cd rare"
             await NamingBot.handle_reserve_category_command(bot, message)
             self.assertEqual(bot.reserve_categories, {})
+
+
+class CommandPermissionTests(unittest.TestCase):
+    def test_lists_commands_that_use_the_configured_role(self) -> None:
+        commands = {
+            "v!grab": "general",
+            "v!test shiny": "general",
+            "v!r search pikachu": "reserves",
+            "v!r": "reserves",
+            "v!cd rare": "reserves",
+            "v!settings": "settings",
+            "v!settime @role": "general",
+            "v!timereset": "general",
+            "v!event": "general",
+            "v!backfill stop": "backfill",
+        }
+        for command, expected_group in commands.items():
+            with self.subTest(command=command):
+                self.assertEqual(command_permission_group(command), expected_group)
+        self.assertIsNone(command_permission_group("v!lowaccuracy off"))
+        self.assertIsNone(command_permission_group("v!sh pikachu"))
+
+    def test_configured_role_adds_access_without_removing_existing_access(self) -> None:
+        role_id = 900
+        bot = SimpleNamespace(command_permissions={"42": role_id})
+
+        def member(*, roles=(), manage_guild=False, administrator=False):
+            return SimpleNamespace(
+                roles=[SimpleNamespace(id=value) for value in roles],
+                guild_permissions=SimpleNamespace(
+                    manage_guild=manage_guild,
+                    administrator=administrator,
+                ),
+            )
+
+        self.assertFalse(
+            can_use_permission_group(bot, "general", 42, member())
+        )
+        self.assertTrue(
+            can_use_permission_group(bot, "general", 42, member(roles=(role_id,)))
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                bot,
+                "reserves",
+                42,
+                member(roles=(RESERVE_ROLE_ID,)),
+            )
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                bot,
+                "settings",
+                42,
+                member(manage_guild=True),
+            )
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                bot,
+                "settings",
+                42,
+                member(roles=(role_id,)),
+            )
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                bot,
+                "backfill",
+                42,
+                member(administrator=True),
+            )
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                bot,
+                "backfill",
+                42,
+                member(roles=(role_id,)),
+            )
+        )
+        self.assertTrue(
+            has_manage_server_access(
+                bot,
+                42,
+                member(roles=(role_id,)),
+            )
+        )
+        self.assertTrue(
+            can_use_permission_group(
+                SimpleNamespace(command_permissions={}),
+                "general",
+                42,
+                member(),
+            )
+        )
+
+    def test_command_permission_file_round_trips_per_server_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "command_permissions.json"
+            expected = {"42": 900, "43": 901}
+
+            save_command_permissions(path, expected)
+
+            self.assertEqual(load_command_permissions(path), expected)
+
+
+class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_manage_server_can_set_and_clear_the_server_role(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bot = SimpleNamespace(
+                command_permissions={},
+                command_permissions_path=Path(directory) / "permissions.json",
+            )
+            guild = Mock()
+            guild.id = SERVER_ID
+            role = Mock()
+            role.id = 900
+            guild.get_role = Mock(return_value=role)
+            message = Mock()
+            message.guild = guild
+            message.author.guild_permissions.manage_guild = True
+            message.reply = AsyncMock()
+            message.content = "v!permission 900"
+
+            await NamingBot.handle_permission_command(bot, message)
+
+            expected = {str(SERVER_ID): 900}
+            self.assertEqual(bot.command_permissions, expected)
+            self.assertEqual(load_command_permissions(bot.command_permissions_path), expected)
+
+            message.content = "v!permission off"
+            await NamingBot.handle_permission_command(bot, message)
+
+            self.assertEqual(bot.command_permissions, {})
+            self.assertEqual(load_command_permissions(bot.command_permissions_path), {})
+
+    async def test_non_manager_cannot_change_the_permission_role(self) -> None:
+        bot = SimpleNamespace(
+            command_permissions={},
+            command_permissions_path=Path("unused-permissions.json"),
+        )
+        message = Mock()
+        message.guild.id = SERVER_ID
+        message.author.guild_permissions.manage_guild = False
+        message.content = "v!permission 900"
+        message.reply = AsyncMock()
+
+        await NamingBot.handle_permission_command(bot, message)
+
+        self.assertIn(
+            "Manage Server permission",
+            message.reply.await_args.args[0],
+        )
+        self.assertEqual(bot.command_permissions, {})
+
+    async def test_configured_role_can_manage_reserve_categories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            role_id = 900
+            bot = SimpleNamespace(
+                command_permissions={str(SERVER_ID): role_id},
+                reserve_categories={},
+                reserve_categories_path=Path(directory) / "categories.json",
+            )
+            message = Mock()
+            message.guild.id = SERVER_ID
+            message.author.roles = [Mock(id=role_id)]
+            message.content = "v!addcategory rare"
+            message.reply = AsyncMock()
+
+            await NamingBot.handle_reserve_category_command(bot, message)
+
+            self.assertEqual(
+                bot.reserve_categories,
+                {str(SERVER_ID): {"rare": []}},
+            )
+
+    async def test_configured_role_can_stop_profile_backfill(self) -> None:
+        role_id = 900
+        bot = SimpleNamespace(
+            command_permissions={str(SERVER_ID): role_id},
+            profile_backfills_in_progress=set(),
+            profile_backfill_stop_requests=set(),
+        )
+        message = Mock()
+        message.guild.id = SERVER_ID
+        message.author.roles = [Mock(id=role_id)]
+        message.author.guild_permissions.administrator = False
+        message.content = "v!backfill stop"
+        message.reply = AsyncMock()
+
+        await NamingBot.handle_profile_backfill_command(bot, message)
+
+        self.assertEqual(
+            message.reply.await_args.args[0],
+            "No profile backfill is running.",
+        )
 
 
 class PokemonNameValidationTests(unittest.TestCase):

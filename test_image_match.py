@@ -312,6 +312,7 @@ class VivillonTests(unittest.TestCase):
         groups = reference_images(Path(__file__).with_name("pokemon_images"))
         forms = {
             "Partner Pikachu": "Pikachu",
+            "Partner Eevee": "Eevee",
             "Gliding Build Koraidon": "Koraidon",
             "Zenith Marshadow": "Marshadow",
             "Galarian Zen Darmanitan": "Darmanitan",
@@ -343,6 +344,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         forms = (
             "Partner Pikachu",
+            "Partner Eevee",
             "Gliding Build Koraidon",
             "Zenith Marshadow",
             "Galarian Zen Darmanitan",
@@ -363,11 +365,16 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)
 
-    def test_tauros_breed_forms_are_recognized_when_flipped(self) -> None:
+    def test_custom_forms_are_recognized_when_flipped(self) -> None:
         import cv2
 
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
-        for form in ("Blaze Breed Tauros", "Aqua Breed Tauros"):
+        forms = (
+            "Partner Eevee",
+            "Blaze Breed Tauros",
+            "Aqua Breed Tauros",
+        )
+        for form in forms:
             with self.subTest(form=form):
                 image_path = (
                     Path(__file__).with_name("pokemon_images")

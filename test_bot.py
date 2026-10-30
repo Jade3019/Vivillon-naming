@@ -2215,6 +2215,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "Rapid Strike Urshifu",
             "Zenith Marshadow",
             "Partner Pikachu",
+            "Partner Eevee",
             "Zygarde Cell",
             "Gigantamax Urshifu",
         ):
@@ -3409,6 +3410,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
     def test_custom_form_catch_cards_show_form_but_copy_species_name(self) -> None:
         forms = (
             ("Partner Pikachu", "Pikachu"),
+            ("Partner Eevee", "Eevee"),
             ("Gliding Build Koraidon", "Koraidon"),
             ("Zenith Marshadow", "Marshadow"),
             ("Galarian Zen Darmanitan", "Darmanitan"),
@@ -3447,6 +3449,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
     def test_custom_form_uses_its_artwork_on_normal_starboard(self) -> None:
         forms = (
             "Partner Pikachu",
+            "Partner Eevee",
             "Gliding Build Koraidon",
             "Zenith Marshadow",
             "Galarian Zen Darmanitan",
@@ -5412,6 +5415,7 @@ class PokemonNameValidationTests(unittest.TestCase):
             "Smearguru",
             "Mosslax",
             "Zenith Marshadow",
+            "Partner Eevee",
             "Blaze Breed Tauros",
             "Aqua Breed Tauros",
         ):

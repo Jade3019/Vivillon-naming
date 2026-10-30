@@ -42,6 +42,7 @@ DISPLAY_NAMES = {
 }
 CUSTOM_FORM_SPECIES = {
     "Partner Pikachu": "Pikachu",
+    "Partner Eevee": "Eevee",
     "Gliding Build Koraidon": "Koraidon",
     "Zenith Marshadow": "Marshadow",
     "Galarian Zen Darmanitan": "Darmanitan",

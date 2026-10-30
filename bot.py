@@ -1658,6 +1658,7 @@ Galarian Darmanitan
 Galarian Zen Darmanitan
 Darmanitan Galar Zen
 Partner Pikachu
+Partner Eevee
 Obstagoon
 Sirfetch'd
 Cursola

@@ -3431,6 +3431,31 @@ class FireSpawnFormattingTests(unittest.TestCase):
                     "**Copy Here >** `@Pokétwo#8236 c minior`",
                 )
 
+    def test_shellos_and_gastrodon_sea_forms_use_base_catch_names(self) -> None:
+        for form_name, species_name in (
+            ("East Shellos", "Shellos"),
+            ("East Sea Shellos", "Shellos"),
+            ("West Shellos", "Shellos"),
+            ("West Sea Shellos", "Shellos"),
+            ("East Gastrodon", "Gastrodon"),
+            ("East Sea Gastrodon", "Gastrodon"),
+            ("West Gastrodon", "Gastrodon"),
+            ("West Sea Gastrodon", "Gastrodon"),
+        ):
+            with self.subTest(form_name=form_name):
+                canonical_name = image_match.species_display_name(form_name)
+                self.assertEqual(canonical_name, species_name)
+                self.assertEqual(
+                    format_spawn_reply(
+                        canonical_name,
+                        100,
+                        POKETWO_COMMAND_BOT_ID,
+                    ),
+                    f"{species_name}: 100.00%\n"
+                    f"**Copy Here >** `@Pokétwo#8236 c "
+                    f"{species_name.casefold()}`",
+                )
+
     def test_collection_all_pokemon_lists_every_form_and_matches_spawns(self) -> None:
         collections = add_collection_pokemon({}, 1, ["all deerling", "pikachu"], 5)
 

@@ -2147,6 +2147,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "Perrserker",
             "Hisuian Zorua",
             "Combat Breed Tauros",
+            "Blaze Breed Tauros",
+            "Aqua Breed Tauros",
             "Fighting Arceus",
             "Douse Drive Genesect",
             "Wellspring-Mask Ogerpon",
@@ -3352,6 +3354,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
             ("Galarian Zen Darmanitan", "Darmanitan"),
             ("Zygarde Cell", "Zygarde"),
             ("Combat Breed Tauros", "Tauros"),
+            ("Blaze Breed Tauros", "Tauros"),
+            ("Aqua Breed Tauros", "Tauros"),
         )
         for form, species in forms:
             with self.subTest(form=form):
@@ -3388,6 +3392,8 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Galarian Zen Darmanitan",
             "Zygarde Cell",
             "Combat Breed Tauros",
+            "Blaze Breed Tauros",
+            "Aqua Breed Tauros",
         )
         for form in forms:
             with self.subTest(form=form):
@@ -5124,6 +5130,8 @@ class PokemonNameValidationTests(unittest.TestCase):
             "Smearguru",
             "Mosslax",
             "Zenith Marshadow",
+            "Blaze Breed Tauros",
+            "Aqua Breed Tauros",
         ):
             with self.subTest(name=name):
                 self.assertTrue(is_known_pokemon_name(name))

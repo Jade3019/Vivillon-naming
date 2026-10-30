@@ -47,6 +47,8 @@ CUSTOM_FORM_SPECIES = {
     "Galarian Zen Darmanitan": "Darmanitan",
     "Zygarde Cell": "Zygarde",
     "Combat Breed Tauros": "Tauros",
+    "Blaze Breed Tauros": "Tauros",
+    "Aqua Breed Tauros": "Tauros",
 }
 # Folders like "Unown Variant 3" are learned separately (so each can have its own
 # thumbnail) but the Pokémon is still named after the base species.

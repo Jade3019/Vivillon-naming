@@ -317,6 +317,8 @@ class VivillonTests(unittest.TestCase):
             "Galarian Zen Darmanitan": "Darmanitan",
             "Zygarde Cell": "Zygarde",
             "Combat Breed Tauros": "Tauros",
+            "Blaze Breed Tauros": "Tauros",
+            "Aqua Breed Tauros": "Tauros",
         }
         for form, species in forms.items():
             with self.subTest(form=form):
@@ -346,6 +348,8 @@ class CustomFormRecognitionTests(unittest.TestCase):
             "Galarian Zen Darmanitan",
             "Zygarde Cell",
             "Combat Breed Tauros",
+            "Blaze Breed Tauros",
+            "Aqua Breed Tauros",
         )
         for form in forms:
             with self.subTest(form=form):
@@ -355,6 +359,29 @@ class CustomFormRecognitionTests(unittest.TestCase):
                     / "image.png"
                 )
                 result = matcher.match(image_path.read_bytes())
+
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], form)
+
+    def test_tauros_breed_forms_are_recognized_when_flipped(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        for form in ("Blaze Breed Tauros", "Aqua Breed Tauros"):
+            with self.subTest(form=form):
+                image_path = (
+                    Path(__file__).with_name("pokemon_images")
+                    / form
+                    / "image.png"
+                )
+                image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+                self.assertIsNotNone(image)
+                if image is None:
+                    continue
+                success, buffer = cv2.imencode(".png", cv2.flip(image, 1))
+                self.assertTrue(success)
+
+                result = matcher.match(buffer.tobytes())
 
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)

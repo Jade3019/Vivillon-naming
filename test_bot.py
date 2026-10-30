@@ -130,6 +130,7 @@ from bot import (
     PROFILE_FRAME_ALPHA_GAMMA,
     PROFILE_FRAME_CANVAS_SIZE,
     PROFILE_FRAME_CORNER_RADIUS,
+    PROFILE_FRAME_SCALES,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1738,10 +1739,25 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(unframed_settings, stats)) as unframed:
             base = unframed.convert("RGB")
         with Image.open(Path(__file__).with_name("Frames") / "gem.png") as source:
-            frame = source.convert("RGBA").resize(
-                PROFILE_FRAME_CANVAS_SIZE,
+            scale = PROFILE_FRAME_SCALES["gem"]
+            scaled_size = (
+                round(PROFILE_FRAME_CANVAS_SIZE[0] * scale),
+                round(PROFILE_FRAME_CANVAS_SIZE[1] * scale),
+            )
+            scaled_frame = source.convert("RGBA").resize(
+                scaled_size,
                 Image.Resampling.LANCZOS,
             )
+        crop_left = (scaled_frame.width - PROFILE_FRAME_CANVAS_SIZE[0]) // 2
+        crop_top = (scaled_frame.height - PROFILE_FRAME_CANVAS_SIZE[1]) // 2
+        frame = scaled_frame.crop(
+            (
+                crop_left,
+                crop_top,
+                crop_left + PROFILE_FRAME_CANVAS_SIZE[0],
+                crop_top + PROFILE_FRAME_CANVAS_SIZE[1],
+            )
+        )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(

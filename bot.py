@@ -195,6 +195,10 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
     "gem": Path(__file__).with_name("Frames") / "gem.png",
 }
+PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
+    "mystic": 1.0,
+    "gem": 1.08,
+}
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
 PROFILE_FRAME_CORNER_RADIUS: Final[int] = 72
@@ -5264,13 +5268,29 @@ def render_profile_image(
                 fill=text_color,
             )
 
-    frame_image_path = PROFILE_FRAME_IMAGES.get(str(settings["frame"]))
+    frame_key = str(settings["frame"])
+    frame_image_path = PROFILE_FRAME_IMAGES.get(frame_key)
     if frame_image_path is not None:
         with Image.open(frame_image_path) as frame_image:
-            frame = frame_image.convert("RGBA").resize(
-                PROFILE_FRAME_CANVAS_SIZE,
+            scale = PROFILE_FRAME_SCALES[frame_key]
+            scaled_size = (
+                round(PROFILE_FRAME_CANVAS_SIZE[0] * scale),
+                round(PROFILE_FRAME_CANVAS_SIZE[1] * scale),
+            )
+            scaled_frame = frame_image.convert("RGBA").resize(
+                scaled_size,
                 Image.Resampling.LANCZOS,
             )
+        crop_left = (scaled_frame.width - PROFILE_FRAME_CANVAS_SIZE[0]) // 2
+        crop_top = (scaled_frame.height - PROFILE_FRAME_CANVAS_SIZE[1]) // 2
+        frame = scaled_frame.crop(
+            (
+                crop_left,
+                crop_top,
+                crop_left + PROFILE_FRAME_CANVAS_SIZE[0],
+                crop_top + PROFILE_FRAME_CANVAS_SIZE[1],
+            )
+        )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(

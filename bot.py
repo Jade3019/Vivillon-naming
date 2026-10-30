@@ -6083,13 +6083,19 @@ class NamingBot(discord.Client):
             return
 
         guild_key_prefix = f"{guild.id}:"
-        total_before = sum(
-            stats["total"]
-            for key, stats in self.profile_stats.items()
-            if key.startswith(guild_key_prefix)
-        )
+
+        def guild_catch_total() -> int:
+            return sum(
+                stats["total"]
+                for key, stats in self.profile_stats.items()
+                if key.startswith(guild_key_prefix)
+            )
+
+        total_before = guild_catch_total()
         scanned_messages = 0
         failed_channels = 0
+        channels_done = 0
+        progress_reporting_failed = False
         stopped = False
         self.profile_backfill_stop_requests.discard(guild.id)
         self.profile_backfills_in_progress.add(guild.id)
@@ -6099,10 +6105,12 @@ class NamingBot(discord.Client):
                 "readable channels and active threads. This may take a while.",
                 mention_author=False,
             )
-            for channel_index, channel in enumerate(channels, start=1):
+            for channel in channels:
                 if guild.id in self.profile_backfill_stop_requests:
                     stopped = True
                     break
+                channel_scanned_messages = 0
+                channel_status = "complete"
                 try:
                     async for historical_message in channel.history(
                         limit=None,
@@ -6116,8 +6124,10 @@ class NamingBot(discord.Client):
                             persist=False,
                         )
                         scanned_messages += 1
+                        channel_scanned_messages += 1
                 except discord.Forbidden:
                     failed_channels += 1
+                    channel_status = "inaccessible"
                     logger.warning(
                         "Profile backfill cannot read channel %s (%s)",
                         channel.id,
@@ -6125,6 +6135,7 @@ class NamingBot(discord.Client):
                     )
                 except discord.HTTPException as error:
                     failed_channels += 1
+                    channel_status = "failed"
                     logger.warning(
                         "Profile backfill failed in channel %s (%s): %s",
                         channel.id,
@@ -6132,14 +6143,36 @@ class NamingBot(discord.Client):
                         error,
                     )
                 if stopped:
-                    break
-                if channel_index % 5 == 0:
-                    await progress.edit(
-                        content=(
-                            f"Backfill scanned {scanned_messages:,} messages "
-                            f"across {channel_index} channels..."
+                    channel_status = "stopped"
+                else:
+                    channels_done += 1
+                catches_recorded = guild_catch_total() - total_before
+                channel_word = "channel" if channels_done == 1 else "channels"
+                for update in (
+                    (
+                        f"progress: {scanned_messages:,} messages scanned, "
+                        f"{catches_recorded:,} catches recorded, "
+                        f"{channels_done} {channel_word} done."
+                    ),
+                    (
+                        f"#{channel.name}: scanned "
+                        f"{channel_scanned_messages:,} messages "
+                        f"({channel_status})."
+                    ),
+                ):
+                    try:
+                        await message.channel.send(content=update)
+                    except discord.HTTPException as error:
+                        progress_reporting_failed = True
+                        logger.warning(
+                            "Could not post backfill progress for channel "
+                            "%s (%s): %s",
+                            channel.id,
+                            channel.name,
+                            error,
                         )
-                    )
+                if stopped:
+                    break
             stopped = stopped or guild.id in self.profile_backfill_stop_requests
 
             try:
@@ -6160,11 +6193,7 @@ class NamingBot(discord.Client):
                 )
                 return
 
-            total_after = sum(
-                stats["total"]
-                for key, stats in self.profile_stats.items()
-                if key.startswith(guild_key_prefix)
-            )
+            total_after = guild_catch_total()
             result = (
                 f"Backfill {'stopped' if stopped else 'finished'}: "
                 f"scanned {scanned_messages:,} messages "
@@ -6177,6 +6206,8 @@ class NamingBot(discord.Client):
                     "so totals may be incomplete. Grant me View Channel and "
                     "Read Message History permissions, then rerun `v!backfill`."
                 )
+            if progress_reporting_failed:
+                result += " Some per-channel progress updates could not be posted."
             await progress.edit(content=result)
         finally:
             self.profile_backfill_stop_requests.discard(guild.id)

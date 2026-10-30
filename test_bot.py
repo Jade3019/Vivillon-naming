@@ -1103,6 +1103,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         command.author.guild_permissions.administrator = True
         command.content = "v!backfill"
         command.reply = AsyncMock(return_value=progress)
+        command.channel.send = AsyncMock()
 
         await self.bot.handle_profile_backfill_command(command)
         await self.bot.handle_profile_backfill_command(command)
@@ -1122,6 +1123,19 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profile_stats[f"{backfill_guild_id}:456"]["total"], 5000)
         self.assertEqual(len(seen_catch_ids), 7000)
         self.assertTrue(all(channel.history.call_count == 2 for channel in channels))
+        progress_messages = [
+            call.kwargs["content"]
+            for call in command.channel.send.await_args_list
+        ]
+        self.assertIn(
+            "progress: 2,000 messages scanned, 2,000 catches recorded, "
+            "1 channel done.",
+            progress_messages[0],
+        )
+        self.assertEqual(
+            progress_messages[1],
+            "#catches-789: scanned 2,000 messages (complete).",
+        )
 
     async def test_profile_backfill_stop_saves_partial_results(self) -> None:
         guild = Mock()
@@ -1150,6 +1164,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         start_command.author.guild_permissions.administrator = True
         start_command.content = "v!backfill"
         start_command.reply = AsyncMock(return_value=progress)
+        start_command.channel.send = AsyncMock()
         stop_command = Mock()
         stop_command.guild = guild
         stop_command.author.guild_permissions.administrator = True
@@ -1178,6 +1193,19 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             "Backfill stopped: scanned 1 messages",
             progress.edit.await_args.kwargs["content"],
+        )
+        progress_messages = [
+            call.kwargs["content"]
+            for call in start_command.channel.send.await_args_list
+        ]
+        self.assertIn(
+            "progress: 1 messages scanned, 1 catches recorded, "
+            "0 channels done.",
+            progress_messages[0],
+        )
+        self.assertEqual(
+            progress_messages[1],
+            "#catches: scanned 1 messages (stopped).",
         )
         self.assertEqual(
             self.bot.profile_stats_for_user(SERVER_ID, 123)["total"],

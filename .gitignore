@@ -4,6 +4,8 @@ __pycache__/
 *.py[cod]
 reserves.json
 reserves.json.tmp
+reserve_categories.json
+reserve_categories.json.tmp
 server_settings.json
 server_settings.json.tmp
 starboard_settings.json

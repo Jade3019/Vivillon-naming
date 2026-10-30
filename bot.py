@@ -91,6 +91,22 @@ RESERVE_REMOVE_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!r\s+remove\s+(.+?)(?:(?:\s*,\s*|\s+)<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
 )
+ADD_RESERVE_CATEGORY_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!addcategory\s+([a-z0-9_-]{1,32})\s*$",
+    re.IGNORECASE,
+)
+CREATE_RESERVE_CATEGORY_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!categorycreate\s+([a-z0-9_-]{1,32})\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
+LIST_RESERVE_CATEGORIES_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!categorylist\s*$",
+    re.IGNORECASE,
+)
+DELETE_RESERVE_CATEGORY_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!(?:categorydelete|cd)\s+([a-z0-9_-]{1,32})\s*$",
+    re.IGNORECASE,
+)
 COLLECTION_ADD_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!cl\s+add\s+(.+?)\s*$",
     re.IGNORECASE,
@@ -1928,6 +1944,146 @@ def reservation_key_for_command(guild_id: int, pokemon_name: str) -> str:
     return reservation_key(guild_id, pokemon_name)
 
 
+def reserve_category_storage_key(category_name: str) -> str:
+    return unicodedata.normalize("NFC", category_name.strip()).casefold()
+
+
+def add_reserve_category(
+    categories: dict[str, dict[str, list[str]]],
+    guild_id: int,
+    category_name: str,
+) -> tuple[dict[str, dict[str, list[str]]], bool]:
+    updated = {
+        server_id: {
+            name: list(pokemon_names)
+            for name, pokemon_names in server_categories.items()
+        }
+        for server_id, server_categories in categories.items()
+    }
+    server_categories = updated.setdefault(str(guild_id), {})
+    category_key = reserve_category_storage_key(category_name)
+    if category_key in server_categories:
+        return updated, False
+    server_categories[category_key] = []
+    return updated, True
+
+
+def append_reserve_category_pokemon(
+    categories: dict[str, dict[str, list[str]]],
+    guild_id: int,
+    category_name: str,
+    pokemon_names: list[str],
+) -> tuple[dict[str, dict[str, list[str]]], list[str], bool]:
+    updated = {
+        server_id: {
+            name: list(existing_names)
+            for name, existing_names in server_categories.items()
+        }
+        for server_id, server_categories in categories.items()
+    }
+    server_categories = updated.get(str(guild_id), {})
+    category_key = reserve_category_storage_key(category_name)
+    existing_names = server_categories.get(category_key)
+    if existing_names is None:
+        return updated, [], False
+
+    existing_keys = {
+        unicodedata.normalize("NFC", canonicalize_pokemon_name(name)).casefold()
+        for name in existing_names
+    }
+    added_names: list[str] = []
+    for name in pokemon_names:
+        canonical_name = canonicalize_pokemon_name(name)
+        name_key = unicodedata.normalize("NFC", canonical_name).casefold()
+        if name_key in existing_keys:
+            continue
+        existing_names.append(canonical_name)
+        existing_keys.add(name_key)
+        added_names.append(canonical_name)
+    return updated, added_names, True
+
+
+def delete_reserve_category(
+    categories: dict[str, dict[str, list[str]]],
+    guild_id: int,
+    category_name: str,
+) -> tuple[dict[str, dict[str, list[str]]], bool]:
+    updated = {
+        server_id: {
+            name: list(pokemon_names)
+            for name, pokemon_names in server_categories.items()
+        }
+        for server_id, server_categories in categories.items()
+    }
+    server_categories = updated.get(str(guild_id))
+    category_key = reserve_category_storage_key(category_name)
+    if server_categories is None or category_key not in server_categories:
+        return updated, False
+    del server_categories[category_key]
+    if not server_categories:
+        del updated[str(guild_id)]
+    return updated, True
+
+
+def expand_reserve_category_names(
+    categories: dict[str, dict[str, list[str]]],
+    guild_id: int,
+    pokemon_names: list[str],
+) -> tuple[list[str], list[str]]:
+    server_categories = categories.get(str(guild_id), {})
+    expanded_names: list[str] = []
+    expanded_keys: set[str] = set()
+    used_categories: list[str] = []
+    for name in pokemon_names:
+        category_key = reserve_category_storage_key(name)
+        category_pokemon = server_categories.get(category_key)
+        names_to_add = category_pokemon if category_pokemon is not None else [name]
+        if category_pokemon is not None:
+            used_categories.append(category_key)
+        for pokemon_name in names_to_add:
+            canonical_name = canonicalize_pokemon_name(pokemon_name)
+            key = reservation_key_for_command(guild_id, canonical_name)
+            if key in expanded_keys:
+                continue
+            expanded_keys.add(key)
+            expanded_names.append(canonical_name)
+    return expanded_names, used_categories
+
+
+def format_reserve_category_embeds(
+    categories: dict[str, dict[str, list[str]]],
+    guild_id: int,
+) -> list[discord.Embed]:
+    category_entries = sorted(categories.get(str(guild_id), {}).items())
+    if not category_entries:
+        return [
+            discord.Embed(
+                title="Reserve Categories",
+                description="No categories have been created.",
+                color=discord.Color.blurple(),
+            )
+        ]
+
+    pages = [
+        category_entries[index : index + RESERVATION_EMBED_PAGE_SIZE]
+        for index in range(0, len(category_entries), RESERVATION_EMBED_PAGE_SIZE)
+    ]
+    embeds: list[discord.Embed] = []
+    for page_number, page_entries in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title="Reserve Categories",
+            description="\n\n".join(
+                f"{category_name}\n{len(pokemon_names)} Pokémon"
+                for category_name, pokemon_names in page_entries
+            ),
+            color=discord.Color.blurple(),
+        )
+        if len(pages) > 1:
+            embed.set_footer(text=f"Page {page_number} of {len(pages)}")
+        embeds.append(embed)
+    return embeds
+
+
 def pokemon_matches_all_forms_reservation(
     pokemon_name: str,
     reserved_name: str,
@@ -2326,6 +2482,45 @@ def parse_reserve_add_command(content: str) -> tuple[list[str], int] | None:
             unique_names.append(name)
             seen_names.add(normalized_name)
     return unique_names, int(match.group(2))
+
+
+def parse_add_reserve_category_command(content: str) -> str | None:
+    match = ADD_RESERVE_CATEGORY_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def parse_create_reserve_category_command(
+    content: str,
+) -> tuple[str, list[str]] | None:
+    match = CREATE_RESERVE_CATEGORY_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+    pokemon_names = [
+        canonicalize_pokemon_name(name.strip())
+        for name in match.group(2).split(",")
+    ]
+    if any(
+        not name or len(name) > 60 or not is_valid_pokemon_name(name)
+        for name in pokemon_names
+    ):
+        return None
+    unique_names: list[str] = []
+    seen_names: set[str] = set()
+    for pokemon_name in pokemon_names:
+        normalized_name = unicodedata.normalize("NFC", pokemon_name).casefold()
+        if normalized_name not in seen_names:
+            unique_names.append(pokemon_name)
+            seen_names.add(normalized_name)
+    return match.group(1), unique_names
+
+
+def parse_delete_reserve_category_command(content: str) -> str | None:
+    match = DELETE_RESERVE_CATEGORY_PATTERN.fullmatch(content)
+    if match is None:
+        return None
+    return match.group(1)
 
 
 def parse_reserve_remove_command(
@@ -4259,6 +4454,70 @@ def save_reservations(path: Path, reservations: dict[str, list[int]]) -> None:
         raise ValueError(f"Could not save reserve data to {path}") from error
 
 
+def load_reserve_categories(
+    path: Path,
+) -> dict[str, dict[str, list[str]]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read reserve categories from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Reserve categories in {path} have an invalid format")
+
+    categories: dict[str, dict[str, list[str]]] = {}
+    for guild_id, server_categories in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(server_categories, dict)
+        ):
+            raise ValueError(f"Reserve categories in {path} have an invalid format")
+        validated_categories: dict[str, list[str]] = {}
+        for category_name, pokemon_names in server_categories.items():
+            if (
+                not isinstance(category_name, str)
+                or re.fullmatch(r"[a-z0-9_-]{1,32}", category_name, re.IGNORECASE)
+                is None
+                or not isinstance(pokemon_names, list)
+                or any(
+                    not isinstance(name, str)
+                    or not is_valid_pokemon_name(name)
+                    for name in pokemon_names
+                )
+            ):
+                raise ValueError(
+                    f"Reserve categories in {path} have an invalid format"
+                )
+            category_key = reserve_category_storage_key(category_name)
+            if category_key in validated_categories:
+                raise ValueError(
+                    f"Reserve categories in {path} have duplicate category names"
+                )
+            validated_categories[category_key] = [
+                canonicalize_pokemon_name(name) for name in pokemon_names
+            ]
+        categories[guild_id] = validated_categories
+    return categories
+
+
+def save_reserve_categories(
+    path: Path,
+    categories: dict[str, dict[str, list[str]]],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(categories, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save reserve categories to {path}") from error
+
+
 SERVER_NAMING_DEFAULTS: Final[dict[str, bool]] = {
     "enabled": True,
     "assisted": True,
@@ -5080,6 +5339,15 @@ class NamingBot(discord.Client):
         self.org_rpc: org_rpc.OrgRpc | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
         self.reservations = load_reservations(self.reserve_path)
+        self.reserve_categories_path = Path(
+            os.environ.get(
+                "RESERVE_CATEGORIES_FILE",
+                "reserve_categories.json",
+            )
+        )
+        self.reserve_categories = load_reserve_categories(
+            self.reserve_categories_path
+        )
         self.shinyhunt_path = Path(
             os.environ.get("SHINYHUNTS_FILE", "shinyhunts.json")
         )
@@ -5823,6 +6091,13 @@ class NamingBot(discord.Client):
                 return
             if re.fullmatch(r"v!event\s*", message.content, re.IGNORECASE):
                 await self.handle_event_command(message)
+                return
+            if re.match(
+                r"^v!(?:addcategory|categorycreate|categorylist|categorydelete|cd)(?:\s|$)",
+                message.content,
+                re.IGNORECASE,
+            ):
+                await self.handle_reserve_category_command(message)
                 return
             if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
                 was_paused = channel_id in self.muted_poketwo_channels
@@ -7033,6 +7308,212 @@ class NamingBot(discord.Client):
             mention_author=False,
         )
 
+    async def handle_reserve_category_command(
+        self,
+        message: discord.Message,
+    ) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Reserve categories can only be used in a server.",
+                mention_author=False,
+            )
+            return
+        if not any(
+            role.id == RESERVE_ROLE_ID
+            for role in getattr(message.author, "roles", ())
+        ):
+            await message.reply(
+                "Only reserve managers can manage reserve categories.",
+                mention_author=False,
+            )
+            return
+
+        category_name = parse_add_reserve_category_command(message.content)
+        if category_name is not None:
+            if is_known_pokemon_name(category_name):
+                await message.reply(
+                    "A category name cannot be a Pokémon name.",
+                    mention_author=False,
+                )
+                return
+            updated_categories, added = add_reserve_category(
+                self.reserve_categories,
+                message.guild.id,
+                category_name,
+            )
+            if not added:
+                await message.reply(
+                    f"Category `{category_name}` already exists.",
+                    mention_author=False,
+                )
+                return
+            try:
+                save_reserve_categories(
+                    self.reserve_categories_path,
+                    updated_categories,
+                )
+            except ValueError:
+                logger.exception("Could not save reserve categories")
+                await message.reply(
+                    "I couldn't save that category. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.reserve_categories = updated_categories
+            await message.reply(
+                f"Category `{category_name.casefold()}` created.",
+                mention_author=False,
+            )
+            return
+        if re.match(r"^v!addcategory(?:\s|$)", message.content, re.IGNORECASE):
+            await message.reply(
+                "Usage: `v!addcategory <name>`",
+                mention_author=False,
+            )
+            return
+
+        parsed_create = parse_create_reserve_category_command(message.content)
+        if parsed_create is not None:
+            category_name, pokemon_names = parsed_create
+            category_key = reserve_category_storage_key(category_name)
+            if category_key not in self.reserve_categories.get(
+                str(message.guild.id),
+                {},
+            ):
+                await message.reply(
+                    f"Category `{category_name}` does not exist. "
+                    f"Create it with `v!addcategory {category_name}` first.",
+                    mention_author=False,
+                )
+                return
+            invalid_names = [
+                name for name in pokemon_names if not is_known_pokemon_name(name)
+            ]
+            if invalid_names:
+                await message.reply(
+                    f"Unknown Pokémon: {', '.join(invalid_names)}.",
+                    mention_author=False,
+                )
+                return
+            updated_categories, added_names, category_exists = (
+                append_reserve_category_pokemon(
+                    self.reserve_categories,
+                    message.guild.id,
+                    category_name,
+                    pokemon_names,
+                )
+            )
+            if not category_exists:
+                await message.reply(
+                    f"Category `{category_name}` does not exist.",
+                    mention_author=False,
+                )
+                return
+            if not added_names:
+                await message.reply(
+                    f"No new Pokémon were added to `{category_key}`.",
+                    mention_author=False,
+                )
+                return
+            try:
+                save_reserve_categories(
+                    self.reserve_categories_path,
+                    updated_categories,
+                )
+            except ValueError:
+                logger.exception("Could not save Pokémon in reserve category")
+                await message.reply(
+                    "I couldn't save those Pokémon. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.reserve_categories = updated_categories
+            await message.reply(
+                f"Added {len(added_names)} Pokémon to `{category_key}`.",
+                mention_author=False,
+            )
+            return
+        if re.match(
+            r"^v!categorycreate(?:\s|$)",
+            message.content,
+            re.IGNORECASE,
+        ):
+            await message.reply(
+                "Usage: `v!categorycreate <categoryname> "
+                "<pokemonname>, <pokemonname>`",
+                mention_author=False,
+            )
+            return
+
+        if LIST_RESERVE_CATEGORIES_PATTERN.fullmatch(message.content):
+            embeds = format_reserve_category_embeds(
+                self.reserve_categories,
+                message.guild.id,
+            )
+            view = (
+                ReservationPagesView(embeds, message.guild.id)
+                if len(embeds) > 1
+                else None
+            )
+            response = await message.reply(
+                embed=embeds[0],
+                view=view,
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            if view is not None:
+                view.message = response
+            return
+        if re.match(r"^v!categorylist(?:\s|$)", message.content, re.IGNORECASE):
+            await message.reply(
+                "Usage: `v!categorylist`",
+                mention_author=False,
+            )
+            return
+
+        category_name = parse_delete_reserve_category_command(message.content)
+        if category_name is not None:
+            updated_categories, deleted = delete_reserve_category(
+                self.reserve_categories,
+                message.guild.id,
+                category_name,
+            )
+            if not deleted:
+                await message.reply(
+                    f"Category `{category_name}` was not found.",
+                    mention_author=False,
+                )
+                return
+            try:
+                save_reserve_categories(
+                    self.reserve_categories_path,
+                    updated_categories,
+                )
+            except ValueError:
+                logger.exception("Could not delete reserve category")
+                await message.reply(
+                    "I couldn't delete that category. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.reserve_categories = updated_categories
+            await message.reply(
+                f"Category `{reserve_category_storage_key(category_name)}` "
+                "deleted. Existing reserves were not changed.",
+                mention_author=False,
+            )
+            return
+        if re.match(
+            r"^v!(?:categorydelete|cd)(?:\s|$)",
+            message.content,
+            re.IGNORECASE,
+        ):
+            await message.reply(
+                "Usage: `v!categorydelete <categoryname>` or "
+                "`v!cd <categoryname>`",
+                mention_author=False,
+            )
+
     async def handle_reserve_command(self, message: discord.Message) -> None:
         if message.guild is None or not isinstance(message.author, discord.Member):
             await message.reply(
@@ -7105,6 +7586,18 @@ class NamingBot(discord.Client):
             )
             return
 
+        pokemon_names, used_categories = expand_reserve_category_names(
+            self.reserve_categories,
+            message.guild.id,
+            pokemon_names,
+        )
+        if not pokemon_names:
+            await message.reply(
+                f"Reserve category `{', '.join(used_categories)}` is empty.",
+                mention_author=False,
+            )
+            return
+
         updated_reservations = {
             key: list(user_ids) for key, user_ids in self.reservations.items()
         }
@@ -7124,6 +7617,14 @@ class NamingBot(discord.Client):
             return
 
         self.reservations = updated_reservations
+        if used_categories:
+            await message.reply(
+                f"Category `{', '.join(used_categories)}` expanded to "
+                f"{len(pokemon_names)} Pokémon and was added to "
+                f"{target.mention}.",
+                mention_author=False,
+            )
+            return
         display_names = ", ".join(
             (
                 f"all forms of {name[len('all '):]}".capitalize()
@@ -7213,6 +7714,18 @@ class NamingBot(discord.Client):
             )
             return
 
+        pokemon_names, used_categories = expand_reserve_category_names(
+            self.reserve_categories,
+            message.guild.id,
+            pokemon_names,
+        )
+        if not pokemon_names:
+            await message.reply(
+                f"Reserve category `{', '.join(used_categories)}` is empty.",
+                mention_author=False,
+            )
+            return
+
         updated_reservations, removed_names, missing_names = remove_reservations(
             self.reservations,
             message.guild.id,
@@ -7238,10 +7751,22 @@ class NamingBot(discord.Client):
             return
 
         self.reservations = updated_reservations
-        response = format_remove_confirmation(
-            ", ".join(removed_names),
-            target.mention if target else None,
-        )
+        if used_categories:
+            response = (
+                f"Removed {len(removed_names)} Pokémon reservations from "
+                f"category `{', '.join(used_categories)}`."
+            )
+            if target is not None:
+                response = (
+                    f"Removed {len(removed_names)} Pokémon reservations from "
+                    f"category `{', '.join(used_categories)}` for "
+                    f"{target.mention}."
+                )
+        else:
+            response = format_remove_confirmation(
+                ", ".join(removed_names),
+                target.mention if target else None,
+            )
         if missing_names:
             response += f". No reservation was found for {', '.join(missing_names)}"
         await message.reply(response, mention_author=False)

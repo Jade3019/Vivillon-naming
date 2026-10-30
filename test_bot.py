@@ -3,6 +3,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
@@ -10,7 +11,12 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from bot import (
     add_shinyhunter,
+    add_reserve_category,
+    append_reserve_category_pokemon,
     clear_shinyhunter,
+    delete_reserve_category,
+    expand_reserve_category_names,
+    format_reserve_category_embeds,
     add_reservations_bulk,
     build_grab_lines,
     grab_display_name,
@@ -70,10 +76,14 @@ from bot import (
     load_server_settings,
     load_starboard_settings,
     load_reservations,
+    load_reserve_categories,
     _org_api_port_from_environment,
     is_known_pokemon_name,
     parse_reserve_add_command,
     parse_reserve_remove_command,
+    parse_add_reserve_category_command,
+    parse_create_reserve_category_command,
+    parse_delete_reserve_category_command,
     parse_collection_add_command,
     parse_shinyhunt_command,
     parse_shinyhunt_remove_command,
@@ -92,6 +102,7 @@ from bot import (
     reserved_pokemon_for_user,
     reserved_user_ids_for_pokemon,
     save_reservations,
+    save_reserve_categories,
     shinyhunt_pokemon_for_user,
     shinyhunter_user_ids_for_pokemon,
     remove_shinyhunter,
@@ -100,6 +111,7 @@ from bot import (
     POKETWO_COMMAND_BOT_ID,
     SERVER_ID,
     SERVER_IDS,
+    RESERVE_ROLE_ID,
     reservation_key,
     Config,
     NamingBot,
@@ -3249,6 +3261,23 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.bot.is_allowed_channel(other_server_channel))
         self.assertFalse(self.bot.is_allowed_channel(Mock()))
 
+    async def test_routes_reserve_category_commands(self) -> None:
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.handle_reserve_category_command = AsyncMock()
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.id = 456
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!addcategory rare"
+        message.attachments = []
+        message.embeds = []
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_reserve_category_command.assert_awaited_once_with(message)
+
 
 class FireSpawnFormattingTests(unittest.TestCase):
     def test_marks_pure_fire_pokemon_but_not_dual_type_pokemon(self) -> None:
@@ -4905,6 +4934,179 @@ class ReservationPersistenceTests(unittest.TestCase):
         view.update_buttons()
         self.assertFalse(buttons["reserve_pages:previous"].disabled)
         self.assertTrue(buttons["reserve_pages:next"].disabled)
+
+
+class ReserveCategoryTests(unittest.TestCase):
+    def test_parses_category_commands(self) -> None:
+        self.assertEqual(
+            parse_add_reserve_category_command("v!addcategory Rare"),
+            "Rare",
+        )
+        self.assertEqual(
+            parse_create_reserve_category_command(
+                "v!categorycreate rare pikachu, eevee, Riffex"
+            ),
+            ("rare", ["pikachu", "eevee", "toxtricity"]),
+        )
+        self.assertEqual(
+            parse_delete_reserve_category_command("v!cd rare"),
+            "rare",
+        )
+        self.assertEqual(
+            parse_delete_reserve_category_command("v!categorydelete rare"),
+            "rare",
+        )
+        self.assertIsNone(
+            parse_create_reserve_category_command(
+                "v!categorycreate rare pikachu,,eevee"
+            )
+        )
+
+    def test_categories_append_deduplicate_and_expand_per_server(self) -> None:
+        categories, created = add_reserve_category({}, 1, "Rare")
+        self.assertTrue(created)
+        categories, added, exists = append_reserve_category_pokemon(
+            categories,
+            1,
+            "rare",
+            ["Pikachu", "Eevee", "Riffex"],
+        )
+        self.assertTrue(exists)
+        self.assertEqual(added, ["Pikachu", "Eevee", "toxtricity"])
+
+        categories, added, exists = append_reserve_category_pokemon(
+            categories,
+            1,
+            "rare",
+            ["pikachu"],
+        )
+        self.assertTrue(exists)
+        self.assertEqual(added, [])
+        self.assertEqual(
+            expand_reserve_category_names(categories, 1, ["rare", "pikachu"]),
+            (["Pikachu", "Eevee", "toxtricity"], ["rare"]),
+        )
+        self.assertEqual(
+            expand_reserve_category_names(categories, 2, ["rare"]),
+            (["rare"], []),
+        )
+
+    def test_category_listing_and_persistence(self) -> None:
+        categories = {
+            "1": {"rare": ["pikachu", "eevee"], "shiny": ["all arceus"]}
+        }
+        embeds = format_reserve_category_embeds(categories, 1)
+        self.assertEqual(
+            embeds[0].description,
+            "rare\n2 Pokémon\n\nshiny\n1 Pokémon",
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reserve_categories.json"
+            save_reserve_categories(path, categories)
+            self.assertEqual(load_reserve_categories(path), categories)
+
+    def test_deleting_a_category_is_server_scoped(self) -> None:
+        categories = {
+            "1": {"rare": ["pikachu"]},
+            "2": {"rare": ["eevee"]},
+        }
+
+        updated, deleted = delete_reserve_category(categories, 1, "RARE")
+
+        self.assertTrue(deleted)
+        self.assertEqual(updated, {"2": {"rare": ["eevee"]}})
+
+
+class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reserve_add_and_remove_expand_category_members(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bot = SimpleNamespace(
+                reserve_categories={"1": {"rare": ["pikachu", "eevee"]}},
+                reservations={},
+                reserve_path=Path(directory) / "reserves.json",
+            )
+
+            async def handle_remove(message: Mock) -> None:
+                await NamingBot.handle_reserve_remove(bot, message)
+
+            bot.handle_reserve_remove = handle_remove
+
+            def reserve_message(content: str) -> Mock:
+                message = Mock()
+                message.guild.id = 1
+                message.author = Mock(spec=discord.Member)
+                message.author.roles = [Mock(id=RESERVE_ROLE_ID)]
+                message.content = content
+                target = Mock()
+                target.id = 123
+                target.mention = "<@123>"
+                message.mentions = [target]
+                message.reply = AsyncMock()
+                return message
+
+            await NamingBot.handle_reserve_command(
+                bot,
+                reserve_message("v!r add rare <@123>"),
+            )
+            self.assertEqual(
+                bot.reservations,
+                {"1:pikachu": [123], "1:eevee": [123]},
+            )
+
+            await NamingBot.handle_reserve_command(
+                bot,
+                reserve_message("v!r remove rare <@123>"),
+            )
+            self.assertEqual(bot.reservations, {})
+
+    async def test_only_reserve_managers_can_manage_categories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bot = Mock()
+            bot.reserve_categories = {}
+            bot.reserve_categories_path = Path(directory) / "categories.json"
+            message = Mock()
+            message.guild.id = 1
+            message.author.roles = [Mock(id=RESERVE_ROLE_ID + 1)]
+            message.content = "v!addcategory rare"
+            message.reply = AsyncMock()
+
+            await NamingBot.handle_reserve_category_command(bot, message)
+
+            message.reply.assert_awaited_once_with(
+                "Only reserve managers can manage reserve categories.",
+                mention_author=False,
+            )
+            self.assertEqual(bot.reserve_categories, {})
+
+    async def test_create_append_and_delete_category_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bot = Mock()
+            bot.reserve_categories = {}
+            bot.reserve_categories_path = Path(directory) / "categories.json"
+            message = Mock()
+            message.guild.id = 1
+            message.author.roles = [Mock(id=RESERVE_ROLE_ID)]
+            message.reply = AsyncMock()
+
+            message.content = "v!addcategory rare"
+            await NamingBot.handle_reserve_category_command(bot, message)
+            self.assertEqual(bot.reserve_categories, {"1": {"rare": []}})
+
+            message.content = "v!categorycreate rare pikachu, eevee"
+            await NamingBot.handle_reserve_category_command(bot, message)
+            self.assertEqual(
+                bot.reserve_categories,
+                {"1": {"rare": ["pikachu", "eevee"]}},
+            )
+            self.assertEqual(
+                load_reserve_categories(bot.reserve_categories_path),
+                bot.reserve_categories,
+            )
+
+            message.content = "v!cd rare"
+            await NamingBot.handle_reserve_category_command(bot, message)
+            self.assertEqual(bot.reserve_categories, {})
 
 
 class PokemonNameValidationTests(unittest.TestCase):

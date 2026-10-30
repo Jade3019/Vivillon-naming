@@ -226,6 +226,26 @@ Keep that file on persistent host storage to retain reservations across
 restarts. The bot must be able to read and send messages in the command channel
 as well as the spawn channel.
 
+Reserve managers can create server-specific categories and append Pokémon to
+them:
+
+```text
+v!addcategory rare
+v!categorycreate rare pikachu, eevee, all arceus
+v!categorylist
+v!r add rare @member
+v!r remove rare @member
+v!categorydelete rare
+```
+
+Category names are single words and cannot be Pokémon names. Repeating
+`v!categorycreate` appends new Pokémon without duplicating existing entries.
+Adding or removing a category with `v!r` expands it into its Pokémon; deleting
+the category does not change reservations that were already expanded. The
+`v!cd <name>` alias also deletes a category. Category data is stored in
+`reserve_categories.json` by default; set `RESERVE_CATEGORIES_FILE` to use a
+different persistent path.
+
 Members with the reserve-manager role can remove reservations with
 `v!r remove pikachu, eevee @member` or `v!r remove pikachu, eevee, @member` to
 remove them only from that member's reserves, or

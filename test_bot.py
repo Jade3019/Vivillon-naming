@@ -1219,6 +1219,48 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(SERVER_ID, self.bot.profile_backfills_in_progress)
         self.assertNotIn(SERVER_ID, self.bot.profile_backfill_stop_requests)
 
+    async def test_profile_backfill_acknowledges_before_permission_checks(self) -> None:
+        guild = Mock()
+        guild.id = SERVER_ID
+        guild.me = Mock()
+        guild.threads = []
+        progress = Mock()
+        progress.edit = AsyncMock()
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = True
+        command.content = "v!backfill"
+        command.reply = AsyncMock(return_value=progress)
+        command.channel.send = AsyncMock()
+
+        channel = Mock()
+        channel.name = "catches"
+
+        def permissions_for(member):
+            command.reply.assert_awaited_once()
+            permissions = Mock()
+            permissions.view_channel = True
+            permissions.read_message_history = True
+            return permissions
+
+        async def history(*, limit: int | None, oldest_first: bool):
+            self.assertIsNone(limit)
+            self.assertTrue(oldest_first)
+            if False:
+                yield Mock()
+
+        channel.permissions_for = Mock(side_effect=permissions_for)
+        channel.history = Mock(side_effect=history)
+        guild.text_channels = [channel]
+
+        await self.bot.handle_profile_backfill_command(command)
+
+        self.assertIn(
+            "Preparing profile backfill",
+            command.reply.await_args.args[0],
+        )
+        channel.permissions_for.assert_called_once_with(guild.me)
+
     async def test_profile_backfill_requires_administrator(self) -> None:
         guild = Mock()
         guild.id = SERVER_ID

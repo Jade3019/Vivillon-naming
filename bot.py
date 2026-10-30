@@ -6065,23 +6065,6 @@ class NamingBot(discord.Client):
             )
             return
 
-        all_channels = [*guild.text_channels, *guild.threads]
-        channels = []
-        skipped_channels = 0
-        for channel in all_channels:
-            permissions = channel.permissions_for(bot_member)
-            if permissions.view_channel and permissions.read_message_history:
-                channels.append(channel)
-            else:
-                skipped_channels += 1
-        if not channels:
-            await message.reply(
-                "I need View Channel and Read Message History permissions "
-                "to backfill catches.",
-                mention_author=False,
-            )
-            return
-
         guild_key_prefix = f"{guild.id}:"
 
         def guild_catch_total() -> int:
@@ -6097,13 +6080,43 @@ class NamingBot(discord.Client):
         channels_done = 0
         progress_reporting_failed = False
         stopped = False
+        skipped_channels = 0
         self.profile_backfill_stop_requests.discard(guild.id)
         self.profile_backfills_in_progress.add(guild.id)
         try:
             progress = await message.reply(
-                f"Backfilling profile catches across {len(channels)} "
-                "readable channels and active threads. This may take a while.",
+                "Preparing profile backfill and checking channel permissions.",
                 mention_author=False,
+            )
+            all_channels = [*guild.text_channels, *guild.threads]
+            channels = []
+            for channel in all_channels:
+                if guild.id in self.profile_backfill_stop_requests:
+                    stopped = True
+                    break
+                permissions = channel.permissions_for(bot_member)
+                if permissions.view_channel and permissions.read_message_history:
+                    channels.append(channel)
+                else:
+                    skipped_channels += 1
+            if stopped:
+                await progress.edit(
+                    content="Backfill stopped before scanning any messages."
+                )
+                return
+            if not channels:
+                await progress.edit(
+                    content=(
+                        "I need View Channel and Read Message History "
+                        "permissions to backfill catches."
+                    )
+                )
+                return
+            await progress.edit(
+                content=(
+                    f"Backfilling profile catches across {len(channels)} "
+                    "readable channels and active threads. This may take a while."
+                )
             )
             for channel in channels:
                 if guild.id in self.profile_backfill_stop_requests:

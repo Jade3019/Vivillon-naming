@@ -359,6 +359,27 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)
 
+    def test_zenith_marshadow_is_recognized_when_flipped(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Zenith Marshadow"
+            / "image.png"
+        )
+        image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+        success, buffer = cv2.imencode(".png", cv2.flip(image, 1))
+        self.assertTrue(success)
+
+        result = matcher.match(buffer.tobytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Zenith Marshadow")
+
     def test_all_vivillon_forms_match_their_reference_images(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         groups = reference_images(Path(__file__).with_name("pokemon_images"))

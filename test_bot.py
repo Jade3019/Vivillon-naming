@@ -5123,6 +5123,7 @@ class PokemonNameValidationTests(unittest.TestCase):
             "DJ Rotom",
             "Smearguru",
             "Mosslax",
+            "Zenith Marshadow",
         ):
             with self.subTest(name=name):
                 self.assertTrue(is_known_pokemon_name(name))

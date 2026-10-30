@@ -4185,6 +4185,7 @@ def load_known_pokemon_names() -> list[str]:
     for forms in POKEMON_FORMS.values():
         names.update(form["display_name"] for form in forms)
     names.update(POKEMON_FORMS)
+    names.update(CUSTOM_FORM_SPECIES)
     return sorted(
         (name.replace("’", "'") for name in names), key=len, reverse=True
     )

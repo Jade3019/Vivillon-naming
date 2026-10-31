@@ -1700,7 +1700,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(render_profile_image(settings, stats)) as image:
             self.assertEqual(image.getpixel((400, 800)), expected.getpixel((400, 800)))
 
-    def test_profile_card_uses_blurred_flipped_eevee_background(self) -> None:
+    def test_profile_card_uses_blurred_rotated_eevee_background(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
         settings["background"] = "eevee"
         stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
@@ -1708,10 +1708,11 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         with Image.open(
             Path(__file__).with_name("background") / "eevee.png"
         ) as source:
-            expected = ImageOps.fit(
-                ImageOps.mirror(source.convert("RGB")),
-                (1400, 825),
-            ).filter(ImageFilter.GaussianBlur(radius=12))
+            expected = source.convert("RGB").transpose(
+                Image.Transpose.ROTATE_90
+            ).resize((1400, 825), Image.Resampling.LANCZOS).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
         with Image.open(render_profile_image(settings, stats)) as image:
             self.assertEqual(
                 image.crop((300, 700, 430, 825)).tobytes(),

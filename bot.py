@@ -168,7 +168,7 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "default": ("Default background", "#292A2F"),
     "cosmog": ("Cosmog", "Cosmog blurred profile background"),
     "hiszorua": ("Hisuian Zorua", "Hisuian Zorua blurred profile background"),
-    "eevee": ("Eevee", "Eevee blurred and flipped profile background"),
+    "eevee": ("Eevee", "Eevee blurred, rotated profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
@@ -5190,11 +5190,13 @@ def render_profile_image(
         with Image.open(background_image_path) as background_image:
             background = background_image.convert("RGB")
             if background_key == "eevee":
-                background = ImageOps.mirror(background)
-            image = ImageOps.fit(
-                background,
-                (width, height),
-            )
+                background = background.transpose(Image.Transpose.ROTATE_90)
+                image = background.resize(
+                    (width, height),
+                    Image.Resampling.LANCZOS,
+                )
+            else:
+                image = ImageOps.fit(background, (width, height))
         image = image.filter(ImageFilter.GaussianBlur(radius=12))
     draw = ImageDraw.Draw(image)
     middle_background_image_path = PROFILE_MIDDLE_BACKGROUND_IMAGES.get(

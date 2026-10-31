@@ -1061,7 +1061,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [option.label for option in editor.children[1].options],
-            ["Default background", "Cosmog", "Hisuian Zorua", "Eevee"],
+            ["Default background", "Cosmog", "Hisuian Zorua", "Eevee", "Moon Night"],
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
@@ -1694,6 +1694,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         with Image.open(
             Path(__file__).with_name("background") / "hiszorua.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            self.assertEqual(image.getpixel((400, 800)), expected.getpixel((400, 800)))
+
+    def test_profile_card_uses_blurred_moonnight_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["background"] = "moonnight"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            Path(__file__).with_name("background") / "moonnight.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
                 ImageFilter.GaussianBlur(radius=12)

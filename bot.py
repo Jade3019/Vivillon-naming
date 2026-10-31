@@ -169,11 +169,13 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "cosmog": ("Cosmog", "Cosmog blurred profile background"),
     "hiszorua": ("Hisuian Zorua", "Hisuian Zorua blurred profile background"),
     "eevee": ("Eevee", "Eevee blurred, rotated profile background"),
+    "moonnight": ("Moon Night", "Moon Night blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
     "hiszorua": Path(__file__).with_name("background") / "hiszorua.png",
     "eevee": Path(__file__).with_name("background") / "eevee.png",
+    "moonnight": Path(__file__).with_name("background") / "moonnight.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),

@@ -335,9 +335,9 @@ profile card is public. Its
 public **Edit** menu appears only after the owner presses **Edit**; changing a
 setting updates the card without a confirmation reply. The card has the normal
 gray background on its left and right sides by default. The background picker
-also offers blurred Cosmog and Hisuian Zorua images, plus a blurred, rotated
-Eevee image; the middle column defaults to white and can also use any of those
-images. Text is drawn above both background layers. The
+also offers blurred Cosmog, Hisuian Zorua, and Moon Night images, plus a
+blurred, rotated Eevee image; the middle column defaults to white and can also
+use Cosmog, Hisuian Zorua, or Eevee. Text is drawn above both background layers. The
 default picker choices are labeled **Default text color**, **Default
 background**, and **Default middle background**. The frame picker offers
 **No frame**, **Mystic**, **Gem**, and **Nightflower**.

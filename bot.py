@@ -201,10 +201,12 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "gem": Path(__file__).with_name("Frames") / "gem.png",
     "nightflower": Path(__file__).with_name("Frames") / "nightflower.png",
 }
+PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
+    "nightflower": (74, 84, 1595, 845),
+}
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.02,
-    "nightflower": 1.08,
 }
 PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -5289,16 +5291,36 @@ def render_profile_image(
     frame_image_path = PROFILE_FRAME_IMAGES.get(frame_key)
     if frame_image_path is not None:
         with Image.open(frame_image_path) as frame_image:
-            scale = PROFILE_FRAME_SCALES[frame_key]
-            scaled_size = (
-                round(PROFILE_FRAME_CANVAS_SIZE[0] * scale),
-                round(PROFILE_FRAME_CANVAS_SIZE[1] * scale),
-            )
-            scaled_frame = frame_image.convert("RGBA").resize(
-                scaled_size,
-                Image.Resampling.LANCZOS,
-            )
-        frame = scaled_frame
+            opening = PROFILE_FRAME_OPENINGS.get(frame_key)
+            if opening is None:
+                scale = PROFILE_FRAME_SCALES[frame_key]
+                frame_size = (
+                    round(PROFILE_FRAME_CANVAS_SIZE[0] * scale),
+                    round(PROFILE_FRAME_CANVAS_SIZE[1] * scale),
+                )
+                frame = frame_image.convert("RGBA").resize(
+                    frame_size,
+                    Image.Resampling.LANCZOS,
+                )
+                profile_position = (
+                    (frame.width - width) // 2,
+                    (frame.height - height) // 2,
+                )
+            else:
+                left, top, right, bottom = opening
+                scale_x = width / (right - left)
+                scale_y = height / (bottom - top)
+                frame = frame_image.convert("RGBA").resize(
+                    (
+                        round(frame_image.width * scale_x),
+                        round(frame_image.height * scale_y),
+                    ),
+                    Image.Resampling.LANCZOS,
+                )
+                profile_position = (
+                    round(left * scale_x),
+                    round(top * scale_y),
+                )
         frame.putalpha(
             frame.getchannel("A").point(
                 lambda alpha: round(
@@ -5319,10 +5341,6 @@ def render_profile_image(
             fill=255,
         )
         profile_card.putalpha(card_mask)
-        profile_position = (
-            (frame.width - profile_card.width) // 2,
-            (frame.height - profile_card.height) // 2,
-        )
         framed_image.alpha_composite(profile_card, dest=profile_position)
         framed_image.alpha_composite(frame)
         image = framed_image

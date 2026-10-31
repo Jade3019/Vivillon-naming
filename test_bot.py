@@ -130,6 +130,7 @@ from bot import (
     PROFILE_FRAME_ALPHA_GAMMA,
     PROFILE_FRAME_CANVAS_SIZE,
     PROFILE_FRAME_CORNER_RADIUS,
+    PROFILE_FRAME_OPENINGS,
     PROFILE_FRAME_SCALES,
     PROFILE_CARD_SCALES,
     save_profile_data,
@@ -1829,9 +1830,48 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         settings = self.bot.profile_settings_for_user(123)
         stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
 
-        with Image.open(render_profile_image(settings, stats)) as image:
-            self.assertEqual(image.size, (1584, 937))
-            self.assertEqual(image.mode, "RGBA")
+        with Image.open(render_profile_image({**settings, "frame": "none"}, stats)) as unframed:
+            base = unframed.convert("RGB")
+        with Image.open(
+            Path(__file__).with_name("Frames") / "nightflower.png"
+        ) as source:
+            left, top, right, bottom = PROFILE_FRAME_OPENINGS["nightflower"]
+            scale_x = base.width / (right - left)
+            scale_y = base.height / (bottom - top)
+            frame = source.convert("RGBA").resize(
+                (
+                    round(source.width * scale_x),
+                    round(source.height * scale_y),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        frame.putalpha(
+            frame.getchannel("A").point(
+                lambda alpha: round(
+                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
+                )
+            )
+        )
+        expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_position = (round(left * scale_x), round(top * scale_y))
+        self.assertEqual(frame.size, (1539, 1020))
+        self.assertEqual(base.size, (1400, 825))
+        self.assertEqual(profile_position, (68, 91))
+        profile_card = base.convert("RGBA")
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        expected.alpha_composite(profile_card, dest=profile_position)
+        expected.alpha_composite(frame)
+
+        with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.size, frame.size)
+            self.assertEqual(actual.mode, "RGBA")
+            self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

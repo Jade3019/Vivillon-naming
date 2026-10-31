@@ -194,18 +194,22 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "none": ("No frame", "No frame selected"),
     "mystic": ("Mystic", "Mystic profile frame"),
     "gem": ("Gem", "Gem profile frame"),
+    "nightflower": ("Nightflower", "Nightflower profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
     "gem": Path(__file__).with_name("Frames") / "gem.png",
+    "nightflower": Path(__file__).with_name("Frames") / "nightflower.png",
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.02,
+    "nightflower": 1.02,
 }
 PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.0,
+    "nightflower": 1.0,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6

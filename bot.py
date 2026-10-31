@@ -204,7 +204,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.02,
-    "nightflower": 1.02,
+    "nightflower": 1.08,
 }
 PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,

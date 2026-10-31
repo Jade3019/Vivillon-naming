@@ -1829,7 +1829,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
 
         with Image.open(render_profile_image(settings, stats)) as image:
-            self.assertEqual(image.size, (1496, 885))
+            self.assertEqual(image.size, (1584, 937))
             self.assertEqual(image.mode, "RGBA")
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:

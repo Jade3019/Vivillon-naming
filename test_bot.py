@@ -36,6 +36,7 @@ from bot import (
     split_collection_add_names,
     format_catch_command,
     format_guess,
+    shown_form_name,
     format_all_forms_reservation_embeds,
     format_collection_embeds,
     format_collection_add_confirmation,
@@ -3760,9 +3761,25 @@ class FireSpawnFormattingTests(unittest.TestCase):
         embed = format_pc_catch_embed("Unown", "Unown Variant 3")
         files = catch_card_files("Unown", "Unown Variant 3")
 
+        self.assertEqual(
+            format_guess("Unown", 100, shown_form_name("Unown", "Unown Variant 3")),
+            "C Unown: 100.00%",
+        )
+        self.assertEqual(embed.title, "Catch C Unown")
         self.assertEqual(embed.thumbnail.url, "attachment://unownvariant3.png")
         self.assertEqual([file.filename for file in files], ["unownvariant3.png"])
         self.assertEqual(catch_card_files("Unown"), [])
+
+        for number, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1):
+            with self.subTest(letter=letter):
+                self.assertEqual(
+                    format_guess(
+                        "Unown",
+                        100,
+                        shown_form_name("Unown", f"Unown Variant {number}"),
+                    ),
+                    f"{letter} Unown: 100.00%",
+                )
 
     def test_hangry_morpeko_uses_own_thumbnail_but_is_named_morpeko(self) -> None:
         self.assertEqual(image_match.species_display_name("Hangry Morpeko"), "Morpeko")

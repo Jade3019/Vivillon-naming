@@ -815,6 +815,7 @@ def shown_form_name(name: str, form_name: str | None) -> str:
         form_name in SILVALLY_FORMS
         or form_name in VIVILLON_FORM_SET
         or form_name in ARCEUS_FORM_SET
+        or form_name in FORM_DISPLAY_NAMES
     ):
         return form_name
     return name

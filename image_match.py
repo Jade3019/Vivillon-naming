@@ -103,6 +103,10 @@ FORM_DISPLAY_NAMES = {
     "Icy-Snow Vivillon": "Icy Snow Vivillon",
     "High-Plains Vivillon": "High Plains Vivillon",
     "Poke-Ball Vivillon": "Poké Ball Vivillon",
+    **{
+        f"Unown Variant {number}": f"{letter} Unown"
+        for number, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1)
+    },
 }
 THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
 

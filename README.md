@@ -115,7 +115,9 @@ species and forms. Image recognition can still make mistakes, so check guesses
 before relying on them. Vivillon predictions are checked against a known
 pattern, and unverified Vivillon guesses are rejected. It then posts the
 matching Pokétwo catch command as inline code for easier copying, preceded by a
-bold “Copy Here >” label, when Assisted mode is on. A separate desktop copy card
+bold “Copy Here >” label, when Assisted mode is on. Maushold's Family-of-Three
+and Family-of-Four appearances are displayed simply as Maushold. A separate
+desktop copy card
 below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
 Assisted mode can be turned off to show names and mentions without catch commands.
 Discord displays both copy formats on mobile and desktop. Discord's copy controls

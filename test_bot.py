@@ -4073,6 +4073,25 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
 
 class GuessFormatTests(unittest.TestCase):
+    def test_maushold_family_variants_use_species_name_and_catch_command(self) -> None:
+        from image_match import family_name, species_display_name
+
+        for form in (
+            "Family-Of-Three Maushold",
+            "Family of Three Maushold",
+            "Family-Of-Four Maushold",
+            "family of four maushold",
+        ):
+            with self.subTest(form=form):
+                name = species_display_name(form)
+                self.assertEqual(name, "Maushold")
+                self.assertEqual(family_name(form.title()), "Maushold")
+                self.assertEqual(format_guess(name, 99.81), "Maushold: 99.81%")
+                self.assertEqual(
+                    format_catch_command(POKETWO_COMMAND_BOT_ID, name),
+                    "@Pokétwo#8236 c maushold",
+                )
+
     def test_recognizes_missingno_aliases(self) -> None:
         for name in ("Missingno.", "missingno", "???"):
             with self.subTest(name=name):

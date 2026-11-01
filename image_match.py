@@ -31,6 +31,10 @@ SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
+MAUSHOLD_FORMS = ("Family-Of-Three Maushold", "Family-Of-Four Maushold")
+MAUSHOLD_FORM_ALIASES = frozenset(
+    {"family of three maushold", "family of four maushold"}
+)
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
@@ -39,6 +43,7 @@ DISPLAY_NAMES = {
     "Paldean Tauros": "Tauros",
     "Totem-Busted Mimikyu": "Mimikyu",
     "Totem-Disguised Mimikyu": "Mimikyu",
+    **{form: "Maushold" for form in MAUSHOLD_FORMS},
 }
 CUSTOM_FORM_SPECIES = {
     "Partner Pikachu": "Pikachu",
@@ -140,6 +145,7 @@ THUMBNAIL_FORM_SPECIES = {
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
     **{form: "Arceus" for form in ARCEUS_FORMS},
+    **{form: "Maushold" for form in MAUSHOLD_FORMS},
 }
 
 
@@ -152,6 +158,7 @@ FAMILY_OVERRIDES = {
     **{form: "Silvally" for form in SILVALLY_FORMS},
     **{form: "Vivillon" for form in VIVILLON_FORMS},
     **{form: "Arceus" for form in ARCEUS_FORMS},
+    **{form: "Maushold" for form in MAUSHOLD_FORMS},
 }
 # Families whose members are near-identical pictures: the best-scoring member
 # is named even when members of the same family score closely.
@@ -159,10 +166,16 @@ INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon", "Arceus"}
 
 
 def family_name(name: str) -> str:
+    normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
+    if normalized in MAUSHOLD_FORM_ALIASES:
+        return "Maushold"
     return FAMILY_OVERRIDES.get(name, base_pokemon_name(name))
 
 
 def species_display_name(name: str) -> str:
+    normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
+    if normalized in MAUSHOLD_FORM_ALIASES:
+        return "Maushold"
     return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))
 
 
@@ -636,9 +649,8 @@ class ImageMatcher:
         else:
             return None
         if name in ("Palafin", "Finizen"):
-            if has_belly_patch(data) is not True:
-                return None
-            name = "Palafin"
+            if has_belly_patch(data) is True:
+                name = "Palafin"
         if name in SILVALLY_FORMS:
             name = silvally_form_by_color(data) or name
         if name in ARCEUS_FORM_SET:

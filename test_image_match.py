@@ -203,7 +203,7 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertEqual(result, ("Milcery", 46))
         mask.assert_not_called()
 
-    def test_palafin_finizen_match_requires_a_detected_belly_patch(self) -> None:
+    def test_palafin_finizen_match_is_kept_when_patch_is_not_detected(self) -> None:
         np = image_match.np
         descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)
 
@@ -217,17 +217,40 @@ class ImageMatcherTests(unittest.TestCase):
             )
             matcher = ImageMatcher(bank_path)
 
-            with (
-                patch.object(
-                    matcher,
-                    "_match",
-                    side_effect=[("Finizen", 20), ("Finizen", 18)],
-                ),
-                patch("image_match.has_belly_patch", return_value=False),
-            ):
-                result = matcher.match(b"ambiguous spawn image")
+            for name in ("Finizen", "Palafin"):
+                with (
+                    self.subTest(name=name),
+                    patch.object(
+                        matcher,
+                        "_match",
+                        side_effect=[(name, 20), (name, 18)],
+                    ),
+                    patch("image_match.has_belly_patch", return_value=False),
+                ):
+                    result = matcher.match(b"spawn image")
+                self.assertEqual(result, (name, 20))
 
-        self.assertIsNone(result)
+    def test_palafin_spawn_reference_matches_normal_and_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Palafin"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, encoded = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(encoded.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Palafin")
 
     def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
         np = image_match.np

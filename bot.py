@@ -6060,16 +6060,17 @@ class NamingBot(discord.Client):
                 )
                 guild_settings["shiny_base_name"] = base_name
                 guild_settings["shiny_count"] = initial_count
-            elif (
-                guild_settings["shiny_base_name"] is None
-                and channel_name
-            ):
-                base_name, initial_count = split_channel_counter(channel_name)
-                guild_settings["shiny_base_name"] = base_name
-                guild_settings["shiny_count"] = max(
-                    int(guild_settings["shiny_count"]),
-                    initial_count,
+            elif channel_name:
+                channel_base_name, current_name_count = split_channel_counter(
+                    channel_name
                 )
+                if guild_settings["shiny_base_name"] is None:
+                    guild_settings["shiny_base_name"] = channel_base_name
+                if guild_settings["shiny_base_name"] == channel_base_name:
+                    guild_settings["shiny_count"] = max(
+                        int(guild_settings["shiny_count"]),
+                        current_name_count,
+                    )
         updated_settings[guild_key] = guild_settings
         save_starboard_settings(self.starboard_settings_path, updated_settings)
         self.starboard_settings = updated_settings
@@ -6087,9 +6088,14 @@ class NamingBot(discord.Client):
         guild_settings = self.starboard_settings_for_guild(guild_id)
         base_name = guild_settings["shiny_base_name"]
         count = int(guild_settings["shiny_count"])
-        if base_name is None and channel_name:
-            base_name, current_name_count = split_channel_counter(channel_name)
-            count = max(count, current_name_count)
+        if channel_name:
+            channel_base_name, current_name_count = split_channel_counter(
+                channel_name
+            )
+            if base_name is None:
+                base_name = channel_base_name
+            if base_name == channel_base_name:
+                count = max(count, current_name_count)
         count += 1
         guild_settings["shiny_base_name"] = base_name
         guild_settings["shiny_count"] = count

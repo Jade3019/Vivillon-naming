@@ -126,6 +126,28 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "Wiglett")
 
+    def test_wiglett_recent_spawn_matches_in_both_orientations(self) -> None:
+        import cv2
+
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Wiglett"
+            / "spawn-reference-4.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Wiglett")
+
     def test_sunkern_spawn_reference_matches_as_sunkern(self) -> None:
         image_path = (
             Path(__file__).with_name("pokemon_images")

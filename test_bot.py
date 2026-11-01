@@ -3575,6 +3575,37 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 2,
             )
 
+    def test_shinyboard_count_resumes_from_a_manually_increased_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.starboard_settings_path = Path(directory) / "starboards.json"
+            self.bot.starboard_settings = {}
+            self.bot.set_starboard_channel(
+                SERVER_ID,
+                "shiny",
+                202,
+                "shiny-board-99",
+            )
+
+            updated_settings = self.bot.set_starboard_channel(
+                SERVER_ID,
+                "shiny",
+                202,
+                "shiny-board-110",
+            )
+            next_channel_name = self.bot.increment_shinyboard_count(
+                SERVER_ID,
+                "shiny-board-110",
+            )
+
+            self.assertEqual(updated_settings["shiny_count"], 110)
+            self.assertEqual(next_channel_name, "shiny-board-111")
+            self.assertEqual(
+                load_starboard_settings(self.bot.starboard_settings_path)[
+                    str(SERVER_ID)
+                ]["shiny_count"],
+                111,
+            )
+
     async def test_shiny_gigantamax_uses_the_matching_embed_on_each_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.starboard_settings_path = Path(directory) / "starboards.json"

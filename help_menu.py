@@ -5,6 +5,7 @@ from typing import Final
 import discord
 
 HELP_COMMAND_PATTERN: Final[str] = r"^v!help\s*$"
+FIELD_VALUE_LIMIT: Final[int] = 1024
 
 HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
     (
@@ -71,7 +72,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
             ("v!lowaccuracy #channel", "Post a link in that channel whenever a spawn scores under 90% (use `off` to disable)."),
             ("v!afk", "Your personal ping settings for shiny hunts and collections."),
             ("v!profile [@user]", "View your or another member's Pokémon catch stats."),
-            ("v!backfill [#channel] / v!backfill stop", "Admins or the configured role: backfill profile data in one channel or across the server, or stop a scan."),
+            ("v!backfill [#channel or category id] / v!backfill stop", "Admins or the configured role: backfill profile data in one channel, one category or across the server, or stop a scan."),
             (
                 "v!permission <role id> / off",
                 "Manage Server: grant a role access to protected commands.",
@@ -94,10 +95,20 @@ def build_help_menu_embed() -> discord.Embed:
         color=discord.Color.from_rgb(0x9B, 0x8C, 0xE8),
     )
     for title, commands in HELP_CATEGORIES:
-        embed.add_field(
-            name=title,
-            value="\n".join(f"`{usage}`\n-# {text}" for usage, text in commands),
-            inline=False,
-        )
+        chunks: list[list[str]] = [[]]
+        length = 0
+        for usage, text in commands:
+            entry = f"`{usage}`\n-# {text}"
+            if chunks[-1] and length + len(entry) + 1 > FIELD_VALUE_LIMIT:
+                chunks.append([])
+                length = 0
+            chunks[-1].append(entry)
+            length += len(entry) + 1
+        for index, chunk in enumerate(chunks):
+            embed.add_field(
+                name=title if index == 0 else f"{title} (cont.)",
+                value="\n".join(chunk),
+                inline=False,
+            )
     embed.set_footer(text="Tip: v!boxhelp explains every box command in detail.")
     return embed

@@ -6799,7 +6799,16 @@ class NamingBot(discord.Client):
                 )
                 return
             if re.fullmatch(HELP_COMMAND_PATTERN, message.content, re.IGNORECASE):
-                await message.reply(embed=build_help_menu_embed(), mention_author=False)
+                try:
+                    await message.reply(
+                        embed=build_help_menu_embed(), mention_author=False
+                    )
+                except discord.Forbidden:
+                    await message.reply(
+                        "I need the Embed Links permission in this channel to "
+                        "show the help list.",
+                        mention_author=False,
+                    )
                 return
             if await self.daycare.handle_message(message):
                 return

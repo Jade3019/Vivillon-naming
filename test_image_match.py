@@ -309,10 +309,20 @@ class VivillonTests(unittest.TestCase):
         self.assertEqual(image_match.family_name("Fancy Vivillon"), "Vivillon")
 
     def test_custom_reference_forms_resolve_to_their_species(self) -> None:
+        import bot
+
         groups = reference_images(Path(__file__).with_name("pokemon_images"))
         forms = {
             "Partner Pikachu": "Pikachu",
             "Partner Eevee": "Eevee",
+            "Enchanted Applin": "Applin",
+            "Rotten Applin": "Applin",
+            "Oracle Meowscarada": "Meowscarada",
+            "Witch Meowscarada": "Meowscarada",
+            "Medusa Simipour": "Simipour",
+            "Statue Simipour": "Simipour",
+            "Elixir Reuniclus": "Reuniclus",
+            "Cauldron Reuniclus": "Reuniclus",
             "Gliding Build Koraidon": "Koraidon",
             "Zenith Marshadow": "Marshadow",
             "Galarian Zen Darmanitan": "Darmanitan",
@@ -326,6 +336,7 @@ class VivillonTests(unittest.TestCase):
                 self.assertIn(form, groups)
                 self.assertEqual(image_match.species_display_name(form), species)
                 self.assertEqual(image_match.family_name(form), species)
+                self.assertIsNotNone(bot.custom_thumbnail_path(form), form)
 
     def test_pattern_is_chosen_by_appearance_even_mirrored(self) -> None:
         import cv2
@@ -345,6 +356,14 @@ class CustomFormRecognitionTests(unittest.TestCase):
         forms = (
             "Partner Pikachu",
             "Partner Eevee",
+            "Enchanted Applin",
+            "Rotten Applin",
+            "Oracle Meowscarada",
+            "Witch Meowscarada",
+            "Medusa Simipour",
+            "Statue Simipour",
+            "Elixir Reuniclus",
+            "Cauldron Reuniclus",
             "Gliding Build Koraidon",
             "Zenith Marshadow",
             "Galarian Zen Darmanitan",

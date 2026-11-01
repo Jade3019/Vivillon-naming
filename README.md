@@ -441,7 +441,9 @@ Hand-added special forms can use a folder named for the form, such as
 `pokemon_images/Gliding Build Koraidon/image.png`. Add its form-to-species entry
 to `CUSTOM_FORM_SPECIES` in `image_match.py` when catch commands should use the
 base species. A matching alphanumeric filename in `assets/thumbnails/` supplies
-the catch-card and normal-starboard artwork.
+the catch-card and normal-starboard artwork. This also supports themed variants
+such as Enchanted Applin and Cauldron Reuniclus: the form name is shown while
+catch commands and reservations use the base species.
 
 Build the feature file after adding images:
 

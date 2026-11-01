@@ -87,6 +87,28 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "Shellos")
 
+    def test_bonsly_recent_spawn_matches_in_both_orientations(self) -> None:
+        import cv2
+
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Bonsly"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Bonsly")
+
     def test_wiglett_spawn_reference_matches_as_wiglett(self) -> None:
         image_path = (
             Path(__file__).with_name("pokemon_images")

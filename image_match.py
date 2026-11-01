@@ -68,6 +68,8 @@ CUSTOM_FORM_SPECIES = {
     "Statue Simipour": "Simipour",
     "Elixir Reuniclus": "Reuniclus",
     "Cauldron Reuniclus": "Reuniclus",
+    "Ride Cyclizar": "Cyclizar",
+    "Battle Cyclizar": "Cyclizar",
     "Gliding Build Koraidon": "Koraidon",
     "Zenith Marshadow": "Marshadow",
     "Galarian Zen Darmanitan": "Darmanitan",

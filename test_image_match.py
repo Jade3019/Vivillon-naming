@@ -109,12 +109,12 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Bonsly")
 
-    def test_dwebble_recent_spawn_matches_in_both_orientations(self) -> None:
+    def test_hippopotas_recent_spawn_matches_in_both_orientations(self) -> None:
         import cv2
 
         image_path = (
             Path(__file__).with_name("pokemon_images")
-            / "Dwebble"
+            / "Hippopotas"
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
@@ -129,7 +129,7 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
                 self.assertIsNotNone(result)
-                self.assertEqual(result[0], "Dwebble")
+                self.assertEqual(result[0], "Hippopotas")
 
     def test_wiglett_spawn_reference_matches_as_wiglett(self) -> None:
         image_path = (

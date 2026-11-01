@@ -3282,6 +3282,17 @@ def format_server_reservation_embeds(
     return embeds
 
 
+def custom_forms_for_species(species_name: str) -> list[str]:
+    species_name = unicodedata.normalize(
+        "NFC", canonicalize_pokemon_name(species_name)
+    ).casefold()
+    return [
+        custom_name
+        for custom_name, custom_species in CUSTOM_FORM_SPECIES.items()
+        if custom_species.casefold() == species_name
+    ]
+
+
 def all_forms_display_names(species_name: str) -> list[str]:
     species_name = unicodedata.normalize(
         "NFC", canonicalize_pokemon_name(species_name)
@@ -3296,11 +3307,7 @@ def all_forms_display_names(species_name: str) -> list[str]:
             name = f"{suffix.replace('-', ' ')} {species_name}"
         if name not in names:
             names.append(name)
-    custom_forms = [
-        custom_name.casefold()
-        for custom_name, custom_species in CUSTOM_FORM_SPECIES.items()
-        if custom_species.casefold() == species_name
-    ]
+    custom_forms = [name.casefold() for name in custom_forms_for_species(species_name)]
     if custom_forms:
         if not names:
             names.append(species_name)
@@ -3402,6 +3409,32 @@ def format_all_forms_reservation_embeds(
             )
         else:
             entries.append(form["display_name"])
+
+    custom_forms = custom_forms_for_species(base_name)
+    if not form_definitions and custom_forms:
+        base_key = reservation_key(guild_id, base_name)
+        known_alias_keys.add(base_key)
+        base_user_ids = wildcard_user_ids | set(reservations.get(base_key, []))
+        if base_user_ids:
+            entries.extend(
+                f"{base_name} <@{user_id}>"
+                for user_id in sorted(base_user_ids)
+            )
+        else:
+            entries.append(base_name)
+    for custom_name in custom_forms:
+        custom_key = reservation_key(guild_id, custom_name)
+        if custom_key in known_alias_keys:
+            continue
+        known_alias_keys.add(custom_key)
+        form_user_ids = wildcard_user_ids | set(reservations.get(custom_key, []))
+        if form_user_ids:
+            entries.extend(
+                f"{custom_name.casefold()} <@{user_id}>"
+                for user_id in sorted(form_user_ids)
+            )
+        else:
+            entries.append(custom_name.casefold())
 
     for key, user_ids in reservations.items():
         if (
@@ -4633,6 +4666,7 @@ NAME_SUGGESTION_PREFIXES: Final[frozenset[str]] = frozenset(
 POKEMON_NAME_ALIASES: Final[dict[str, str]] = {
     "riffex": "toxtricity",
     "madusa simipour": "medusa simipour",
+    "misipour": "simipour",
 }
 NAME_SUGGESTION_CUTOFF: Final[float] = 0.6
 NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 60
@@ -8717,6 +8751,31 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        event_species = list(
+            dict.fromkeys(
+                canonicalize_pokemon_name(name[4:].strip())
+                for name in pokemon_names
+                if name.casefold().startswith("all ")
+                and custom_forms_for_species(name[4:].strip())
+            )
+        )
+        if event_species:
+            await message.reply(
+                "Choose whether to reserve only the event forms of "
+                f"{', '.join(event_species)} or all forms, including the "
+                "regular Pokémon.",
+                view=ReserveAllFormsChoiceView(
+                    self,
+                    message.guild.id,
+                    message.author.id,
+                    target.id,
+                    pokemon_names,
+                    event_species,
+                ),
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
 
         updated_reservations = {
             key: list(user_ids) for key, user_ids in self.reservations.items()
@@ -9978,6 +10037,118 @@ class NameSuggestionView(discord.ui.View):
     ) -> None:
         del button
         await self._finish(interaction, False, "Cancelled, nothing was added.")
+
+
+class ReserveAllFormsChoiceView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+        target_id: int,
+        pokemon_names: list[str],
+        event_species: list[str],
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+        self.target_id = target_id
+        self.pokemon_names = pokemon_names
+        self.event_species = event_species
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            interaction.user.id != self.requester_id
+            or interaction.guild_id != self.guild_id
+            or not isinstance(interaction.user, discord.Member)
+            or not has_reserve_manager_access(
+                self.bot,
+                self.guild_id,
+                interaction.user,
+            )
+        ):
+            await interaction.response.send_message(
+                "Only the authorized command user can choose this reservation.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def _finish(
+        self,
+        interaction: discord.Interaction,
+        *,
+        event_forms_only: bool,
+    ) -> None:
+        names_to_add: list[str] = []
+        for name in self.pokemon_names:
+            if event_forms_only and name.casefold().startswith("all "):
+                species_name = name[4:].strip()
+                custom_forms = custom_forms_for_species(species_name)
+                names_to_add.extend(custom_forms or [name])
+            else:
+                names_to_add.append(name)
+
+        updated_reservations = {
+            key: list(user_ids) for key, user_ids in self.bot.reservations.items()
+        }
+        for name in names_to_add:
+            key = reservation_key_for_command(self.guild_id, name)
+            user_ids = updated_reservations.setdefault(key, [])
+            if self.target_id not in user_ids:
+                user_ids.append(self.target_id)
+        try:
+            save_reservations(self.bot.reserve_path, updated_reservations)
+        except ValueError:
+            logger.exception("Could not save Pokémon reservations")
+            await interaction.response.send_message(
+                "I couldn't save that reservation. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.reservations = updated_reservations
+        self.stop()
+        choice = "event forms only" if event_forms_only else "all forms"
+        await interaction.response.edit_message(
+            content=(
+                f"Reservation added ({choice} for "
+                f"{', '.join(self.event_species)})."
+            ),
+            view=None,
+        )
+
+    @discord.ui.button(label="Event forms only", style=discord.ButtonStyle.primary)
+    async def reserve_event_forms(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await self._finish(interaction, event_forms_only=True)
+
+    @discord.ui.button(label="All forms", style=discord.ButtonStyle.success)
+    async def reserve_all_forms(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await self._finish(interaction, event_forms_only=False)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        self.stop()
+        await interaction.response.edit_message(
+            content="Reservation cancelled.",
+            view=None,
+        )
 
 
 class ClearReservesView(discord.ui.View):

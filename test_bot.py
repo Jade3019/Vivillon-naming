@@ -5506,6 +5506,11 @@ class ReservationPersistenceTests(unittest.TestCase):
             reservation_key_for_command(1, "all Riffex"),
             all_forms_reservation_key(1, "Toxtricity"),
         )
+        self.assertTrue(is_known_pokemon_name("all misipour"))
+        self.assertEqual(
+            reservation_key_for_command(1, "all misipour"),
+            all_forms_reservation_key(1, "Simipour"),
+        )
 
         collections = add_collection_pokemon({}, 1, ["all alcremie"], 123)
         self.assertEqual(
@@ -6065,6 +6070,27 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertIn("fairy arceus <@456>", rows)
         self.assertIn("normal arceus", rows)
 
+    def test_all_forms_search_includes_custom_forms_and_base_species(self) -> None:
+        for species, event_forms in (
+            ("Applin", ("Enchanted Applin", "Rotten Applin")),
+            ("Simipour", ("Medusa Simipour", "Statue Simipour")),
+        ):
+            with self.subTest(species=species):
+                embeds = format_all_forms_reservation_embeds(
+                    {all_forms_reservation_key(1, species): [123]},
+                    1,
+                    species,
+                )
+
+                rows = (
+                    "\n".join(embed.description for embed in embeds)
+                    .casefold()
+                    .splitlines()
+                )
+                self.assertIn(f"{species.casefold()} <@123>", rows)
+                for event_form in event_forms:
+                    self.assertIn(f"{event_form.casefold()} <@123>", rows)
+
     def test_all_forms_search_lists_pichu_forms_and_reserver(self) -> None:
         embeds = format_all_forms_reservation_embeds(
             {all_forms_reservation_key(1, "Pichu"): [123]},
@@ -6293,6 +6319,61 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             await NamingBot.handle_reserve_command(bot, message)
 
             self.assertEqual(bot.reservations, {"1:pikachu": [123]})
+
+    async def test_all_applin_reserve_asks_event_forms_or_all_forms(self) -> None:
+        for choice, expected in (
+            (
+                "Event forms only",
+                {
+                    reservation_key(1, "Enchanted Applin"): [123],
+                    reservation_key(1, "Rotten Applin"): [123],
+                },
+            ),
+            (
+                "All forms",
+                {all_forms_reservation_key(1, "Applin"): [123]},
+            ),
+        ):
+            with self.subTest(choice=choice), tempfile.TemporaryDirectory() as directory:
+                role_id = 900
+                bot = SimpleNamespace(
+                    command_permissions={"1": role_id},
+                    reserve_categories={},
+                    reservations={},
+                    reserve_path=Path(directory) / "reserves.json",
+                )
+                message = Mock()
+                message.guild.id = 1
+                message.author = Mock(spec=discord.Member)
+                message.author.id = 456
+                message.author.roles = [Mock(id=role_id)]
+                message.content = "v!r add all applin <@123>"
+                target = Mock()
+                target.id = 123
+                target.mention = "<@123>"
+                message.mentions = [target]
+                message.reply = AsyncMock()
+
+                await NamingBot.handle_reserve_command(bot, message)
+
+                self.assertEqual(bot.reservations, {})
+                view = message.reply.await_args.kwargs["view"]
+                interaction = Mock()
+                interaction.guild_id = 1
+                interaction.user = Mock(spec=discord.Member)
+                interaction.user.id = message.author.id
+                interaction.user.roles = [Mock(id=role_id)]
+                interaction.response.edit_message = AsyncMock()
+                interaction.response.send_message = AsyncMock()
+                self.assertTrue(await view.interaction_check(interaction))
+                button = next(
+                    button
+                    for button in view.children
+                    if button.label == choice
+                )
+                await button.callback(interaction)
+
+                self.assertEqual(bot.reservations, expected)
 
     async def test_unknown_pokemon_cannot_be_added_to_reservations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

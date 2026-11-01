@@ -257,7 +257,10 @@ reserved members in a `Reserved:` line above the catch command. The
 are not mentioned. Reservations are stored in
 `reserves.json` by default; set `RESERVES_FILE` to a different path if needed.
 Keep that file on persistent host storage to retain reservations across
-restarts. The bot must be able to read and send messages in the command channel
+restarts. When a Pokémon has custom event forms, `v!r add all <pokemon>`
+offers **Event forms only** or **All forms**. For example, event-only Applin
+reserves Enchanted Applin and Rotten Applin; all forms also includes regular
+Applin. The bot must be able to read and send messages in the command channel
 as well as the spawn channel.
 
 Reserve managers can create server-specific categories and append Pokémon to

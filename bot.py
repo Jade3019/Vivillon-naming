@@ -125,6 +125,10 @@ TYPE_PING_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!(?:tp|typeping)\s*$",
     re.IGNORECASE,
 )
+TYPE_PING_CLEAR_ALL_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!(?:tp|typeping)\s+clear\s+all\s*$",
+    re.IGNORECASE,
+)
 RESERVATION_EMBED_PAGE_SIZE: Final[int] = 20
 CHAT_EVENT_EMOJI: Final[str] = "⏲️"
 CHAT_EVENT_SIGNUP_SECONDS: Final[int] = 60
@@ -4988,6 +4992,18 @@ def save_type_pings(path: Path, type_pings: dict[str, list[str]]) -> None:
         raise ValueError(f"Could not save type ping settings to {path}") from error
 
 
+def clear_guild_type_pings(
+    type_pings: dict[str, list[str]],
+    guild_id: int,
+) -> dict[str, list[str]]:
+    guild_prefix = f"{guild_id}:"
+    return {
+        key: list(enabled_types)
+        for key, enabled_types in type_pings.items()
+        if not key.startswith(guild_prefix)
+    }
+
+
 def valid_profile_setting(setting: str, value: object) -> bool:
     if setting == "catches":
         return isinstance(value, int) and not isinstance(value, bool) and value >= 0
@@ -7749,9 +7765,26 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        if TYPE_PING_CLEAR_ALL_PATTERN.fullmatch(message.content) is not None:
+            if not message.author.guild_permissions.administrator:
+                await message.reply(
+                    "Only server administrators can clear everyone's type pings.",
+                    mention_author=False,
+                )
+                return
+            await message.reply(
+                "Are you sure you want to clear everyone's type pings in this server?",
+                view=ClearTypePingsView(
+                    self,
+                    message.guild.id,
+                    message.author.id,
+                ),
+                mention_author=False,
+            )
+            return
         if TYPE_PING_COMMAND_PATTERN.fullmatch(message.content) is None:
             await message.reply(
-                "Usage: `v!tp` or `v!typeping`",
+                "Usage: `v!tp`, `v!typeping`, or `v!tp clear all`",
                 mention_author=False,
             )
             return
@@ -9654,6 +9687,72 @@ class ClearShinyhuntsView(discord.ui.View):
         self.bot.shinyhunters = updated_shinyhunters
         await interaction.response.edit_message(
             content="Everyone's shinyhunts in this server have been cleared.",
+            view=None,
+        )
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.secondary)
+    async def cancel_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        await interaction.response.edit_message(
+            content="Command cancelled",
+            view=None,
+        )
+
+
+class ClearTypePingsView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        guild_id: int,
+        requester_id: int,
+    ) -> None:
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.requester_id = requester_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            interaction.user.id != self.requester_id
+            or interaction.guild_id != self.guild_id
+            or not isinstance(interaction.user, discord.Member)
+            or not interaction.user.guild_permissions.administrator
+        ):
+            await interaction.response.send_message(
+                "Only the administrator who ran this command can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.danger)
+    async def confirm_clear(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        updated_type_pings = clear_guild_type_pings(
+            self.bot.type_pings,
+            self.guild_id,
+        )
+        try:
+            save_type_pings(self.bot.type_ping_path, updated_type_pings)
+        except ValueError:
+            logger.exception("Could not clear server type pings")
+            await interaction.response.send_message(
+                "I couldn't clear the type pings. Check the bot logs.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.type_pings = updated_type_pings
+        await interaction.response.edit_message(
+            content="Everyone's type pings in this server have been cleared.",
             view=None,
         )
 

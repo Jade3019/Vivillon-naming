@@ -42,6 +42,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
                 "v!tp / v!typeping",
                 "Choose Pokémon types to get pinged for, including dual-type spawns.",
             ),
+            ("v!tp clear all", "Administrators: clear everyone's type pings in this server."),
         ],
     ),
     (

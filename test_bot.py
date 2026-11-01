@@ -29,6 +29,7 @@ from bot import (
     all_forms_reservation_key,
     clear_guild_reservations,
     clear_guild_collection,
+    clear_guild_type_pings,
     clear_guild_shinyhunts,
     clear_user_collection,
     collection_pokemon_for_user,
@@ -140,6 +141,7 @@ from bot import (
     type_ping_user_ids_for_pokemon,
     TYPE_PING_TYPES,
     TypePingView,
+    ClearTypePingsView,
     render_profile_image,
     ProfileView,
     ProfileEditView,
@@ -2339,6 +2341,79 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         await self.bot.close()
+
+    def test_clear_guild_type_pings_preserves_other_guilds(self) -> None:
+        type_pings = {
+            f"{SERVER_ID}:123": ["fire"],
+            f"{SERVER_ID}:456": ["normal", "water"],
+            "999:123": ["grass"],
+        }
+
+        updated = clear_guild_type_pings(type_pings, SERVER_ID)
+
+        self.assertEqual(updated, {"999:123": ["grass"]})
+        self.assertEqual(type_pings[f"{SERVER_ID}:123"], ["fire"])
+
+    async def test_clear_all_type_pings_requires_server_administrator(self) -> None:
+        self.bot.type_pings = {f"{SERVER_ID}:123": ["fire"]}
+        message = Mock()
+        message.content = "v!tp clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = False
+        message.reply = AsyncMock()
+
+        await self.bot.handle_type_ping_command(message)
+
+        message.reply.assert_awaited_once_with(
+            "Only server administrators can clear everyone's type pings.",
+            mention_author=False,
+        )
+        self.assertEqual(self.bot.type_pings, {f"{SERVER_ID}:123": ["fire"]})
+
+    async def test_admin_clear_all_type_pings_confirms_and_preserves_other_guilds(
+        self,
+    ) -> None:
+        self.bot.type_pings = {
+            f"{SERVER_ID}:123": ["fire"],
+            f"{SERVER_ID}:456": ["normal", "water"],
+            "999:123": ["grass"],
+        }
+        message = Mock()
+        message.content = "v!tp clear all"
+        message.guild.id = SERVER_ID
+        message.author.id = 123
+        message.author.guild_permissions.administrator = True
+        message.reply = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.type_ping_path = Path(directory) / "type_pings.json"
+            save_type_pings(self.bot.type_ping_path, self.bot.type_pings)
+
+            await self.bot.handle_type_ping_command(message)
+
+            message.reply.assert_awaited_once()
+            view = message.reply.await_args.kwargs["view"]
+            self.assertIsInstance(view, ClearTypePingsView)
+
+            interaction = Mock()
+            interaction.user.id = 123
+            interaction.user.guild_permissions.administrator = True
+            interaction.guild_id = SERVER_ID
+            interaction.response.edit_message = AsyncMock()
+            interaction.response.send_message = AsyncMock()
+            confirm_button = next(
+                button for button in view.children if button.label == "Yes"
+            )
+            await confirm_button.callback(interaction)
+
+            expected = {"999:123": ["grass"]}
+            self.assertEqual(self.bot.type_pings, expected)
+            self.assertEqual(load_type_pings(self.bot.type_ping_path), expected)
+            interaction.response.edit_message.assert_awaited_once_with(
+                content="Everyone's type pings in this server have been cleared.",
+                view=None,
+            )
 
     def test_selected_types_match_either_pokemon_type(self) -> None:
         type_pings = {

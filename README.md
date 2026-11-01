@@ -319,9 +319,9 @@ dual-type Pokémon that has Normal as either type. Matching members are
 mentioned on a separate `Typeping:` line.
 Selections are saved per member and server in `type_pings.json` by default; set
 `TYPE_PINGS_FILE` to use a different path.
-Server administrators can use `v!tp clear all` to clear every member's type
-pings in the current server. The bot asks for confirmation and leaves other
-servers' settings unchanged.
+Server administrators can use `v!tp clear all` or `v!typeping clear all` to
+clear every member's type pings in the current server. The bot asks for
+confirmation and leaves other servers' settings unchanged.
 
 Use `v!afk` to open your personal ping settings. The **Shiny Hunt** and
 **Collection** buttons independently turn those notifications on or off; the

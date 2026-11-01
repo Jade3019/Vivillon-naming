@@ -2380,7 +2380,7 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             "999:123": ["grass"],
         }
         message = Mock()
-        message.content = "v!tp clear all"
+        message.content = "v!typeping clear all"
         message.guild.id = SERVER_ID
         message.author.id = 123
         message.author.guild_permissions.administrator = True

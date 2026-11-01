@@ -7784,7 +7784,8 @@ class NamingBot(discord.Client):
             return
         if TYPE_PING_COMMAND_PATTERN.fullmatch(message.content) is None:
             await message.reply(
-                "Usage: `v!tp`, `v!typeping`, or `v!tp clear all`",
+                "Usage: `v!tp`, `v!typeping`, `v!tp clear all`, or "
+                "`v!typeping clear all`",
                 mention_author=False,
             )
             return

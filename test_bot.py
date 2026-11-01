@@ -79,6 +79,7 @@ from bot import (
     load_pokemon_forms,
     load_server_settings,
     load_command_permissions,
+    load_command_locks,
     load_starboard_settings,
     load_reservations,
     load_reserve_categories,
@@ -5883,6 +5884,94 @@ class CommandPermissionTests(unittest.TestCase):
             save_command_permissions(path, expected)
 
             self.assertEqual(load_command_permissions(path), expected)
+
+
+class CommandLockTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.bot = NamingBot(ConfigTests().load_config())
+        self.bot.command_locks_path = Path(self.directory.name) / "locks.json"
+        self.bot.command_locks = {}
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+        self.directory.cleanup()
+
+    def message(
+        self,
+        content: str,
+        *,
+        administrator: bool = False,
+        author_id: int = 123,
+        author_is_bot: bool = False,
+    ) -> Mock:
+        message = Mock()
+        message.content = content
+        message.guild.id = SERVER_ID
+        message.channel.id = 456
+        message.channel.guild.id = SERVER_ID
+        message.author.id = author_id
+        message.author.bot = author_is_bot
+        message.author.guild_permissions.administrator = administrator
+        message.author.roles = []
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+        return message
+
+    async def test_admin_lock_blocks_commands_until_admin_reenables_them(self) -> None:
+        member_lock = self.message("v!coff")
+
+        await self.bot.on_message(member_lock)
+
+        self.assertIn("Only server administrators", member_lock.reply.await_args.args[0])
+        self.assertFalse(self.bot.commands_locked_for_guild(SERVER_ID))
+
+        admin_lock = self.message("v!coff", administrator=True)
+        await self.bot.on_message(admin_lock)
+
+        self.assertTrue(self.bot.commands_locked_for_guild(SERVER_ID))
+        self.assertEqual(
+            load_command_locks(self.bot.command_locks_path),
+            {str(SERVER_ID): True},
+        )
+
+        blocked_command = self.message("v!ping")
+        self.bot.handle_ping_command = AsyncMock()
+        await self.bot.on_message(blocked_command)
+
+        self.assertIn("disabled", blocked_command.reply.await_args.args[0])
+        self.bot.handle_ping_command.assert_not_awaited()
+
+        member_unlock = self.message("v!con")
+        await self.bot.on_message(member_unlock)
+
+        self.assertIn("Only server administrators", member_unlock.reply.await_args.args[0])
+        self.assertTrue(self.bot.commands_locked_for_guild(SERVER_ID))
+
+        admin_unlock = self.message("v!con", administrator=True)
+        await self.bot.on_message(admin_unlock)
+
+        self.assertFalse(self.bot.commands_locked_for_guild(SERVER_ID))
+        self.assertEqual(load_command_locks(self.bot.command_locks_path), {})
+
+    async def test_command_lock_does_not_stop_automatic_spawn_handling(self) -> None:
+        self.bot.set_commands_locked(SERVER_ID, True)
+        self.bot.track_profile_catch = Mock()
+        self.bot.track_profile_box_shiny = AsyncMock()
+        self.bot.handle_catch_starboard = AsyncMock()
+        self.bot.handle_spawn = AsyncMock()
+        message = self.message(
+            "A wild Pokémon has appeared!",
+            author_id=self.bot.config.poketwo_bot_id,
+            author_is_bot=True,
+        )
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_spawn.assert_awaited_once_with(message)
 
 
 class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):

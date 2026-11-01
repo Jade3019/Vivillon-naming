@@ -63,6 +63,8 @@ PERMISSION_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!permission(?:\s+(off|\d+))?\s*$",
     re.IGNORECASE,
 )
+COMMANDS_OFF_PATTERN: Final[re.Pattern[str]] = re.compile(r"^v!coff\s*$", re.IGNORECASE)
+COMMANDS_ON_PATTERN: Final[re.Pattern[str]] = re.compile(r"^v!con\s*$", re.IGNORECASE)
 PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
@@ -530,6 +532,41 @@ def save_command_permissions(path: Path, permissions: dict[str, int]) -> None:
         temporary_path.replace(path)
     except OSError as error:
         raise ValueError(f"Could not save command permissions to {path}") from error
+
+
+def load_command_locks(path: Path) -> dict[str, bool]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read command locks from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Command locks in {path} have an invalid format")
+
+    locks: dict[str, bool] = {}
+    for guild_id, locked in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(locked, bool)
+        ):
+            raise ValueError(f"Command locks in {path} have an invalid entry")
+        locks[guild_id] = locked
+    return locks
+
+
+def save_command_locks(path: Path, locks: dict[str, bool]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(locks, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save command locks to {path}") from error
 
 
 def is_image_test_command(content: str) -> bool:
@@ -5618,6 +5655,10 @@ class NamingBot(discord.Client):
         self.command_permissions = load_command_permissions(
             self.command_permissions_path
         )
+        self.command_locks_path = Path(
+            os.environ.get("COMMAND_LOCKS_FILE", "command_locks.json")
+        )
+        self.command_locks = load_command_locks(self.command_locks_path)
         self.starboard_settings_path = Path(
             os.environ.get("STARBOARD_SETTINGS_FILE", "starboard_settings.json")
         )
@@ -6016,6 +6057,27 @@ class NamingBot(discord.Client):
             **SERVER_NAMING_DEFAULTS,
             **self.server_settings.get(str(guild_id), {}),
         }
+
+    def commands_locked_for_guild(self, guild_id: int) -> bool:
+        return self.command_locks.get(str(guild_id), False)
+
+    def set_commands_locked(self, guild_id: int, locked: bool) -> None:
+        if (
+            isinstance(guild_id, bool)
+            or not isinstance(guild_id, int)
+            or guild_id <= 0
+        ):
+            raise ValueError("A command lock requires a positive server ID.")
+        if not isinstance(locked, bool):
+            raise ValueError("A command lock state must be a boolean.")
+        updated_locks = dict(self.command_locks)
+        guild_key = str(guild_id)
+        if locked:
+            updated_locks[guild_key] = True
+        else:
+            updated_locks.pop(guild_key, None)
+        save_command_locks(self.command_locks_path, updated_locks)
+        self.command_locks = updated_locks
 
     def starboard_settings_for_guild(
         self, guild_id: int
@@ -6425,6 +6487,22 @@ class NamingBot(discord.Client):
 
         text = message_text(message)
         if message.author.id != self.config.poketwo_bot_id:
+            if COMMANDS_OFF_PATTERN.fullmatch(message.content):
+                await self.handle_command_lock_command(message, locked=True)
+                return
+            if COMMANDS_ON_PATTERN.fullmatch(message.content):
+                await self.handle_command_lock_command(message, locked=False)
+                return
+            if (
+                message.guild is not None
+                and self.commands_locked_for_guild(message.guild.id)
+                and re.match(r"^\s*v!", message.content, re.IGNORECASE)
+            ):
+                await message.reply(
+                    "Commands are currently disabled for this server.",
+                    mention_author=False,
+                )
+                return
             if re.match(r"^v!permission(?:\s|$)", message.content, re.IGNORECASE):
                 await self.handle_permission_command(message)
                 return
@@ -7234,6 +7312,50 @@ class NamingBot(discord.Client):
             mention_author=False,
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+    async def handle_command_lock_command(
+        self,
+        message: discord.Message,
+        *,
+        locked: bool,
+    ) -> None:
+        guild = message.guild
+        if guild is None:
+            await message.reply(
+                "Command access can only be changed in a server.",
+                mention_author=False,
+            )
+            return
+        permissions = getattr(message.author, "guild_permissions", None)
+        if permissions is None or not permissions.administrator:
+            await message.reply(
+                "Only server administrators can enable or disable commands.",
+                mention_author=False,
+            )
+            return
+
+        try:
+            self.set_commands_locked(guild.id, locked)
+        except ValueError:
+            logger.exception(
+                "Could not update command lock for guild %s",
+                guild.id,
+            )
+            await message.reply(
+                "I couldn't update command access. Check the bot logs.",
+                mention_author=False,
+            )
+            return
+
+        if locked:
+            confirmation = (
+                "Bot commands are now disabled for this server. "
+                "Automatic bot features will continue. "
+                "An administrator can run `v!con` to re-enable commands."
+            )
+        else:
+            confirmation = "Bot commands are enabled again for this server."
+        await message.reply(confirmation, mention_author=False)
 
     async def report_low_accuracy(
         self, message: discord.Message, name: str, confidence: float

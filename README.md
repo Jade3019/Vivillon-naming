@@ -157,6 +157,12 @@ Use `v!permission` to view the configured role or `v!permission off` to remove
 it. The setting is stored in `command_permissions.json` by default; set
 `COMMAND_PERMISSIONS_FILE` to use a different persistent path.
 
+Server administrators can use `v!coff` to disable `v!` commands for everyone
+in that server and `v!con` to re-enable them. While commands are disabled,
+automatic bot features continue to run; only these two administrator controls
+remain available. The lock is stored in `command_locks.json` by default; set
+`COMMAND_LOCKS_FILE` to use a different persistent path.
+
 Open **Starboard** from `v!settings` to choose separate **Vivillon Starboard**,
 **Shinyboard**, and **Normal Starboard** channels. The Vivillon Starboard posts
 shiny catches, catches with 90% IV or higher, catches below 10% IV, MissingNo.

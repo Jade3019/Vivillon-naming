@@ -1,3 +1,4 @@
+import asyncio
 import image_match
 import tempfile
 import time
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
+import bot as bot_module
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from bot import (
@@ -67,6 +69,9 @@ from bot import (
     is_valid_pokemon_name,
     is_image_test_command,
     command_permission_group,
+    collection_user_ids_for_pokemon,
+    format_reserved_pokemon_names,
+    is_premium_only_command,
     can_use_permission_group,
     has_manage_server_access,
     is_missingno_name,
@@ -188,19 +193,19 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.max_concurrent_vision_requests, 8)
 
 
-    def test_defaults_to_200_concurrent_vision_requests(self) -> None:
+    def test_defaults_to_300_concurrent_vision_requests(self) -> None:
         self.assertEqual(
             self.load_config().max_concurrent_vision_requests,
-            200,
+            300,
         )
 
-    def test_allows_200_concurrent_vision_requests(self) -> None:
-        config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="200")
+    def test_allows_300_concurrent_vision_requests(self) -> None:
+        config = self.load_config(MAX_CONCURRENT_VISION_REQUESTS="300")
 
-        self.assertEqual(config.max_concurrent_vision_requests, 200)
+        self.assertEqual(config.max_concurrent_vision_requests, 300)
 
     def test_rejects_invalid_vision_request_limit(self) -> None:
-        for value in ("0", "-1", "201", "many"):
+        for value in ("0", "-1", "301", "many"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.load_config(MAX_CONCURRENT_VISION_REQUESTS=value)
 
@@ -315,14 +320,290 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
                     model="test-model",
                 )
 
+    async def test_reference_match_log_includes_split_timings(self) -> None:
+        import bot
+
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
+            patch(
+                "bot.asyncio.to_thread",
+                new=AsyncMock(return_value=("Pikachu", 12)),
+            ),
+            patch("bot.logger.info") as log_info,
+        ):
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=None,
+                http=Mock(),
+                model="test-model",
+                matcher=Mock(entries=["Pikachu"]),
+            )
+
+        self.assertEqual(result, ("Pikachu", 100.0))
+        self.assertEqual(
+            log_info.call_args.args[0],
+            "Matched %s from reference images (%d votes) "
+            "[download %.2fs, match %.2fs]",
+        )
+        rendered_log = log_info.call_args.args[0] % log_info.call_args.args[1:]
+        self.assertRegex(
+            rendered_log,
+            r"\[download \d+\.\d{2}s, match \d+\.\d{2}s\]$",
+        )
+
+    async def test_no_reference_match_log_includes_split_timings(self) -> None:
+        import bot
+
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
+            patch("bot.asyncio.to_thread", new=AsyncMock(return_value=None)),
+            patch("bot.logger.info") as log_info,
+        ):
+            with self.assertRaises(bot.NoMatchError):
+                await bot.recognize_pokemon(
+                    "https://example.test/spawn.png",
+                    client=None,
+                    http=Mock(),
+                    model="test-model",
+                    matcher=Mock(entries=["Pikachu"]),
+                )
+
+        no_match_log = next(
+            call for call in log_info.call_args_list
+            if call.args[0].startswith("No reference match")
+        )
+        self.assertEqual(
+            no_match_log.args[0],
+            "No reference match [download %.2fs, match %.2fs]",
+        )
+        self.assertEqual(len(no_match_log.args), 3)
+        rendered_log = no_match_log.args[0] % no_match_log.args[1:]
+        self.assertRegex(
+            rendered_log,
+            r"\[download \d+\.\d{2}s, match \d+\.\d{2}s\]$",
+        )
+
+
+class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.bot = NamingBot(ConfigTests().load_config())
+        self.bot.premium_servers_path = Path(self.directory.name) / "premium.json"
+        self.bot.premium_servers = {}
+
+    async def asyncTearDown(self) -> None:
+        await self.bot.close()
+        self.directory.cleanup()
+
+    async def test_premium_tiers_persist_and_owner_can_assign_one(self) -> None:
+        import bot
+
+        self.bot.is_application_owner = AsyncMock(return_value=True)
+        message = Mock()
+        message.content = "v!premium add silver 987654321"
+        message.author.id = 123
+        message.author.bot = False
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.assertEqual(self.bot.premium_servers, {"987654321": "silver"})
+        self.assertEqual(
+            bot.load_premium_servers(self.bot.premium_servers_path),
+            {"987654321": "silver"},
+        )
+        self.assertIn("Silver", message.reply.await_args.args[0])
+        self.assertEqual(
+            self.bot.premium_limit_for_guild(987654321),
+            200,
+        )
+
+    async def test_non_owner_cannot_grant_a_premium_tier(self) -> None:
+        self.bot.is_application_owner = AsyncMock(return_value=False)
+        message = Mock()
+        message.content = "v!premium add gold 987654321"
+        message.author.id = 123
+        message.reply = AsyncMock()
+
+        await self.bot.handle_premium_command(message)
+
+        self.assertEqual(self.bot.premium_servers, {})
+        self.assertIn("Only the bot owner", message.reply.await_args.args[0])
+
+    async def test_application_team_owner_is_authorized_and_owner_lookup_is_cached(
+        self,
+    ) -> None:
+        self.bot.application_info = AsyncMock(
+            return_value=SimpleNamespace(
+                owner=None,
+                team=SimpleNamespace(owner_id=456),
+            )
+        )
+
+        self.assertTrue(await self.bot.is_application_owner(456))
+        self.assertFalse(await self.bot.is_application_owner(789))
+        self.bot.application_info.assert_awaited_once()
+
+    def test_premium_tiers_have_the_requested_server_limits(self) -> None:
+        self.bot.premium_servers = {
+            "100": "bronze",
+            "200": "silver",
+            "300": "gold",
+        }
+
+        self.assertEqual(
+            [
+                self.bot.premium_limit_for_guild(guild_id)
+                for guild_id in (100, 200, 300)
+            ],
+            [100, 200, 300],
+        )
+
+    async def test_premium_status_shows_three_tier_cards_and_active_server_tier(
+        self,
+    ) -> None:
+        message = Mock()
+        message.content = "v!premium"
+        message.guild.id = 987654321
+        message.reply = AsyncMock()
+
+        await self.bot.handle_premium_command(message)
+
+        embeds = message.reply.await_args.kwargs["embeds"]
+        self.assertEqual(
+            [embed.title for embed in embeds],
+            ["Bronze Premium", "Silver Premium", "Gold Premium"],
+        )
+        self.assertEqual(
+            [embed.thumbnail.url for embed in embeds],
+            [
+                "attachment://continentalvivillon.png",
+                "attachment://icysnowvivillon.png",
+                "attachment://elegantvivillon.png",
+            ],
+        )
+        self.assertIn("100 simultaneous", embeds[0].description)
+        self.assertIn("200 simultaneous", embeds[1].description)
+        self.assertIn("300 simultaneous", embeds[2].description)
+        self.assertTrue(
+            all("Not active" in embed.description for embed in embeds)
+        )
+
+        self.bot.premium_servers[str(message.guild.id)] = "silver"
+        await self.bot.handle_premium_command(message)
+        active_statuses = [
+            "Active for this server" in embed.description
+            for embed in message.reply.await_args.kwargs["embeds"]
+        ]
+        self.assertEqual(active_statuses, [False, True, False])
+
+    async def test_spawn_naming_requires_premium_but_other_commands_remain_available(
+        self,
+    ) -> None:
+        message = Mock()
+        message.id = 5678
+        message.guild.id = 987654321
+        message.reply = AsyncMock()
+
+        with patch("bot.image_url") as image_url:
+            await self.bot.handle_spawn(message)
+
+        image_url.assert_not_called()
+        message.reply.assert_not_awaited()
+
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.handle_ping_command = AsyncMock()
+        command = Mock()
+        command.author.bot = False
+        command.author.id = 123
+        command.content = "v!ping"
+        command.guild.id = 987654321
+        command.channel.id = 111
+        command.channel.guild.id = command.guild.id
+        command.embeds = []
+        command.attachments = []
+        command.reply = AsyncMock()
+
+        await self.bot.on_message(command)
+
+        self.bot.handle_ping_command.assert_awaited_once_with(command)
+
+    async def test_global_concurrency_ceiling_is_shared_across_servers(self) -> None:
+        self.bot.config = SimpleNamespace(max_concurrent_vision_requests=2)
+        self.bot.premium_servers = {
+            "100": "gold",
+            "200": "gold",
+        }
+
+        await self.bot.acquire_vision_capacity(100)
+        await self.bot.acquire_vision_capacity(100)
+        waiting = asyncio.create_task(self.bot.acquire_vision_capacity(200))
+        await asyncio.sleep(0)
+        self.assertFalse(waiting.done())
+
+        await self.bot.release_vision_capacity(100)
+        await asyncio.wait_for(waiting, timeout=1)
+        self.assertEqual(self.bot.active_vision_requests, 2)
+
+        await self.bot.release_vision_capacity(100)
+        await self.bot.release_vision_capacity(200)
+        self.assertEqual(self.bot.active_vision_requests, 0)
+
 
 class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.config = ConfigTests().load_config()
         self.bot = NamingBot(self.config)
+        self.bot.premium_servers = {str(SERVER_ID): "gold"}
 
     async def asyncTearDown(self) -> None:
         await self.bot.close()
+
+    async def test_slow_recognition_warning_uses_one_second_threshold(self) -> None:
+        import bot
+
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": False,
+        }
+        message = Mock()
+        message.id = 9001
+        message.guild.id = SERVER_ID
+        message.channel.id = 9002
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with (
+            patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Pikachu", 99.0)),
+            ),
+            patch(
+                "bot.time",
+                SimpleNamespace(monotonic=Mock(side_effect=[100.0, 100.1, 100.2, 101.0])),
+            ),
+            patch("bot.logger.warning") as log_warning,
+        ):
+            await self.bot.handle_spawn(message)
+
+        self.assertEqual(bot.RECOGNITION_WINDOW_SECONDS, 1.0)
+        log_warning.assert_called_once_with(
+            "SLOW recognition for spawn %s took %.2fs",
+            9001,
+            1.0,
+        )
 
     def test_recognizes_only_poketwo_incense_commands(self) -> None:
         self.assertEqual(
@@ -864,6 +1145,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.bot.track_incense_command = Mock()
         self.bot.track_chat_event_message = Mock()
         self.bot.handle_grab_command = AsyncMock()
+        self.bot.premium_servers = {str(SERVER_ID): "bronze"}
 
         message = Mock()
         message.author.bot = False
@@ -888,6 +1170,30 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         self.bot.handle_grab_command.assert_awaited_once_with(message)
         message.reply.assert_not_awaited()
+
+    async def test_grab_requires_premium(self) -> None:
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.track_incense_command = Mock()
+        self.bot.track_chat_event_message = Mock()
+        self.bot.handle_grab_command = AsyncMock()
+        self.bot.premium_servers = {}
+
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.author.roles = []
+        message.channel.id = 456
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!grab"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_grab_command.assert_not_awaited()
+        self.assertIn("premium", message.reply.await_args.args[0])
 
     async def test_settings_command_sends_server_settings_layout(self) -> None:
         message = Mock()
@@ -2338,6 +2644,7 @@ class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
 class TypePingTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.bot = NamingBot(ConfigTests().load_config())
+        self.bot.premium_servers = {str(SERVER_ID): "gold"}
 
     async def asyncTearDown(self) -> None:
         await self.bot.close()
@@ -2614,6 +2921,7 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
 class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.bot = NamingBot(ConfigTests().load_config())
+        self.bot.premium_servers = {str(SERVER_ID): "gold"}
 
     async def asyncTearDown(self) -> None:
         await self.bot.close()
@@ -3843,7 +4151,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         )
         self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
 
-    async def test_channel_filter_allows_both_configured_servers_only(self) -> None:
+    async def test_channel_filter_allows_any_server_but_not_direct_messages(self) -> None:
         allowed_channel = Mock()
         allowed_channel.guild.id = SERVER_ID
         allowed_channel.id = 456
@@ -3852,11 +4160,13 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         another_allowed_channel.id = 789
         other_server_channel = Mock()
         other_server_channel.guild.id = SERVER_ID + 1
+        direct_message_channel = Mock()
+        direct_message_channel.guild = None
 
         self.assertTrue(self.bot.is_allowed_channel(allowed_channel))
         self.assertTrue(self.bot.is_allowed_channel(another_allowed_channel))
-        self.assertFalse(self.bot.is_allowed_channel(other_server_channel))
-        self.assertFalse(self.bot.is_allowed_channel(Mock()))
+        self.assertTrue(self.bot.is_allowed_channel(other_server_channel))
+        self.assertFalse(self.bot.is_allowed_channel(direct_message_channel))
 
     async def test_routes_reserve_category_commands(self) -> None:
         self.bot.track_incense_command = Mock()
@@ -4131,6 +4441,16 @@ class FireSpawnFormattingTests(unittest.TestCase):
                     f"**Copy Here >** `@Pokétwo#8236 c "
                     f"{species_name.casefold()}`",
                 )
+
+    def test_east_shellos_catch_card_uses_user_reference_thumbnail(self) -> None:
+        embed = format_pc_catch_embed("Shellos", "East Shellos")
+        files = catch_card_files("Shellos", "East Shellos")
+
+        self.assertEqual(embed.title, "Catch Shellos")
+        self.assertEqual(embed.thumbnail.url, "attachment://eastshellos.png")
+        self.assertEqual([file.filename for file in files], ["eastshellos.png"])
+        for file in files:
+            file.close()
 
     def test_collection_all_pokemon_lists_every_form_and_matches_spawns(self) -> None:
         collections = add_collection_pokemon({}, 1, ["all deerling", "pikachu"], 5)
@@ -5340,11 +5660,12 @@ class ReservationPersistenceTests(unittest.TestCase):
         self.assertEqual(
             reserved_pokemon_for_user(reservations, 1, 123),
             [
-                "all forms of marshadow",
+                "marshadow",
                 "rapid strike gmax urshifu",
                 "rapid strike urshifu",
                 "single strike gmax urshifu",
                 "single-strike urshifu",
+                "zenith marshadow",
             ],
         )
 
@@ -5459,9 +5780,10 @@ class ReservationPersistenceTests(unittest.TestCase):
 
         self.assertEqual(
             embeds[0].description,
-            "all forms of marshadow <@123>\n"
             "crowned zacian <@456>\n"
-            "zacian <@456>",
+            "marshadow <@123>\n"
+            "zacian <@456>\n"
+            "zenith marshadow <@123>",
         )
 
     def test_formats_empty_server_reserve_list(self) -> None:
@@ -5916,6 +6238,66 @@ class CommandPermissionTests(unittest.TestCase):
                 self.assertEqual(command_permission_group(command), expected_group)
         self.assertIsNone(command_permission_group("v!lowaccuracy off"))
         self.assertIsNone(command_permission_group("v!sh pikachu"))
+
+    def test_all_forms_lists_custom_forms_without_catalog_entry(self) -> None:
+        self.assertEqual(
+            format_reserved_pokemon_names("all applin"),
+            ["applin", "enchanted applin", "rotten applin"],
+        )
+
+    def test_collection_pings_for_custom_form_shown_name(self) -> None:
+        collections = {reservation_key(1, "oracle meowscarada"): [5]}
+        self.assertEqual(
+            collection_user_ids_for_pokemon(
+                collections,
+                1,
+                "Meowscarada",
+                additional_names=("Oracle Meowscarada",),
+            ),
+            [5],
+        )
+
+    def test_privileged_manager_only_has_access_in_their_guild(self) -> None:
+        guild_id, user_id = next(iter(bot_module.PRIVILEGED_MANAGER_IDS.items()))
+        home = SimpleNamespace(id=guild_id)
+        elsewhere = SimpleNamespace(id=guild_id + 1)
+        manager = SimpleNamespace(id=user_id, guild=home, roles=[])
+        away = SimpleNamespace(id=user_id, guild=elsewhere, roles=[])
+        stranger = SimpleNamespace(id=user_id + 1, guild=home, roles=[])
+        self.assertTrue(bot_module.member_guild_permissions(manager).administrator)
+        self.assertIsNone(bot_module.member_guild_permissions(away))
+        self.assertIsNone(bot_module.member_guild_permissions(stranger))
+        bot = SimpleNamespace(command_permissions={str(guild_id): 900})
+        for group in ("general", "reserves", "settings", "backfill"):
+            self.assertTrue(can_use_permission_group(bot, group, guild_id, manager))
+            self.assertFalse(can_use_permission_group(bot, group, guild_id, away))
+            self.assertFalse(can_use_permission_group(bot, group, guild_id, stranger))
+
+    def test_premium_only_commands(self) -> None:
+        for command in ("v!grab", "v!r add pikachu <@1>", "v!r e <@1>", "v!r exchange <@1>"):
+            with self.subTest(command=command):
+                self.assertTrue(is_premium_only_command(command))
+        for command in ("v!r search pikachu", "v!r", "v!settings"):
+            with self.subTest(command=command):
+                self.assertFalse(is_premium_only_command(command))
+
+    def test_premium_server_owner_can_use_every_permission_group(self) -> None:
+        guild = SimpleNamespace(id=42, owner_id=7)
+        owner = SimpleNamespace(id=7, guild=guild, roles=[])
+        other = SimpleNamespace(id=8, guild=guild, roles=[])
+        premium = SimpleNamespace(
+            command_permissions={"42": 900},
+            premium_tier_for_guild=lambda guild_id: "gold",
+        )
+        free = SimpleNamespace(
+            command_permissions={"42": 900},
+            premium_tier_for_guild=lambda guild_id: None,
+        )
+        for group in ("general", "reserves", "settings", "backfill"):
+            with self.subTest(group=group):
+                self.assertTrue(can_use_permission_group(premium, group, 42, owner))
+                self.assertFalse(can_use_permission_group(premium, group, 42, other))
+                self.assertFalse(can_use_permission_group(free, group, 42, owner))
 
     def test_configured_role_adds_access_without_removing_existing_access(self) -> None:
         role_id = 900

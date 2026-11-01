@@ -40,17 +40,24 @@ approval for privileged intents on larger bots.
    `POKETWO_BOT_ID` identifies the account whose spawn messages the bot
    monitors. Generated catch commands target `<@716390085896962058>`.
 
-   The bot responds in every channel and thread in servers
-   `1530949341013868635` and `1543384606630481920`. Messages from other servers
-   and direct messages are ignored.
-   The bot queues spawn recognition and processes up to 200 vision requests
-   concurrently by default. Set `MAX_CONCURRENT_VISION_REQUESTS` to adjust this
-   between 1 and 200 for your OpenAI project’s rate limits; the client retries
-   temporary API errors.
+   The bot responds to commands in server channels and threads. Spawn naming
+   requires a premium tier assigned to that server with `v!premium add`; other
+   commands and features remain available without a tier. Direct messages are
+   otherwise ignored; tier status requires a server context.
+   Bronze, Silver, and Gold allow up to 100, 200, and 300 simultaneous spawn
+   recognitions per server. The bot also has a shared ceiling of 300 requests;
+   set `MAX_CONCURRENT_VISION_REQUESTS` between 1 and 300 to lower it for your
+   OpenAI project’s rate limits. The client retries temporary API errors.
    A larger channel count does not increase OpenAI API quota, so billing,
    project limits, and the exact error in the bot logs still matter if requests
    continue to fail. `OPENAI_MODEL` can select another vision-capable
    Chat Completions model.
+
+   `v!premium` displays Bronze/Silver/Gold tier cards and shows which tier is
+   active for the current server. Only the bot owner can grant access with
+   `v!premium add bronze <server id>`, `v!premium add silver <server id>`, or
+   `v!premium add gold <server id>`. Tier assignments persist in
+   `premium_servers.json` (or the path set by `PREMIUM_SERVERS_FILE`).
 
 4. Start the bot:
 
@@ -68,6 +75,7 @@ docker build -t vivillon-naming .
 docker run -d --name vivillon-naming --restart unless-stopped \
   --env-file .env \
   -e PROFILE_DATA_FILE=/data/profile_data.json \
+  -e PREMIUM_SERVERS_FILE=/data/premium_servers.json \
   -e STARBOARD_SETTINGS_FILE=/data/starboard_settings.json \
   -e SERVER_SETTINGS_FILE=/data/server_settings.json \
   -v vivillon-data:/data \

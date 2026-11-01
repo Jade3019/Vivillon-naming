@@ -53,12 +53,27 @@ CATCH_COMMAND_NAME_ALIASES: Final[dict[str, str]] = {
     "blade aegislash": "Aegislash",
     "shield aegislash": "Aegislash",
 }
+PREMIUM_TIER_LIMITS: Final[dict[str, int]] = {
+    "bronze": 100,
+    "silver": 200,
+    "gold": 300,
+}
+PREMIUM_TIER_BUTTERFLIES: Final[dict[str, tuple[str, str, int]]] = {
+    "bronze": ("Continental Vivillon", "continentalvivillon.png", 0xCD7F32),
+    "silver": ("Icy-Snow Vivillon", "icysnowvivillon.png", 0xC0C0C0),
+    "gold": ("Elegant Vivillon", "elegantvivillon.png", 0xFFD700),
+}
 SERVER_ID: Final[int] = 1530949341013868635
 SERVER_IDS: Final[frozenset[int]] = frozenset(
-    {SERVER_ID, 1543384606630481920}
+    {SERVER_ID, 1543384606630481920, 1473361675452420136}
 )
+# Guild id -> the one user who may use every command in that guild only.
+PRIVILEGED_MANAGER_IDS: Final[dict[int, int]] = {
+    1473361675452420136: 616386709659189268,
+}
 INCENSE_DURATION_SECONDS: Final[int] = 60 * 60
 API_STATUS_WINDOW_SECONDS: Final[int] = 5 * 60
+RECOGNITION_WINDOW_SECONDS: Final[float] = 1.0
 API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!api\s*$",
     re.IGNORECASE,
@@ -69,6 +84,10 @@ PERMISSION_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 COMMANDS_OFF_PATTERN: Final[re.Pattern[str]] = re.compile(r"^v!coff\s*$", re.IGNORECASE)
 COMMANDS_ON_PATTERN: Final[re.Pattern[str]] = re.compile(r"^v!con\s*$", re.IGNORECASE)
+PREMIUM_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!premium(?:\s+add\s+(?P<tier>bronze|silver|gold)\s+(?P<guild_id>[0-9]+))?\s*$",
+    re.IGNORECASE,
+)
 PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
     re.IGNORECASE,
@@ -425,9 +444,9 @@ class Config:
         try:
             poketwo_bot_id = int(poketwo_bot_id)
             max_concurrent_vision_requests = int(
-                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "200")
+                os.environ.get("MAX_CONCURRENT_VISION_REQUESTS", "300")
             )
-            if not 1 <= max_concurrent_vision_requests <= 200:
+            if not 1 <= max_concurrent_vision_requests <= 300:
                 raise ValueError
             return cls(
                 discord_token=discord_token,
@@ -440,7 +459,7 @@ class Config:
         except ValueError as error:
             raise ValueError(
                 "POKETWO_BOT_ID must be a positive numeric Discord ID; "
-                "MAX_CONCURRENT_VISION_REQUESTS must be an integer from 1 to 200"
+                "MAX_CONCURRENT_VISION_REQUESTS must be an integer from 1 to 300"
             ) from error
 
 
@@ -577,6 +596,73 @@ def save_command_locks(path: Path, locks: dict[str, bool]) -> None:
         raise ValueError(f"Could not save command locks to {path}") from error
 
 
+def load_premium_servers(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read premium servers from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Premium servers in {path} have an invalid format")
+
+    premium_servers: dict[str, str] = {}
+    for guild_id, tier in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(tier, str)
+            or tier.casefold() not in PREMIUM_TIER_LIMITS
+        ):
+            raise ValueError(f"Premium servers in {path} have an invalid entry")
+        premium_servers[guild_id] = tier.casefold()
+    return premium_servers
+
+
+def save_premium_servers(path: Path, premium_servers: dict[str, str]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(premium_servers, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save premium servers to {path}") from error
+
+
+def build_premium_status_embeds(current_tier: str | None) -> list[discord.Embed]:
+    embeds = []
+    for tier, limit in PREMIUM_TIER_LIMITS.items():
+        butterfly_name, filename, color = PREMIUM_TIER_BUTTERFLIES[tier]
+        status = (
+            "✅ Active for this server"
+            if current_tier == tier
+            else "Not active for this server"
+        )
+        embed = discord.Embed(
+            title=f"{tier.title()} Premium",
+            description=(
+                f"**Spawn naming:** up to {limit} simultaneous spawns\n"
+                f"**Status:** {status}"
+            ),
+            color=color,
+        )
+        embed.set_thumbnail(url=f"attachment://{filename}")
+        embed.set_footer(text=f"Vivillon pattern: {butterfly_name}")
+        embeds.append(embed)
+    return embeds
+
+
+def premium_status_files() -> list[discord.File]:
+    thumbnail_dir = Path(__file__).with_name("assets") / "thumbnails"
+    return [
+        discord.File(thumbnail_dir / filename, filename=filename)
+        for _, filename, _ in PREMIUM_TIER_BUTTERFLIES.values()
+    ]
+
+
 def is_image_test_command(content: str) -> bool:
     return (
         re.fullmatch(r"v!test(?:\s+shiny)?\s*", content, re.IGNORECASE)
@@ -611,6 +697,39 @@ def command_permission_group(content: str) -> str | None:
     return None
 
 
+PREMIUM_ONLY_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!(?:grab|r\s+(?:add|e|exchange))(?:\s|$)",
+    re.IGNORECASE,
+)
+
+
+def is_premium_only_command(content: str) -> bool:
+    return PREMIUM_ONLY_COMMAND_PATTERN.match(content.strip()) is not None
+
+
+def is_premium_server_owner(bot: object, member: object) -> bool:
+    guild = getattr(member, "guild", None)
+    tier_for_guild = getattr(bot, "premium_tier_for_guild", None)
+    if guild is None or not callable(tier_for_guild):
+        return False
+    return (
+        getattr(guild, "owner_id", None) == getattr(member, "id", object())
+        and tier_for_guild(guild.id) is not None
+    )
+
+
+def is_privileged_manager(member: object) -> bool:
+    guild_id = getattr(getattr(member, "guild", None), "id", None)
+    manager_id = PRIVILEGED_MANAGER_IDS.get(guild_id) if isinstance(guild_id, int) else None
+    return manager_id is not None and getattr(member, "id", None) == manager_id
+
+
+def member_guild_permissions(member: object) -> discord.Permissions | None:
+    if is_privileged_manager(member):
+        return discord.Permissions.all()
+    return getattr(member, "guild_permissions", None)
+
+
 def member_has_role_id(member: object, role_id: int) -> bool:
     return any(
         getattr(role, "id", None) == role_id
@@ -638,15 +757,20 @@ def member_has_command_role(bot: object, guild_id: int, member: object) -> bool:
 def has_reserve_manager_access(
     bot: object, guild_id: int, member: object
 ) -> bool:
-    return member_has_role_id(member, RESERVE_ROLE_ID) or member_has_command_role(
-        bot, guild_id, member
+    return (
+        member_has_role_id(member, RESERVE_ROLE_ID)
+        or member_has_command_role(bot, guild_id, member)
+        or is_premium_server_owner(bot, member)
+        or is_privileged_manager(member)
     )
 
 
 def has_manage_server_access(bot: object, guild_id: int, member: object) -> bool:
-    permissions = getattr(member, "guild_permissions", None)
-    return member_has_command_role(bot, guild_id, member) or bool(
-        getattr(permissions, "manage_guild", False)
+    permissions = member_guild_permissions(member)
+    return (
+        member_has_command_role(bot, guild_id, member)
+        or is_premium_server_owner(bot, member)
+        or bool(getattr(permissions, "manage_guild", False))
     )
 
 
@@ -657,11 +781,16 @@ def can_use_permission_group(
     member: object,
 ) -> bool:
     role_id = command_role_id_for_guild(bot, guild_id)
-    if role_id is None or member_has_role_id(member, role_id):
+    if (
+        role_id is None
+        or member_has_role_id(member, role_id)
+        or is_premium_server_owner(bot, member)
+        or is_privileged_manager(member)
+    ):
         return True
     if group == "reserves":
         return member_has_role_id(member, RESERVE_ROLE_ID)
-    permissions = getattr(member, "guild_permissions", None)
+    permissions = member_guild_permissions(member)
     if group == "settings":
         return bool(getattr(permissions, "manage_guild", False))
     if group == "backfill":
@@ -697,12 +826,29 @@ async def recognize_pokemon(
     matcher: ImageMatcher | None = None,
 ) -> tuple[str, float]:
     downloaded: tuple[bytes, str] | None = None
+    download_seconds = 0.0
+    match_seconds = 0.0
     if matcher is not None and matcher.entries:
+        download_started = time.monotonic()
         downloaded = await download_image(http, url)
+        download_seconds = time.monotonic() - download_started
+        match_started = time.monotonic()
         found = await asyncio.to_thread(matcher.match, downloaded[0])
+        match_seconds = time.monotonic() - match_started
         if found is not None:
-            logger.info("Matched %s from reference images (%d votes)", *found)
+            logger.info(
+                "Matched %s from reference images (%d votes) "
+                "[download %.2fs, match %.2fs]",
+                *found,
+                download_seconds,
+                match_seconds,
+            )
             return found[0], 100.0
+    logger.info(
+        "No reference match [download %.2fs, match %.2fs]",
+        download_seconds,
+        match_seconds,
+    )
 
     if client is None:
         raise NoMatchError("No reference image matched and OpenAI is not configured")
@@ -1402,7 +1548,7 @@ THUMBNAIL_ASSETS_DIR: Final[Path] = Path(__file__).with_name("assets") / "thumbn
 
 
 def custom_thumbnail_path(name: str) -> Path | None:
-    """Bundled thumbnail for Pokémon that PokeAPI has no artwork for."""
+    """Bundled artwork for Pokémon or forms needing a non-default sprite."""
     filename = re.sub(r"[^a-z0-9]", "", normalize_pokemon_alias(name)) + ".png"
     path = THUMBNAIL_ASSETS_DIR / filename
     return path if path.is_file() else None
@@ -2644,8 +2790,15 @@ def collection_user_ids_for_pokemon(
     collections: dict[str, list[int]],
     guild_id: int,
     pokemon_name: str,
+    *,
+    additional_names: tuple[str, ...] = (),
 ) -> list[int]:
-    return reserved_user_ids_for_pokemon(collections, guild_id, pokemon_name)
+    return reserved_user_ids_for_pokemon(
+        collections,
+        guild_id,
+        pokemon_name,
+        additional_names=additional_names,
+    )
 
 
 def remove_collection_pokemon(
@@ -3128,6 +3281,19 @@ def all_forms_display_names(species_name: str) -> list[str]:
             name = f"{suffix.replace('-', ' ')} {species_name}"
         if name not in names:
             names.append(name)
+    custom_forms = [
+        custom_name.casefold()
+        for custom_name, custom_species in CUSTOM_FORM_SPECIES.items()
+        if custom_species.casefold() == species_name
+    ]
+    if custom_forms:
+        if not names:
+            names.append(species_name)
+        names.extend(
+            custom_name
+            for custom_name in custom_forms
+            if custom_name not in {name.casefold() for name in names}
+        )
     return names
 
 
@@ -5618,9 +5784,13 @@ class NamingBot(discord.Client):
             if config.openai_api_key
             else None
         )
-        self.vision_semaphore = asyncio.Semaphore(
-            config.max_concurrent_vision_requests
+        self.vision_capacity_condition = asyncio.Condition()
+        self.active_vision_requests_by_guild: dict[int, int] = {}
+        self.premium_servers_path = Path(
+            os.environ.get("PREMIUM_SERVERS_FILE", "premium_servers.json")
         )
+        self.premium_servers = load_premium_servers(self.premium_servers_path)
+        self.application_owner_ids: set[int] | None = None
         self.image_http: aiohttp.ClientSession | None = None
         image_bank_file = os.environ.get("IMAGE_BANK_FILE")
         self.image_matcher = ImageMatcher(
@@ -5803,7 +5973,6 @@ class NamingBot(discord.Client):
         message_id = getattr(message, "id", None)
         if (
             guild is None
-            or getattr(guild, "id", None) not in SERVER_IDS
             or isinstance(message_id, bool)
             or not isinstance(message_id, int)
             or message_id <= 0
@@ -5910,7 +6079,6 @@ class NamingBot(discord.Client):
         author = getattr(message, "author", None)
         if (
             guild is None
-            or getattr(guild, "id", None) not in SERVER_IDS
             or getattr(author, "id", None) != self.config.poketwo_bot_id
             or isinstance(message_id, bool)
             or not isinstance(message_id, int)
@@ -6486,6 +6654,12 @@ class NamingBot(discord.Client):
         # drop the org bot's own JSON requests, and before channel filtering.
         if self.org_rpc is not None and await self.org_rpc.handle_message(message):
             return
+        if (
+            not message.author.bot
+            and re.match(r"^v!premium(?:\s|$)", message.content, re.IGNORECASE)
+        ):
+            await self.handle_premium_command(message)
+            return
         poketwo_catch = message.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(message)
         parsed_catch_report = (
@@ -6547,6 +6721,17 @@ class NamingBot(discord.Client):
                     f"You need the configured role <@&{role_id}> to use this command.",
                     mention_author=False,
                     allowed_mentions=discord.AllowedMentions.none(),
+                )
+                return
+            if (
+                message.guild is not None
+                and is_premium_only_command(message.content)
+                and self.premium_tier_for_guild(message.guild.id) is None
+            ):
+                await message.reply(
+                    "This command requires a premium tier. Run `v!premium` "
+                    "to check this server's access.",
+                    mention_author=False,
                 )
                 return
             if PROFILE_COMMAND_PATTERN.fullmatch(message.content):
@@ -6652,9 +6837,137 @@ class NamingBot(discord.Client):
         if SPAWN_PATTERN.search(text):
             await self.handle_spawn(message)
 
+    async def is_application_owner(self, user_id: int) -> bool:
+        if self.application_owner_ids is None:
+            application = await self.application_info()
+            owner_ids: set[int] = set()
+            if application.owner is not None:
+                owner_ids.add(application.owner.id)
+            if application.team is not None:
+                owner_ids.add(application.team.owner_id)
+            self.application_owner_ids = owner_ids
+        return user_id in self.application_owner_ids
+
+    async def handle_premium_command(self, message: discord.Message) -> None:
+        match = PREMIUM_COMMAND_PATTERN.fullmatch(message.content.strip())
+        if match is None:
+            await message.reply(
+                "Usage: `v!premium` or "
+                "`v!premium add bronze|silver|gold <server id>`.",
+                mention_author=False,
+            )
+            return
+
+        tier = match.group("tier")
+        if tier is not None:
+            try:
+                is_owner = await self.is_application_owner(message.author.id)
+            except discord.HTTPException:
+                logger.exception("Could not verify the bot owner for premium access")
+                await message.reply(
+                    "I couldn't verify premium management access. Try again later.",
+                    mention_author=False,
+                )
+                return
+            if not is_owner:
+                await message.reply(
+                    "Only the bot owner can grant premium access.",
+                    mention_author=False,
+                )
+                return
+
+            guild_id = int(match.group("guild_id"))
+            if guild_id <= 0:
+                await message.reply(
+                    "The server ID must be a positive number.",
+                    mention_author=False,
+                )
+                return
+            normalized_tier = tier.casefold()
+            updated_premium_servers = dict(self.premium_servers)
+            updated_premium_servers[str(guild_id)] = normalized_tier
+            try:
+                save_premium_servers(
+                    self.premium_servers_path,
+                    updated_premium_servers,
+                )
+            except ValueError:
+                logger.exception("Could not save premium access for server %s", guild_id)
+                await message.reply(
+                    "I couldn't save that premium tier. Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+            self.premium_servers = updated_premium_servers
+            async with self.vision_capacity_condition:
+                self.vision_capacity_condition.notify_all()
+            await message.reply(
+                f"**{normalized_tier.title()}** access is active for server "
+                f"`{guild_id}`: up to "
+                f"{PREMIUM_TIER_LIMITS[normalized_tier]} simultaneous spawn "
+                "recognitions.",
+                mention_author=False,
+            )
+            return
+
+        if message.guild is None:
+            await message.reply(
+                "Use `v!premium` in a server to check that server's tier.",
+                mention_author=False,
+            )
+            return
+        files = premium_status_files()
+        try:
+            await message.reply(
+                embeds=build_premium_status_embeds(
+                    self.premium_tier_for_guild(message.guild.id)
+                ),
+                files=files,
+                mention_author=False,
+            )
+        finally:
+            for file in files:
+                file.close()
+
+    def premium_tier_for_guild(self, guild_id: int) -> str | None:
+        return self.premium_servers.get(str(guild_id))
+
+    def premium_limit_for_guild(self, guild_id: int) -> int:
+        tier = self.premium_tier_for_guild(guild_id)
+        return PREMIUM_TIER_LIMITS.get(tier, 0)
+
+    async def acquire_vision_capacity(self, guild_id: int) -> None:
+        guild_limit = self.premium_limit_for_guild(guild_id)
+        if guild_limit == 0:
+            raise ValueError(f"Server {guild_id} has no premium spawn-naming tier")
+        async with self.vision_capacity_condition:
+            await self.vision_capacity_condition.wait_for(
+                lambda: (
+                    self.active_vision_requests
+                    < self.config.max_concurrent_vision_requests
+                    and self.active_vision_requests_by_guild.get(guild_id, 0)
+                    < self.premium_limit_for_guild(guild_id)
+                )
+            )
+            self.active_vision_requests += 1
+            self.active_vision_requests_by_guild[guild_id] = (
+                self.active_vision_requests_by_guild.get(guild_id, 0) + 1
+            )
+
+    async def release_vision_capacity(self, guild_id: int) -> None:
+        async with self.vision_capacity_condition:
+            active_for_guild = self.active_vision_requests_by_guild.get(guild_id, 0)
+            if active_for_guild == 0 or self.active_vision_requests == 0:
+                raise RuntimeError("Released a vision slot that was not acquired")
+            if active_for_guild == 1:
+                del self.active_vision_requests_by_guild[guild_id]
+            else:
+                self.active_vision_requests_by_guild[guild_id] = active_for_guild - 1
+            self.active_vision_requests -= 1
+            self.vision_capacity_condition.notify_all()
+
     def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
-        guild = getattr(channel, "guild", None)
-        return getattr(guild, "id", None) in SERVER_IDS
+        return getattr(channel, "guild", None) is not None
 
     def load_active_incenses(self) -> dict[str, dict[str, int | str]]:
         if not self.incense_path.is_file():
@@ -6775,14 +7088,14 @@ class NamingBot(discord.Client):
         if command_match is None:
             return
         guild = message.guild
-        if guild is None or guild.id not in SERVER_IDS:
+        if guild is None:
             await message.reply(
-                "Profile backfill is only available in servers where Vivillon is enabled.",
+                "Profile backfill is only available in a server.",
                 mention_author=False,
             )
             return
         if (
-            not message.author.guild_permissions.administrator
+            not member_guild_permissions(message.author).administrator
             and not member_has_command_role(self, guild.id, message.author)
         ):
             await message.reply(
@@ -7036,9 +7349,9 @@ class NamingBot(discord.Client):
         match = PROFILE_COMMAND_PATTERN.fullmatch(message.content)
         if match is None:
             return
-        if message.guild is None or message.guild.id not in SERVER_IDS:
+        if message.guild is None:
             await message.reply(
-                "Profiles are only available in servers where Vivillon is enabled.",
+                "Profiles are only available in a server.",
                 mention_author=False,
             )
             return
@@ -7264,7 +7577,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        permissions = getattr(message.author, "guild_permissions", None)
+        permissions = member_guild_permissions(message.author)
         if permissions is None or not permissions.manage_guild:
             await message.reply(
                 "You need the Manage Server permission to configure command access.",
@@ -7351,7 +7664,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        permissions = getattr(message.author, "guild_permissions", None)
+        permissions = member_guild_permissions(message.author)
         if permissions is None or not permissions.administrator:
             await message.reply(
                 "Only server administrators can enable or disable commands.",
@@ -7403,7 +7716,7 @@ class NamingBot(discord.Client):
             logger.warning("Could not send low accuracy report", exc_info=True)
 
     async def handle_low_accuracy_command(self, message: discord.Message) -> None:
-        permissions = getattr(message.author, "guild_permissions", None)
+        permissions = member_guild_permissions(message.author)
         if message.guild is None or permissions is None or not permissions.manage_guild:
             await message.reply(
                 "You need the Manage Server permission to use this.",
@@ -7650,7 +7963,7 @@ class NamingBot(discord.Client):
             return
 
         if re.fullmatch(r"v!sh\s+clear\s+all\s*", message.content, re.IGNORECASE):
-            if not message.author.guild_permissions.administrator:
+            if not member_guild_permissions(message.author).administrator:
                 await message.reply(
                     "Only server administrators can clear everyone's shinyhunts.",
                     mention_author=False,
@@ -7775,7 +8088,7 @@ class NamingBot(discord.Client):
             )
             return
         if TYPE_PING_CLEAR_ALL_PATTERN.fullmatch(message.content) is not None:
-            if not message.author.guild_permissions.administrator:
+            if not member_guild_permissions(message.author).administrator:
                 await message.reply(
                     "Only server administrators can clear everyone's type pings.",
                     mention_author=False,
@@ -7830,7 +8143,7 @@ class NamingBot(discord.Client):
             return
 
         if re.fullmatch(r"v!cl\s+clear\s+all\s*", message.content, re.IGNORECASE):
-            if not message.author.guild_permissions.administrator:
+            if not member_guild_permissions(message.author).administrator:
                 await message.reply(
                     "Only server administrators can clear everyone's collection.",
                     mention_author=False,
@@ -8760,6 +9073,16 @@ class NamingBot(discord.Client):
         test_mode: bool = False,
         shiny_test_mode: bool = False,
     ) -> None:
+        guild = message.guild
+        if guild is None or self.premium_tier_for_guild(guild.id) is None:
+            if test_mode:
+                await message.reply(
+                    "Spawn naming requires a premium tier. Run `v!premium` "
+                    "to check this server's access.",
+                    mention_author=False,
+                )
+            return
+        guild_id = guild.id
         if not test_mode and message.guild:
             naming_settings = self.naming_settings_for_guild(message.guild.id)
             if not naming_settings["enabled"]:
@@ -8801,37 +9124,36 @@ class NamingBot(discord.Client):
         waiting_for_vision_slot = True
         try:
             try:
-                async with self.vision_semaphore:
-                    self.pending_vision_requests -= 1
-                    waiting_for_vision_slot = False
-                    self.active_vision_requests += 1
-                    try:
-                        inference_started = time.monotonic()
-                        for attempt in range(3):
-                            try:
-                                name, confidence = await recognize_pokemon(
-                                    url,
-                                    client=self.openai,
-                                    http=self.image_http,
-                                    model=self.config.openai_model,
-                                    detail=self.config.openai_image_detail,
-                                    matcher=self.image_matcher,
-                                )
-                                break
-                            except NoMatchError:
+                await self.acquire_vision_capacity(guild_id)
+                self.pending_vision_requests -= 1
+                waiting_for_vision_slot = False
+                try:
+                    inference_started = time.monotonic()
+                    for attempt in range(3):
+                        try:
+                            name, confidence = await recognize_pokemon(
+                                url,
+                                client=self.openai,
+                                http=self.image_http,
+                                model=self.config.openai_model,
+                                detail=self.config.openai_image_detail,
+                                matcher=self.image_matcher,
+                            )
+                            break
+                        except NoMatchError:
+                            raise
+                        except (
+                            aiohttp.ClientError,
+                            asyncio.TimeoutError,
+                            ValueError,
+                            OpenAIError,
+                        ):
+                            if attempt == 2:
                                 raise
-                            except (
-                                aiohttp.ClientError,
-                                asyncio.TimeoutError,
-                                ValueError,
-                                OpenAIError,
-                            ):
-                                if attempt == 2:
-                                    raise
-                                await asyncio.sleep(0.1)
-                        inference_seconds = time.monotonic() - inference_started
-                    finally:
-                        self.active_vision_requests -= 1
+                            await asyncio.sleep(0.1)
+                    inference_seconds = time.monotonic() - inference_started
+                finally:
+                    await self.release_vision_capacity(guild_id)
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
                 self.failed_recognition_count += 1
                 logger.exception("Could not recognize spawn in message %s", message.id)
@@ -8870,6 +9192,12 @@ class NamingBot(discord.Client):
             )
         elif not name and not test_mode:
             self.failed_recognition_count += 1
+        if response_seconds >= RECOGNITION_WINDOW_SECONDS:
+            logger.warning(
+                "SLOW recognition for spawn %s took %.2fs",
+                message.id,
+                response_seconds,
+            )
         logger.info(
             "Recognized %s in %.2fs (message %s)",
             name or "nothing",
@@ -8935,6 +9263,7 @@ class NamingBot(discord.Client):
                 self.collections,
                 message.guild.id,
                 name,
+                additional_names=(guess_name,),
             )
             if message.guild
             else []
@@ -9598,7 +9927,7 @@ class ClearCollectionView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not interaction.user.guild_permissions.administrator
+            or not member_guild_permissions(interaction.user).administrator
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",
@@ -9664,7 +9993,7 @@ class ClearShinyhuntsView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not interaction.user.guild_permissions.administrator
+            or not member_guild_permissions(interaction.user).administrator
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",
@@ -9730,7 +10059,7 @@ class ClearTypePingsView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not interaction.user.guild_permissions.administrator
+            or not member_guild_permissions(interaction.user).administrator
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",

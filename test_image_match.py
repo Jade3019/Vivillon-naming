@@ -74,10 +74,10 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], name)
 
-    def test_user_shellos_spawn_reference_matches_as_shellos(self) -> None:
+    def test_user_east_shellos_reference_matches_as_east_shellos(self) -> None:
         image_path = (
             Path(__file__).with_name("pokemon_images")
-            / "Shellos"
+            / "East Shellos"
             / "spawn-reference.png"
         )
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
@@ -85,7 +85,7 @@ class ImageMatcherTests(unittest.TestCase):
         result = matcher.match(image_path.read_bytes())
 
         self.assertIsNotNone(result)
-        self.assertEqual(result[0], "Shellos")
+        self.assertEqual(result[0], "East Shellos")
 
     def test_bonsly_recent_spawn_matches_in_both_orientations(self) -> None:
         import cv2

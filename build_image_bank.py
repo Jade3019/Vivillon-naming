@@ -16,6 +16,8 @@ import numpy as np
 from image_match import (
     family_name,
     BANK_FILE,
+    FEATURES_PER_IMAGE,
+    MAX_SIDE,
     MAX_FEATURES_PER_POKEMON,
     SHARED_DISTANCE,
     compute_descriptors,
@@ -75,7 +77,9 @@ def pokemon_features(
     pool=None,
 ):
     cache_file = cache / f"{hashlib.sha1(name.encode()).hexdigest()}.npz"
-    wanted = signature(paths) + "-fg2"
+    wanted = (
+        f"{signature(paths)}-{FEATURES_PER_IMAGE}-{MAX_SIDE}-fg2"
+    )
     if cache_file.is_file():
         with np.load(cache_file) as data:
             if str(data["signature"]) == wanted:

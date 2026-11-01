@@ -11,6 +11,7 @@ from pathlib import Path
 
 try:
     import cv2
+    cv2.setNumThreads(1)
     import numpy as np
 except ImportError:  # Optional: without them the bot falls back to OpenAI.
     cv2 = None
@@ -19,14 +20,19 @@ except ImportError:  # Optional: without them the bot falls back to OpenAI.
 logger = logging.getLogger(__name__)
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
-FEATURES_PER_IMAGE = 800
-MAX_SIDE = 800
+FEATURES_PER_IMAGE = 250
+MAX_SIDE = 512
 MAX_FEATURES_PER_POKEMON = 300
 CONSENSUS_COMPARISONS = 8
 RATIO = 0.8
 MIN_VOTES = 6
 MIN_MARGIN = 3
-SPECIES_MIN_VOTES = {"Boldore": 8, "Milcery": 6, "Shellos": 8}
+SPECIES_MIN_VOTES = {
+    "Boldore": 8,
+    "East Shellos": 8,
+    "Milcery": 6,
+    "Shellos": 8,
+}
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0

@@ -67,6 +67,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
         [
             ("v!settings", "Server settings: turn naming, assisted replies and ping-only mode on or off."),
             ("v!coff / v!con", "Administrators: disable or re-enable commands for this server; automatic bot features continue."),
+            ("v!premium / v!premium add <tier> <server id>", "See Bronze/Silver/Gold spawn-naming limits; only the bot owner can grant a tier."),
             ("v!lowaccuracy #channel", "Post a link in that channel whenever a spawn scores under 90% (use `off` to disable)."),
             ("v!afk", "Your personal ping settings for shiny hunts and collections."),
             ("v!profile [@user]", "View your or another member's Pokémon catch stats."),

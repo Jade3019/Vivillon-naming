@@ -49,6 +49,10 @@ SPAWN_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 RESERVE_ROLE_ID: Final[int] = 1532820386511720579
 POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
+CATCH_COMMAND_NAME_ALIASES: Final[dict[str, str]] = {
+    "blade aegislash": "Aegislash",
+    "shield aegislash": "Aegislash",
+}
 SERVER_ID: Final[int] = 1530949341013868635
 SERVER_IDS: Final[frozenset[int]] = frozenset(
     {SERVER_ID, 1543384606630481920}
@@ -865,7 +869,12 @@ def shown_form_name(name: str, form_name: str | None) -> str:
 
 def format_catch_command(poketwo_bot_id: int, name: str) -> str:
     del poketwo_bot_id
-    return f"@Pokétwo#8236 c {display_pokemon_name(name).lower()}"
+    normalized_name = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
+    catch_name = CATCH_COMMAND_NAME_ALIASES.get(
+        normalized_name,
+        display_pokemon_name(name),
+    )
+    return f"@Pokétwo#8236 c {catch_name.lower()}"
 
 
 def format_spawn_reply(

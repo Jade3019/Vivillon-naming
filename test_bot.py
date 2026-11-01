@@ -4480,6 +4480,29 @@ class GuessFormatTests(unittest.TestCase):
                     "@Pokétwo#8236 c alolan graveler",
                 )
 
+    def test_aegislash_forms_use_base_name_in_catch_commands(self) -> None:
+        for form in ("Shield Aegislash", "Blade Aegislash"):
+            with self.subTest(form=form):
+                reply = format_spawn_reply(
+                    form,
+                    100,
+                    POKETWO_COMMAND_BOT_ID,
+                    guess_name=form,
+                )
+                self.assertIn(f"{form}: 100.00%", reply)
+                self.assertIn(
+                    "@Pokétwo#8236 c aegislash",
+                    reply,
+                )
+                self.assertNotIn(
+                    f"c {form.casefold()}",
+                    reply,
+                )
+
+                embed = format_pc_catch_embed(form, form)
+                self.assertEqual(embed.title, f"Catch {form}")
+                self.assertIn("@Pokétwo#8236 c aegislash", embed.description)
+
     def test_eiscue_face_names_use_species_name_and_catch_command(self) -> None:
         from image_match import family_name, species_display_name
 

@@ -701,6 +701,10 @@ async def request_prediction(
     model: str,
     detail: str,
 ) -> tuple[str, float]:
+    custom_forms = "; ".join(
+        f"{form} (base species: {species})"
+        for form, species in sorted(CUSTOM_FORM_SPECIES.items())
+    )
     result = await client.chat.completions.create(
         model=model,
         response_format={"type": "json_object"},
@@ -719,17 +723,20 @@ async def request_prediction(
                     "similar species and neighboring evolutions. Identify a regional "
                     "variant or alternate forme only when its visible features support "
                     "that specific form; do not infer details hidden by the image. "
+                    "This server also recognizes these custom forms: "
+                    f"{custom_forms}. When the image clearly matches one, return its "
+                    "exact listed form name; otherwise return the base species name. "
                     "Choose the closest match to the visible evidence, and lower the "
                     "confidence when important features are unclear or obscured. "
-                    "Return only the single most likely Pokémon's Pokétwo-accepted "
-                    "English name. Never return a description, reasoning, multiple "
-                    "candidates, alternate names, aliases, or a list. Estimate "
+                    "Return only the single most likely Pokémon or custom form name. "
+                    "Never return a description, reasoning, multiple candidates, "
+                    "alternate names, aliases, or a list. Estimate "
                     "confidence in that exact identification as a percentage from 0 "
                     "to 100 with up to two decimal places; confidence should reflect "
                     "how clearly the visible traits support the chosen species and "
                     "form. Return JSON only, "
                     "in the form "
-                    '{"name":"one Pokétwo-accepted English name","confidence":85.34}. '
+                    '{"name":"one Pokémon or custom form name","confidence":85.34}. '
                     "Include a form or "
                     "regional name when needed to identify the shown Pokémon. If the "
                     "image is not recognizable as a Pokémon, set name to an empty "

@@ -446,7 +446,9 @@ to `CUSTOM_FORM_SPECIES` in `image_match.py` when catch commands should use the
 base species. A matching alphanumeric filename in `assets/thumbnails/` supplies
 the catch-card and normal-starboard artwork. This also supports themed variants
 such as Enchanted Applin and Cauldron Reuniclus: the form name is shown while
-catch commands and reservations use the base species.
+catch commands and reservations use the base species. The vision fallback is
+also given these custom labels and base species, and only returns a custom
+label when the visible image supports it.
 
 Build the feature file after adding images:
 

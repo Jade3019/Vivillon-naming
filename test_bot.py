@@ -227,6 +227,36 @@ class ConfigTests(unittest.TestCase):
 
 
 class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_vision_prompt_includes_custom_form_names(self) -> None:
+        import bot
+
+        client = Mock()
+        client.chat.completions.create = AsyncMock(
+            return_value=SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content='{"name":"Enchanted Applin","confidence":98}'
+                        )
+                    )
+                ]
+            )
+        )
+
+        result = await bot.request_prediction(
+            "https://example.test/spawn.png",
+            client=client,
+            model="test-model",
+            detail="low",
+        )
+
+        self.assertEqual(result, ("Enchanted Applin", 98.0))
+        prompt = client.chat.completions.create.await_args.kwargs["messages"][0][
+            "content"
+        ]
+        self.assertIn("Enchanted Applin (base species: Applin)", prompt)
+        self.assertIn("return its exact listed form name", prompt)
+
     async def test_inconclusive_local_match_uses_vision_prediction(self) -> None:
         import bot
 

@@ -3781,6 +3781,34 @@ class FireSpawnFormattingTests(unittest.TestCase):
                     f"{letter} Unown: 100.00%",
                 )
 
+    def test_male_indeedee_uses_species_name_and_catch_command(self) -> None:
+        species_name = image_match.species_display_name("Male Indeedee")
+
+        self.assertEqual(species_name, "Indeedee")
+        self.assertEqual(
+            format_spawn_reply(species_name, 100, POKETWO_COMMAND_BOT_ID),
+            "Indeedee: 100.00%\n"
+            "**Copy Here >** `@Pokétwo#8236 c indeedee`",
+        )
+        self.assertEqual(
+            format_pc_catch_embed(species_name, "Male Indeedee").title,
+            "Catch Indeedee",
+        )
+
+    def test_alola_geodude_uses_alolan_name_and_catch_command(self) -> None:
+        species_name = image_match.species_display_name("Alola Geodude")
+
+        self.assertEqual(species_name, "Alolan Geodude")
+        self.assertEqual(
+            format_spawn_reply(species_name, 100, POKETWO_COMMAND_BOT_ID),
+            "Alolan Geodude: 100.00%\n"
+            "**Copy Here >** `@Pokétwo#8236 c alolan geodude`",
+        )
+        self.assertEqual(
+            format_pc_catch_embed(species_name, "Alola Geodude").title,
+            "Catch Alolan Geodude",
+        )
+
     def test_hangry_morpeko_uses_own_thumbnail_but_is_named_morpeko(self) -> None:
         self.assertEqual(image_match.species_display_name("Hangry Morpeko"), "Morpeko")
         embed = format_pc_catch_embed("Morpeko", "Hangry Morpeko")

@@ -35,7 +35,10 @@ MAUSHOLD_FORMS = ("Family-Of-Three Maushold", "Family-Of-Four Maushold")
 MAUSHOLD_FORM_ALIASES = frozenset(
     {"family of three maushold", "family of four maushold"}
 )
-FORM_NAME_ALIASES = {"alola graveler": "Alolan Graveler"}
+FORM_NAME_ALIASES = {
+    "alola geodude": "Alolan Geodude",
+    "alola graveler": "Alolan Graveler",
+}
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
@@ -138,6 +141,7 @@ THUMBNAIL_FORM_SPECIES = {
             "Yellow Minior",
         )
     },
+    "Male Indeedee": "Indeedee",
     "East Gastrodon": "Gastrodon",
     "East Sea Gastrodon": "Gastrodon",
     "East Sea Shellos": "Shellos",

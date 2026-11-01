@@ -74,6 +74,19 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], name)
 
+    def test_user_shellos_spawn_reference_matches_as_shellos(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Shellos"
+            / "spawn-reference.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Shellos")
+
     def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "urshifu-rapid-strike" / "1.png"

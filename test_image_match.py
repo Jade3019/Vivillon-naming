@@ -113,6 +113,19 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "Wiglett")
 
+    def test_wiglett_unnamed_spawn_matches_as_wiglett(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Wiglett"
+            / "spawn-reference-3.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Wiglett")
+
     def test_sunkern_spawn_reference_matches_as_sunkern(self) -> None:
         image_path = (
             Path(__file__).with_name("pokemon_images")

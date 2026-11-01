@@ -439,6 +439,8 @@ curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
 Put each Pokémon's spawn pictures in its own folder inside `pokemon_images/`, named exactly like the Pokémon (`pokemon_images/Abomasnow/`, `pokemon_images/Mega Absol/`). The file names inside don't matter. Use real spawn images Pokétwo posts, ideally with different backgrounds (about 10 to 25 each).
 
 You can place a bulk archive of per-Pokémon image folders anywhere under `pokemon_images/` (for example `pokemon_images/archive/`). The builder searches recursively, merges duplicate folders, skips ambiguous composite images, and recognizes species, known forms, regional forms and event-costume names. Raw archive images are git-ignored; only upload the generated bank.
+Gender-coded folders such as `nidoran-f` and `nidoran-m` retain their separate
+Nidoran labels; mixed Nidoran composites are skipped as ambiguous.
 
 Hand-added special forms can use a folder named for the form, such as
 `pokemon_images/Gliding Build Koraidon/image.png`. Add its form-to-species entry

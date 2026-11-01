@@ -39,6 +39,41 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertEqual(list(groups), ["Shaymin"])
 
+    def test_nidoran_gendered_reference_names_stay_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder in (
+                "nidoran-f",
+                "nidoran-m",
+                "nidoran-female",
+                "nidoran-male",
+                "Nidoran♀",
+                "Nidoran♂",
+                "nidoran-valentine",
+            ):
+                image_path = root / folder / "1.png"
+                image_path.parent.mkdir()
+                image_path.write_bytes(b"")
+
+            groups = reference_images(root)
+
+        self.assertEqual(len(groups["Nidoran♀"]), 3)
+        self.assertEqual(len(groups["Nidoran♂"]), 3)
+        self.assertNotIn("Nidoran-Valentine", groups)
+
+    def test_archived_nidoran_genders_match_their_own_references(self) -> None:
+        root = Path(__file__).with_name("pokemon_images")
+        groups = reference_images(root)
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        for name, folder in (("Nidoran♀", "nidoran-f"), ("Nidoran♂", "nidoran-m")):
+            with self.subTest(name=name):
+                references = [path for path in groups[name] if path.parent.name == folder]
+                self.assertTrue(references)
+                result = matcher.match(references[0].read_bytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], name)
+
     def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "urshifu-rapid-strike" / "1.png"

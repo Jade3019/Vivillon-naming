@@ -250,7 +250,21 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
     except (OSError, ValueError, KeyError, TypeError):
         species, form_data = [], {}
 
-    species_by_key = {key(name): name for name in species}
+    gendered_species_by_key: dict[str, set[str]] = {}
+    gendered_species_by_display: dict[str, str] = {}
+    gendered_aliases: dict[str, str] = {}
+    for name in species:
+        if name.endswith(("♀", "♂")):
+            base, symbol = name[:-1], name[-1]
+            gender = "female" if symbol == "♀" else "male"
+            gendered_species_by_key.setdefault(key(base), set()).add(name)
+            gendered_species_by_display[name.casefold()] = name
+            gendered_aliases[key(f"{base}-{gender[0]}")] = name
+            gendered_aliases[key(f"{base}-{gender}")] = name
+            gendered_aliases[key(f"{base} {gender}")] = name
+    species_by_key = {
+        key(name): name for name in species if not name.endswith(("♀", "♂"))
+    }
     custom_forms_by_key = {key(form): form for form in CUSTOM_FORM_SPECIES}
     forms_by_key: dict[str, str] = {}
     for species_name, forms in form_data.items():
@@ -279,7 +293,11 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
 
     def canonical_name(raw: str) -> str | None:
         raw = raw.strip()
+        if raw.casefold() in gendered_species_by_display:
+            return gendered_species_by_display[raw.casefold()]
         normalized_key = key(raw)
+        if normalized_key in gendered_aliases:
+            return gendered_aliases[normalized_key]
         if normalized_key in custom_forms_by_key:
             return custom_forms_by_key[normalized_key]
         if normalized_key in forms_by_key:
@@ -303,6 +321,7 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
                 name = species_by_key.get(key("".join(kept[start:end])))
                 if name:
                     found.add(name)
+                found.update(gendered_species_by_key.get(key("".join(kept[start:end])), ()))
         if len(found) == 1:
             return next(iter(found))
         if len(found) > 1:

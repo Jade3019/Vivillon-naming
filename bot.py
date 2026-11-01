@@ -68,7 +68,7 @@ PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 PROFILE_BACKFILL_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"^v!backfill(?:\s+(stop))?\s*$",
+    r"^v!backfill(?:\s+(?P<stop>stop)|\s+(?P<channel><#\d+>|\d+))?\s*$",
     re.IGNORECASE,
 )
 PROFILE_CATCH_PREFIX_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -136,6 +136,7 @@ PROFILE_DEFAULTS: Final[dict[str, int | str]] = {
 PROFILE_STAT_DEFAULTS: Final[dict[str, int]] = {
     "total": 0,
     "shiny": 0,
+    "box_shiny": 0,
     "low_iv": 0,
     "high_iv": 0,
     "gmax": 0,
@@ -560,7 +561,7 @@ def command_permission_group(content: str) -> str | None:
         return "general"
     if re.fullmatch(r"v!event", content, re.IGNORECASE):
         return "general"
-    if re.fullmatch(r"v!backfill(?:\s+stop)?", content, re.IGNORECASE):
+    if PROFILE_BACKFILL_COMMAND_PATTERN.fullmatch(content):
         return "backfill"
     return None
 
@@ -1517,6 +1518,26 @@ def parse_catch_details(
     )
 
 
+def parse_box_shiny_count(text: str) -> int:
+    if re.search(
+        r"\byou open\s+\d+\b[^\n]*\bchests?\b",
+        text,
+        re.IGNORECASE,
+    ) is None:
+        return 0
+    shiny_marker = re.compile(
+        r"✨|🌟|⭐|colors seem unusual|\bshiny\b|"
+        r"<a?:[a-z0-9_~]*(?:shiny|sparkle)[a-z0-9_~]*:\d+>",
+        re.IGNORECASE,
+    )
+    return sum(
+        1
+        for line in text.splitlines()
+        if re.search(r"\b(?:level|lv\.?)\s*\d+\b", line, re.IGNORECASE)
+        and shiny_marker.search(line)
+    )
+
+
 def profile_catch_user_id(message: discord.Message) -> int | None:
     match = PROFILE_CATCH_PREFIX_PATTERN.search(message_text(message))
     if match is None:
@@ -2289,15 +2310,19 @@ def reserved_user_ids_for_pokemon(
     reservations: dict[str, list[int]],
     guild_id: int,
     pokemon_name: str,
+    *,
+    additional_names: tuple[str, ...] = (),
 ) -> list[int]:
-    user_ids = set(reservations.get(reservation_key(guild_id, pokemon_name), []))
+    user_ids: set[int] = set()
     wildcard_prefix = f"{guild_id}:*:"
-    for key, reserved_user_ids in reservations.items():
-        if not key.startswith(wildcard_prefix):
-            continue
-        reserved_name = key.removeprefix(wildcard_prefix)
-        if pokemon_matches_all_forms_reservation(pokemon_name, reserved_name):
-            user_ids.update(reserved_user_ids)
+    for candidate in dict.fromkeys((pokemon_name, *additional_names)):
+        user_ids.update(reservations.get(reservation_key(guild_id, candidate), []))
+        for key, reserved_user_ids in reservations.items():
+            if not key.startswith(wildcard_prefix):
+                continue
+            reserved_name = key.removeprefix(wildcard_prefix)
+            if pokemon_matches_all_forms_reservation(candidate, reserved_name):
+                user_ids.update(reserved_user_ids)
     return sorted(user_ids)
 
 
@@ -5303,6 +5328,20 @@ def render_profile_image(
                 font=record_value_font,
                 fill=text_color,
             )
+    box_shiny_y = 760
+    draw_profile_stat_icon(
+        image,
+        draw,
+        "shiny",
+        (980, box_shiny_y - 2),
+        emoji_assets or {},
+    )
+    draw.text(
+        (1025, box_shiny_y),
+        f"Box Shiny: {stats.get('box_shiny', 0):,}",
+        font=record_label_font,
+        fill=text_color,
+    )
 
     frame_key = str(settings["frame"])
     frame_image_path = PROFILE_FRAME_IMAGES.get(frame_key)
@@ -5792,6 +5831,89 @@ class NamingBot(discord.Client):
                 return
         self.profile_stats = profile_stats
         self.profile_records = profile_records
+        self.profile_seen_catch_ids = seen_catch_ids
+
+    async def track_profile_box_shiny(
+        self,
+        message: discord.Message,
+        *,
+        persist: bool = True,
+    ) -> None:
+        guild = getattr(message, "guild", None)
+        message_id = getattr(message, "id", None)
+        author = getattr(message, "author", None)
+        if (
+            guild is None
+            or getattr(guild, "id", None) not in SERVER_IDS
+            or getattr(author, "id", None) != self.config.poketwo_bot_id
+            or isinstance(message_id, bool)
+            or not isinstance(message_id, int)
+            or message_id <= 0
+        ):
+            return
+        box_shiny_count = parse_box_shiny_count(message_text(message))
+        if box_shiny_count == 0 or message_id in self.profile_seen_catch_ids:
+            return
+
+        reference = getattr(message, "reference", None)
+        referenced_message = getattr(reference, "resolved", None)
+        if referenced_message is None:
+            reference_id = getattr(reference, "message_id", None)
+            channel = getattr(message, "channel", None)
+            fetch_message = getattr(channel, "fetch_message", None)
+            if (
+                isinstance(reference_id, int)
+                and not isinstance(reference_id, bool)
+                and callable(fetch_message)
+            ):
+                try:
+                    referenced_message = await fetch_message(reference_id)
+                except discord.HTTPException as error:
+                    logger.warning(
+                        "Could not read the chest command for message %s: %s",
+                        message_id,
+                        error,
+                    )
+        command_author = getattr(referenced_message, "author", None)
+        user_id = getattr(command_author, "id", None)
+        if (
+            isinstance(user_id, bool)
+            or not isinstance(user_id, int)
+            or getattr(command_author, "bot", False)
+        ):
+            logger.warning(
+                "Could not determine the user for box-shiny message %s",
+                message_id,
+            )
+            return
+
+        profile_stats = {
+            key: dict(stats) for key, stats in self.profile_stats.items()
+        }
+        user_key = f"{guild.id}:{user_id}"
+        user_stats = profile_stats.setdefault(
+            user_key,
+            dict(PROFILE_STAT_DEFAULTS),
+        )
+        user_stats["box_shiny"] += box_shiny_count
+        seen_catch_ids = [*self.profile_seen_catch_ids, message_id][-10000:]
+        if persist:
+            try:
+                save_profile_data(
+                    self.profile_data_path,
+                    self.profiles,
+                    profile_stats,
+                    self.profile_records,
+                    seen_catch_ids,
+                )
+            except ValueError:
+                logger.exception(
+                    "Could not record box-shiny message %s for profile user %s",
+                    message_id,
+                    user_id,
+                )
+                return
+        self.profile_stats = profile_stats
         self.profile_seen_catch_ids = seen_catch_ids
 
     def update_appearance(self, guild_id: int, **changes) -> None:
@@ -6287,6 +6409,7 @@ class NamingBot(discord.Client):
             return
         if poketwo_catch or catch_detection_report or parsed_catch_report:
             self.track_profile_catch(message)
+            await self.track_profile_box_shiny(message)
             await self.handle_catch_starboard(message)
         self.track_incense_command(message)
         if not self.is_allowed_channel(message.channel):
@@ -6559,7 +6682,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        if command_match.group(1) is not None:
+        if command_match.group("stop") is not None:
             if guild.id not in self.profile_backfills_in_progress:
                 await message.reply(
                     "No profile backfill is running.",
@@ -6596,7 +6719,15 @@ class NamingBot(discord.Client):
                 if key.startswith(guild_key_prefix)
             )
 
+        def guild_box_shiny_total() -> int:
+            return sum(
+                stats.get("box_shiny", 0)
+                for key, stats in self.profile_stats.items()
+                if key.startswith(guild_key_prefix)
+            )
+
         total_before = guild_catch_total()
+        box_shiny_before = guild_box_shiny_total()
         scanned_messages = 0
         failed_channels = 0
         channels_done = 0
@@ -6611,6 +6742,37 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             all_channels = [*guild.text_channels, *guild.threads]
+            channel_argument = command_match.group("channel")
+            if channel_argument is not None:
+                channel_id_match = re.fullmatch(
+                    r"<#(\d+)>|(\d+)",
+                    channel_argument,
+                )
+                if channel_id_match is None:
+                    await progress.edit(
+                        content="Use a channel mention or channel ID with `v!backfill`."
+                    )
+                    return
+                requested_channel_id = int(
+                    channel_id_match.group(1) or channel_id_match.group(2)
+                )
+                selected_channel = next(
+                    (
+                        channel
+                        for channel in all_channels
+                        if channel.id == requested_channel_id
+                    ),
+                    None,
+                )
+                if selected_channel is None:
+                    await progress.edit(
+                        content=(
+                            "I couldn't find that text channel or active thread "
+                            "in this server."
+                        )
+                    )
+                    return
+                all_channels = [selected_channel]
             channels = []
             for channel in all_channels:
                 if guild.id in self.profile_backfill_stop_requests:
@@ -6636,8 +6798,15 @@ class NamingBot(discord.Client):
                 return
             await progress.edit(
                 content=(
-                    f"Backfilling profile catches across {len(channels)} "
-                    "readable channels and active threads. This may take a while."
+                    (
+                        f"Backfilling profile data in #{channels[0].name}."
+                        if channel_argument is not None
+                        else (
+                            f"Backfilling profile data across {len(channels)} "
+                            "readable channels and active threads."
+                        )
+                    )
+                    + " This may take a while."
                 )
             )
             for channel in channels:
@@ -6655,6 +6824,10 @@ class NamingBot(discord.Client):
                             stopped = True
                             break
                         self.track_profile_catch(
+                            historical_message,
+                            persist=False,
+                        )
+                        await self.track_profile_box_shiny(
                             historical_message,
                             persist=False,
                         )
@@ -6729,10 +6902,12 @@ class NamingBot(discord.Client):
                 return
 
             total_after = guild_catch_total()
+            box_shiny_after = guild_box_shiny_total()
             result = (
                 f"Backfill {'stopped' if stopped else 'finished'}: "
                 f"scanned {scanned_messages:,} messages "
-                f"and added {total_after - total_before:,} catches to profiles."
+                f"and added {total_after - total_before:,} catches and "
+                f"{box_shiny_after - box_shiny_before:,} Box Shinies to profiles."
             )
             incomplete_channels = skipped_channels + failed_channels
             if incomplete_channels:
@@ -7218,6 +7393,7 @@ class NamingBot(discord.Client):
         if not poketwo_catch and not catch_detection_report and not parsed_catch_report:
             return
         self.track_profile_catch(after)
+        await self.track_profile_box_shiny(after)
         await self.handle_catch_starboard(after)
         self.track_incense_command(after)
         if not self.is_allowed_channel(after.channel):
@@ -8569,6 +8745,7 @@ class NamingBot(discord.Client):
                 self.reservations,
                 message.guild.id,
                 name,
+                additional_names=(guess_name,),
             )
             if message.guild
             else []

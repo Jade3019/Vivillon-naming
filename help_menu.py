@@ -65,7 +65,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
             ("v!lowaccuracy #channel", "Post a link in that channel whenever a spawn scores under 90% (use `off` to disable)."),
             ("v!afk", "Your personal ping settings for shiny hunts and collections."),
             ("v!profile [@user]", "View your or another member's Pokémon catch stats."),
-            ("v!backfill [stop]", "Admins or the configured role: backfill profile catches or stop a scan."),
+            ("v!backfill [#channel] / v!backfill stop", "Admins or the configured role: backfill profile data in one channel or across the server, or stop a scan."),
             (
                 "v!permission <role id> / off",
                 "Manage Server: grant a role access to protected commands.",

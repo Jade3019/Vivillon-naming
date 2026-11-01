@@ -1250,6 +1250,87 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "#catches-789: scanned 2,000 messages (complete).",
         )
 
+    async def test_profile_backfill_scans_only_the_requested_channel(self) -> None:
+        guild_id = next(iter(SERVER_IDS - {SERVER_ID}))
+        guild = Mock()
+        guild.id = guild_id
+        guild.me = Mock()
+        guild.threads = []
+
+        def make_catch() -> Mock:
+            catch = Mock()
+            catch.id = 400001
+            catch.guild = guild
+            catch.author.id = self.bot.config.poketwo_bot_id
+            catch.author.bot = True
+            catch.content = (
+                "Congratulations <@123>! You caught a Level 20 Bagon! "
+                "(50.54%)!"
+            )
+            catch.embeds = []
+            catch.attachments = []
+            catch.mentions = []
+            return catch
+
+        def make_box_shiny() -> Mock:
+            box_shiny = Mock()
+            box_shiny.id = 400002
+            box_shiny.guild = guild
+            box_shiny.author.id = self.bot.config.poketwo_bot_id
+            box_shiny.author.bot = True
+            box_shiny.content = ""
+            box_shiny.embeds = [
+                discord.Embed(
+                    title="You open 1 Eclipse Chest...",
+                    description="• ✨ Level 11 Bronzor (84.95%)",
+                )
+            ]
+            box_shiny.reference.resolved.author.id = 123
+            box_shiny.reference.resolved.author.bot = False
+            return box_shiny
+
+        def make_channel(channel_id: int) -> Mock:
+            channel = Mock()
+            channel.id = channel_id
+            channel.name = f"catches-{channel_id}"
+            channel.permissions_for.return_value.view_channel = True
+            channel.permissions_for.return_value.read_message_history = True
+
+            async def history(*, limit: int | None, oldest_first: bool):
+                self.assertIsNone(limit)
+                self.assertTrue(oldest_first)
+                yield make_catch()
+                yield make_box_shiny()
+
+            channel.history = Mock(side_effect=history)
+            return channel
+
+        selected_channel = make_channel(789)
+        other_channel = make_channel(790)
+        guild.text_channels = [selected_channel, other_channel]
+        progress = Mock()
+        progress.edit = AsyncMock()
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = True
+        command.content = "v!backfill <#789>"
+        command.reply = AsyncMock(return_value=progress)
+        command.channel.send = AsyncMock()
+
+        await self.bot.handle_profile_backfill_command(command)
+        await self.bot.handle_profile_backfill_command(command)
+
+        self.assertEqual(selected_channel.history.call_count, 2)
+        other_channel.history.assert_not_called()
+        self.assertEqual(
+            self.bot.profile_stats_for_user(guild_id, 123)["total"],
+            1,
+        )
+        self.assertEqual(
+            self.bot.profile_stats_for_user(guild_id, 123)["box_shiny"],
+            1,
+        )
+
     async def test_profile_backfill_stop_saves_partial_results(self) -> None:
         guild = Mock()
         guild.id = SERVER_ID
@@ -1416,6 +1497,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.bot.handle_profile_backfill_command.assert_awaited_once_with(message)
         self.bot.handle_profile_backfill_command.reset_mock()
         message.content = "v!backfill stop"
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_profile_backfill_command.assert_awaited_once_with(message)
+        self.bot.handle_profile_backfill_command.reset_mock()
+        message.content = "v!backfill <#789>"
 
         await self.bot.on_message(message)
 
@@ -1614,6 +1701,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             {
                 "total": 4,
                 "shiny": 2,
+                "box_shiny": 0,
                 "low_iv": 1,
                 "high_iv": 1,
                 "gmax": 1,
@@ -1625,6 +1713,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             {
                 "total": 1,
                 "shiny": 0,
+                "box_shiny": 0,
                 "low_iv": 0,
                 "high_iv": 1,
                 "gmax": 0,
@@ -1650,6 +1739,39 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         _, _, profile_records, _ = load_profile_data(self.bot.profile_data_path)
         self.assertEqual(profile_records[f"{SERVER_ID}:123"], records)
+
+    async def test_profile_counts_each_shiny_pokemon_from_a_chest_once(self) -> None:
+        message = Mock()
+        message.id = 9001
+        message.guild.id = SERVER_ID
+        message.author.id = self.bot.config.poketwo_bot_id
+        message.reference.resolved.author.id = 123
+        message.reference.resolved.author.bot = False
+        message.content = ""
+        message.embeds = [
+            discord.Embed(
+                title="You open 5 Eclipse Chests...",
+                description=(
+                    "Eclipse Chest\n"
+                    "• ✨ Level 11 Bronzor ♀ (84.95%)\n"
+                    "• Level 21 Blooming Sunflora ♀ (34.95%)\n"
+                    "• 🌟 Level 18 Gardevoir ♂ (70.00%)"
+                ),
+            )
+        ]
+
+        await self.bot.track_profile_box_shiny(message)
+        await self.bot.track_profile_box_shiny(message)
+
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        self.assertEqual(stats["box_shiny"], 2)
+        self.assertEqual(stats["total"], 0)
+        self.assertEqual(stats["shiny"], 0)
+        _, saved_stats, _, seen_message_ids = load_profile_data(
+            self.bot.profile_data_path
+        )
+        self.assertEqual(saved_stats[f"{SERVER_ID}:123"]["box_shiny"], 2)
+        self.assertEqual(seen_message_ids, [message.id])
 
     def test_profile_card_keeps_default_backgrounds(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
@@ -4711,6 +4833,27 @@ class ReservationPersistenceTests(unittest.TestCase):
             )
         )
 
+    def test_custom_form_reservation_matches_only_that_form_and_base_reserves(self) -> None:
+        reservations = {
+            reservation_key(1, "Enchanted Applin"): [123],
+            reservation_key(1, "Applin"): [456],
+            reservation_key(1, "Rotten Applin"): [789],
+        }
+
+        self.assertEqual(
+            reserved_user_ids_for_pokemon(
+                reservations,
+                1,
+                "Applin",
+                additional_names=("Enchanted Applin",),
+            ),
+            [123, 456],
+        )
+        self.assertEqual(
+            reserved_user_ids_for_pokemon(reservations, 1, "Applin"),
+            [456],
+        )
+
     def test_all_forms_command_uses_a_separate_reservation_key(self) -> None:
         self.assertEqual(
             reservation_key_for_command(1, "all Arceus"),
@@ -5617,6 +5760,8 @@ class CommandPermissionTests(unittest.TestCase):
             "v!timereset": "general",
             "v!event": "general",
             "v!backfill stop": "backfill",
+            "v!backfill <#789>": "backfill",
+            "v!backfill 789": "backfill",
         }
         for command, expected_group in commands.items():
             with self.subTest(command=command):

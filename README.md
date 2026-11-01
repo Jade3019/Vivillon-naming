@@ -347,7 +347,8 @@ adds one to Total; a spawn by itself does not count, and the total has no cap.
 Server administrators can run `v!backfill` in that server to scan readable
 text channels and active threads for earlier catches. Use `v!backfill <channel>`
 for one channel or `v!backfill <category id>` for only the channels in that
-category. Run `v!backfill stop` to
+category. Use `v!backfill continue <channel>` to scan from that channel down
+through the last channel in the server's channel list. Run `v!backfill stop` to
 stop an active scan; catches processed before stopping are saved. The bot needs
 View Channel and Read Message History permissions; channels it cannot read are
 reported and excluded. The bot posts cumulative totals and a scanned-message
@@ -394,12 +395,13 @@ Reserve lists (`v!r search @member`, `v!r list`) and the exchange prompt show an
 
 ## Grabbing a list with `v!grab`
 
-Reply to any message or embed that contains Pokémon names, with `v!grab`: a `v!r search` result, a plain list, or a labelled list such as `Regional — @user - Zorua`. The bot finds the Pokémon names on each line (ignoring labels, emojis and formatting); the list shows only Pokémon names, and the `@user` on each line is remembered for Add reserves. Names come from `pokemon_names.json`. The bot builds
+Reply to any message or embed that contains Pokémon names, with `v!grab`: a `v!r search` result, a plain list, or a labelled list such as `Regional — @user - Zorua`. The bot finds the Pokémon names on each line (ignoring labels, emojis and formatting); the list shows only Pokémon names, and the `@user` beside each Pokémon is remembered for Add reserves. Use `|` to separate owner groups on one line (for example, `@user1 - Sneasel | @user2 Amaura`) so each Pokémon stays with its own owner. Names come from `pokemon_names.json`; listed Pokémon are not expanded into their other forms. The bot builds
 a separate list of every Pokémon (not just the visible page), all in one message with no page limit. Only the person who ran `v!grab` can use its buttons:
 
 - **Order** – sorts the list alphabetically (click again to restore the original order).
-- **All forms off / on** – turns green when on and puts `All` in front of
-  Pokémon that have alternate forms.
+- **All forms off / on** – turns green when on and preserves `All` only for
+  Pokémon marked as an all-forms entry in the source list. It does not infer
+  all-forms reservations from a Pokémon having alternate forms.
 - **Custom emoji** – opens a box for emojis separated by commas; they are put in
   front of the Pokémon in order and repeat (emoji 1, emoji 2, emoji 1, ...).
 - **Copy** – sends you the current list (with the order, All forms and emojis as shown) as a plain private message containing only the list, with any emojis added through Custom emoji, so you can copy it directly. Discord doesn't let bots write to your clipboard directly. Custom server emojis stay as text and display once pasted.

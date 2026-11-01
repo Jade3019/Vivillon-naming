@@ -59,9 +59,9 @@ PREMIUM_TIER_LIMITS: Final[dict[str, int]] = {
     "gold": 300,
 }
 PREMIUM_TIER_BUTTERFLIES: Final[dict[str, tuple[str, str, int]]] = {
-    "bronze": ("Continental Vivillon", "continentalvivillon.png", 0xCD7F32),
-    "silver": ("Icy-Snow Vivillon", "icysnowvivillon.png", 0xC0C0C0),
-    "gold": ("Elegant Vivillon", "elegantvivillon.png", 0xFFD700),
+    "bronze": ("Bronze butterfly", "butterfly-bronze.png", 0xCD7F32),
+    "silver": ("Silver butterfly", "butterfly-silver.png", 0xC0C0C0),
+    "gold": ("Gold butterfly", "butterfly-gold.png", 0xFFD700),
 }
 SERVER_ID: Final[int] = 1530949341013868635
 SERVER_IDS: Final[frozenset[int]] = frozenset(
@@ -93,7 +93,9 @@ PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 PROFILE_BACKFILL_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"^v!backfill(?:\s+(?P<stop>stop)|\s+(?P<channel><#\d+>|\d+))?\s*$",
+    r"^v!backfill(?:\s+(?P<stop>stop)"
+    r"|\s+continue\s+(?P<continue_from><#\d+>|\d+)"
+    r"|\s+(?P<channel><#\d+>|\d+))?\s*$",
     re.IGNORECASE,
 )
 PROFILE_CATCH_PREFIX_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -635,7 +637,9 @@ def save_premium_servers(path: Path, premium_servers: dict[str, str]) -> None:
 def build_premium_status_embeds(current_tier: str | None) -> list[discord.Embed]:
     embeds = []
     for tier, limit in PREMIUM_TIER_LIMITS.items():
-        butterfly_name, filename, color = PREMIUM_TIER_BUTTERFLIES[tier]
+        if current_tier is not None and tier != current_tier:
+            continue
+        _, filename, color = PREMIUM_TIER_BUTTERFLIES[tier]
         status = (
             "✅ Active for this server"
             if current_tier == tier
@@ -650,16 +654,16 @@ def build_premium_status_embeds(current_tier: str | None) -> list[discord.Embed]
             color=color,
         )
         embed.set_thumbnail(url=f"attachment://{filename}")
-        embed.set_footer(text=f"Vivillon pattern: {butterfly_name}")
         embeds.append(embed)
     return embeds
 
 
-def premium_status_files() -> list[discord.File]:
-    thumbnail_dir = Path(__file__).with_name("assets") / "thumbnails"
+def premium_status_files(current_tier: str | None = None) -> list[discord.File]:
+    thumbnail_dir = Path(__file__).with_name("butterfly_variants")
     return [
         discord.File(thumbnail_dir / filename, filename=filename)
-        for _, filename, _ in PREMIUM_TIER_BUTTERFLIES.values()
+        for tier, (_, filename, _) in PREMIUM_TIER_BUTTERFLIES.items()
+        if current_tier is None or tier == current_tier
     ]
 
 
@@ -4743,24 +4747,28 @@ def parse_grab_entries(texts: list[str]) -> list[tuple[str, list[int]]]:
     entries: list[tuple[str, list[int]]] = []
     for text in texts:
         for line in text.replace("’", "'").splitlines():
-            user_ids = list(
-                dict.fromkeys(int(user_id) for user_id in MENTION_PATTERN.findall(line))
-            )
-            for match in GRAB_NAME_PATTERN.finditer(MENTION_PATTERN.sub(" ", line)):
-                name = " ".join(unicodedata.normalize("NFC", match.group()).split())
-                if name.casefold().startswith("all forms of "):
-                    name = "all " + name[len("all forms of ") :]
-                entries.append((name, list(user_ids)))
+            for group in line.split("|"):
+                user_ids = list(
+                    dict.fromkeys(
+                        int(user_id)
+                        for user_id in MENTION_PATTERN.findall(group)
+                    )
+                )
+                for match in GRAB_NAME_PATTERN.finditer(
+                    MENTION_PATTERN.sub(" ", group)
+                ):
+                    name = " ".join(
+                        unicodedata.normalize("NFC", match.group()).split()
+                    )
+                    if name.casefold().startswith("all forms of "):
+                        name = "all " + name[len("all forms of ") :]
+                    entries.append((name, list(user_ids)))
     return entries
 
 
 def grab_entry_name(name: str, all_forms: bool) -> str:
-    if (
-        all_forms
-        and not name.casefold().startswith("all ")
-        and len(POKEMON_FORMS.get(name.casefold(), [])) > 1
-    ):
-        return f"all {name}"
+    if name.casefold().startswith("all "):
+        return name if all_forms else name[4:].strip()
     return name
 
 
@@ -6941,12 +6949,11 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
-        files = premium_status_files()
+        current_tier = self.premium_tier_for_guild(message.guild.id)
+        files = premium_status_files(current_tier)
         try:
             await message.reply(
-                embeds=build_premium_status_embeds(
-                    self.premium_tier_for_guild(message.guild.id)
-                ),
+                embeds=build_premium_status_embeds(current_tier),
                 files=files,
                 mention_author=False,
             )
@@ -7191,7 +7198,41 @@ class NamingBot(discord.Client):
             all_channels = [*guild.text_channels, *guild.threads]
             category_name = None
             channel_argument = command_match.group("channel")
-            if channel_argument is not None:
+            continue_argument = command_match.group("continue_from")
+            continue_start_name = None
+            if continue_argument is not None:
+                start_id = int(re.sub(r"\D", "", continue_argument))
+                ordered_channels = [
+                    channel
+                    for _, grouped in guild.by_category()
+                    for channel in grouped
+                    if isinstance(channel, discord.TextChannel)
+                ]
+                start_index = next(
+                    (
+                        index
+                        for index, channel in enumerate(ordered_channels)
+                        if channel.id == start_id
+                    ),
+                    None,
+                )
+                if start_index is None:
+                    await progress.edit(
+                        content="I couldn't find that text channel in this server."
+                    )
+                    return
+                continue_start_name = ordered_channels[start_index].name
+                ordered_channels = ordered_channels[start_index:]
+                included_ids = {channel.id for channel in ordered_channels}
+                all_channels = [
+                    *ordered_channels,
+                    *(
+                        thread
+                        for thread in guild.threads
+                        if thread.parent_id in included_ids
+                    ),
+                ]
+            elif channel_argument is not None:
                 channel_id_match = re.fullmatch(
                     r"<#(\d+)>|(\d+)",
                     channel_argument,
@@ -7273,7 +7314,11 @@ class NamingBot(discord.Client):
             await progress.edit(
                 content=(
                     (
-                        f"Backfilling profile data in #{channels[0].name}."
+                        f"Continuing profile backfill from #{continue_start_name} "
+                        f"through the last channel ({len(channels)} readable "
+                        "channels and threads)."
+                        if continue_start_name is not None
+                        else f"Backfilling profile data in #{channels[0].name}."
                         if channel_argument is not None and category_name is None
                         else (
                             f"Backfilling profile data across {len(channels)} "

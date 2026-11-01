@@ -480,7 +480,7 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
             [100, 200, 300],
         )
 
-    async def test_premium_status_shows_three_tier_cards_and_active_server_tier(
+    async def test_premium_status_shows_all_tiers_or_only_the_active_one(
         self,
     ) -> None:
         message = Mock()
@@ -498,9 +498,9 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [embed.thumbnail.url for embed in embeds],
             [
-                "attachment://continentalvivillon.png",
-                "attachment://icysnowvivillon.png",
-                "attachment://elegantvivillon.png",
+                "attachment://butterfly-bronze.png",
+                "attachment://butterfly-silver.png",
+                "attachment://butterfly-gold.png",
             ],
         )
         self.assertIn("100 simultaneous", embeds[0].description)
@@ -512,11 +512,13 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
 
         self.bot.premium_servers[str(message.guild.id)] = "silver"
         await self.bot.handle_premium_command(message)
-        active_statuses = [
-            "Active for this server" in embed.description
-            for embed in message.reply.await_args.kwargs["embeds"]
-        ]
-        self.assertEqual(active_statuses, [False, True, False])
+        embeds = message.reply.await_args.kwargs["embeds"]
+        self.assertEqual([embed.title for embed in embeds], ["Silver Premium"])
+        self.assertIn("Active for this server", embeds[0].description)
+        self.assertEqual(
+            [file.filename for file in message.reply.await_args.kwargs["files"]],
+            ["butterfly-silver.png"],
+        )
 
     async def test_spawn_naming_requires_premium_but_other_commands_remain_available(
         self,
@@ -1698,6 +1700,50 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         for channel in inside:
             channel.history.assert_called_once()
         outside.history.assert_not_called()
+
+    async def test_profile_backfill_continue_starts_at_channel_and_goes_down(
+        self,
+    ) -> None:
+        guild = Mock()
+        guild.id = next(iter(SERVER_IDS - {SERVER_ID}))
+        guild.me = Mock()
+        guild.threads = []
+
+        def make_channel(channel_id: int) -> Mock:
+            channel = Mock(spec=discord.TextChannel)
+            channel.id = channel_id
+            channel.name = f"c-{channel_id}"
+            channel.permissions_for.return_value.view_channel = True
+            channel.permissions_for.return_value.read_message_history = True
+
+            async def history(*, limit: int | None, oldest_first: bool):
+                return
+                yield
+
+            channel.history = Mock(side_effect=history)
+            return channel
+
+        channels = [make_channel(index) for index in range(1, 5)]
+        guild.text_channels = channels
+        guild.by_category.return_value = [
+            (None, channels[:1]),
+            (Mock(), channels[1:3]),
+            (Mock(), channels[3:]),
+        ]
+        progress = Mock()
+        progress.edit = AsyncMock()
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = True
+        command.content = "v!backfill continue <#2>"
+        command.reply = AsyncMock(return_value=progress)
+        command.channel.send = AsyncMock()
+
+        await self.bot.handle_profile_backfill_command(command)
+
+        channels[0].history.assert_not_called()
+        for channel in channels[1:]:
+            channel.history.assert_called_once()
 
     async def test_profile_backfill_stop_saves_partial_results(self) -> None:
         guild = Mock()
@@ -5149,16 +5195,42 @@ class GrabListTests(unittest.TestCase):
             [("Mewtwo", []), ("Mr. Mime", [4]), ("Galarian Articuno", [4])],
         )
 
+    def test_pipe_separated_groups_keep_pokemon_with_their_mentioned_user(self) -> None:
+        self.assertEqual(
+            parse_grab_entries(
+                ["Regional — <@1> - Sneasel | <@2> Amaura | <@3> Zorua"]
+            ),
+            [("Sneasel", [1]), ("Amaura", [2]), ("Zorua", [3])],
+        )
+
     def test_order_all_forms_and_emoji_cycle(self) -> None:
-        entries = [("sylveon", [1]), ("trapinch", []), ("urshifu", []), ("ditto", [])]
+        entries = [
+            ("sylveon", [1]),
+            ("trapinch", []),
+            ("urshifu", []),
+            ("all arceus", [2]),
+            ("ditto", []),
+        ]
 
         self.assertEqual(
             build_grab_lines(entries, ordered=True, all_forms=True, emojis=["🔥", "💧"]),
-            ["🔥 Ditto", "💧 Sylveon", "🔥 Trapinch", "💧 All urshifu"],
+            ["🔥 All arceus", "💧 Ditto", "🔥 Sylveon", "💧 Trapinch", "🔥 Urshifu"],
         )
         self.assertEqual(
             build_grab_lines(entries, ordered=False, all_forms=False, emojis=[]),
-            ["Sylveon", "Trapinch", "Urshifu", "Ditto"],
+            ["Sylveon", "Trapinch", "Urshifu", "Arceus", "Ditto"],
+        )
+
+    def test_all_forms_only_applies_to_entries_marked_in_source(self) -> None:
+        entries = [("urshifu", [1]), ("all arceus", [2])]
+
+        self.assertEqual(
+            grab_reserve_pairs(entries, True),
+            [("urshifu", 1), ("all arceus", 2)],
+        )
+        self.assertEqual(
+            grab_reserve_pairs(entries, False),
+            [("urshifu", 1), ("arceus", 2)],
         )
 
     def test_grab_display_names(self) -> None:

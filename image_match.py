@@ -38,6 +38,8 @@ MAUSHOLD_FORM_ALIASES = frozenset(
 FORM_NAME_ALIASES = {
     "alola geodude": "Alolan Geodude",
     "alola graveler": "Alolan Graveler",
+    "ice eiscue": "Eiscue",
+    "noice eiscue": "Eiscue",
 }
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {

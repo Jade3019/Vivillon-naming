@@ -4480,6 +4480,24 @@ class GuessFormatTests(unittest.TestCase):
                     "@Pokétwo#8236 c alolan graveler",
                 )
 
+    def test_eiscue_face_names_use_species_name_and_catch_command(self) -> None:
+        from image_match import family_name, species_display_name
+
+        for alias in ("Ice Eiscue", "Noice Eiscue"):
+            with self.subTest(alias=alias):
+                name = species_display_name(alias)
+                self.assertEqual(name, "Eiscue")
+                self.assertEqual(family_name(alias), "Eiscue")
+                self.assertEqual(format_guess(name, 100), "Eiscue: 100.00%")
+                self.assertEqual(
+                    format_catch_command(POKETWO_COMMAND_BOT_ID, name),
+                    "@Pokétwo#8236 c eiscue",
+                )
+                self.assertEqual(
+                    format_pc_catch_embed(name, alias).title,
+                    "Catch Eiscue",
+                )
+
     def test_maushold_family_variants_use_species_name_and_catch_command(self) -> None:
         from image_match import family_name, species_display_name
 

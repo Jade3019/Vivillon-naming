@@ -8552,6 +8552,18 @@ class NamingBot(discord.Client):
                 await self.set_poketwo_blocked(message.channel, True)
             return
 
+        if message.guild and not test_mode:
+            try:
+                self.type_pings = load_type_pings(self.type_ping_path)
+            except ValueError:
+                logger.exception("Could not refresh type ping registrations")
+                await message.reply(
+                    "I couldn't load the current type ping registrations. "
+                    "Check the bot logs.",
+                    mention_author=False,
+                )
+                return
+
         reserved_user_ids = (
             reserved_user_ids_for_pokemon(
                 self.reservations,

@@ -26,7 +26,7 @@ CONSENSUS_COMPARISONS = 8
 RATIO = 0.8
 MIN_VOTES = 6
 MIN_MARGIN = 3
-SPECIES_MIN_VOTES = {"Boldore": 8, "Milcery": 6}
+SPECIES_MIN_VOTES = {"Boldore": 8, "Milcery": 6, "Shellos": 8}
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
@@ -217,7 +217,9 @@ def foreground_mask(data: bytes):
     if image is None:
         return None
     if image.ndim == 3 and image.shape[2] == 4:
-        return np.where(image[..., 3] > 128, 255, 0).astype(np.uint8)
+        if np.any(image[..., 3] < 255):
+            return np.where(image[..., 3] > 128, 255, 0).astype(np.uint8)
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
     if image.ndim != 3:
         return None
     height, width = image.shape[:2]
@@ -724,7 +726,14 @@ class ImageMatcher:
         if is_variant:
             min_votes, min_margin = 2, 2
         elif relaxed:
-            min_votes, min_margin = (4, 3) if name != "Pumpkaboo" else (99, 99)
+            if name == "Pumpkaboo":
+                min_votes, min_margin = 99, 99
+            elif name in SPECIES_MIN_VOTES:
+                min_votes = SPECIES_MIN_VOTES[name]
+                min_margin = SPECIES_MIN_MARGIN.get(name, MIN_MARGIN)
+            else:
+                min_votes = max(MIN_VOTES, min_votes - 2)
+                min_margin = max(MIN_MARGIN, min_margin - 1)
         if best >= min_votes and best - second >= max(min_margin, 0.3 * best):
             return DISPLAY_NAMES.get(name, name), best
         return None

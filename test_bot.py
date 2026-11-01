@@ -2378,6 +2378,40 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             self.assertLess(content.index("Pyroar:"), content.index("Collection:"))
             self.assertEqual(content.count("<@123>"), 2)
 
+    async def test_in_flight_spawn_uses_cleared_type_pings(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.type_ping_path = Path(directory) / "type_pings.json"
+            self.bot.type_pings = {f"{SERVER_ID}:123": ["fire"]}
+            save_type_pings(self.bot.type_ping_path, self.bot.type_pings)
+
+            message = Mock()
+            message.id = 709
+            message.guild.id = SERVER_ID
+            message.channel.id = 1209
+            message.attachments = [
+                Mock(content_type="image/png", url="https://example.test/spawn.png")
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            async def recognize_after_clear(*args, **kwargs):
+                save_type_pings(self.bot.type_ping_path, {})
+                return "Pyroar", 99.0
+
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(side_effect=recognize_after_clear),
+            ):
+                await self.bot.handle_spawn(message)
+
+            self.assertNotIn("Typeping:", message.reply.await_args.args[0])
+
 
 class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:

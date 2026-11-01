@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import image_match
 from image_match import ImageMatcher, compute_descriptors, reference_images
@@ -86,6 +86,45 @@ class ImageMatcherTests(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "Shellos")
+
+    def test_wiglett_spawn_reference_matches_as_wiglett(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Wiglett"
+            / "spawn-reference.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Wiglett")
+
+    def test_sunkern_spawn_reference_matches_as_sunkern(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Sunkern"
+            / "spawn-reference.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Sunkern")
+
+    def test_shroodle_spawn_reference_matches_as_shroodle(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Shroodle"
+            / "spawn-reference.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Shroodle")
 
     def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -251,6 +290,84 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertEqual(result, ("Milcery", 46))
         mask.assert_not_called()
 
+    def test_opaque_png_uses_foreground_segmentation(self) -> None:
+        cv2 = image_match.cv2
+        np = image_match.np
+        image = np.zeros((256, 256, 4), dtype=np.uint8)
+        image[..., :3] = (30, 180, 30)
+        image[..., 3] = 255
+        cv2.rectangle(image, (80, 60), (175, 205), (30, 30, 220, 255), -1)
+        encoded = cv2.imencode(".png", image)[1].tobytes()
+
+        mask = image_match.foreground_mask(encoded)
+
+        self.assertIsNotNone(mask)
+        self.assertTrue(np.any(mask == 0))
+        self.assertTrue(np.any(mask == 255))
+
+    def test_relaxed_match_rejects_weak_shellos_false_positive(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(25).random((2, 128), dtype=np.float32)
+        neighbours = [
+            [Mock(trainIdx=0, distance=10), Mock(trainIdx=1, distance=20)]
+            for _ in range(5)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.array([0, 1], dtype=np.int32),
+                names=np.array(["Shellos", "Bellossom"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch(
+                    "image_match.compute_descriptors",
+                    return_value=np.zeros((5, 128), dtype=np.float32),
+                ),
+                patch.object(matcher, "matcher", Mock()) as image_matcher,
+            ):
+                image_matcher.knnMatch.return_value = neighbours
+                result = matcher._match(b"spawn image", False, relaxed=True)
+
+        self.assertIsNone(result)
+
+    def test_shellos_requires_more_votes_than_a_weak_goomy_lookalike(self) -> None:
+        np = image_match.np
+        descriptors = np.random.default_rng(26).random((2, 128), dtype=np.float32)
+        neighbours = [
+            [Mock(trainIdx=0, distance=10), Mock(trainIdx=1, distance=20)]
+            for _ in range(6)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=descriptors,
+                labels=np.array([0, 1], dtype=np.int32),
+                names=np.array(["Shellos", "Goomy"]),
+            )
+            matcher = ImageMatcher(bank_path)
+
+            with (
+                patch(
+                    "image_match.compute_descriptors",
+                    return_value=np.zeros((6, 128), dtype=np.float32),
+                ),
+                patch.object(matcher, "matcher", Mock()) as image_matcher,
+            ):
+                image_matcher.knnMatch.return_value = neighbours
+                results = [
+                    matcher._match(b"spawn image", False, relaxed=relaxed)
+                    for relaxed in (False, True)
+                ]
+
+        self.assertEqual(results, [None, None])
+
     def test_palafin_finizen_match_is_kept_when_patch_is_not_detected(self) -> None:
         np = image_match.np
         descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)
@@ -278,13 +395,13 @@ class ImageMatcherTests(unittest.TestCase):
                     result = matcher.match(b"spawn image")
                 self.assertEqual(result, (name, 20))
 
-    def test_palafin_spawn_reference_matches_normal_and_mirrored(self) -> None:
+    def test_finizen_spawn_reference_matches_normal_and_mirrored(self) -> None:
         import cv2
 
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         path = (
             Path(__file__).with_name("pokemon_images")
-            / "Palafin"
+            / "Finizen"
             / "spawn-reference.png"
         )
         image = cv2.imread(str(path))
@@ -298,7 +415,7 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertTrue(success)
                 result = matcher.match(encoded.tobytes())
                 self.assertIsNotNone(result)
-                self.assertEqual(result[0], "Palafin")
+                self.assertEqual(result[0], "Finizen")
 
     def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
         np = image_match.np

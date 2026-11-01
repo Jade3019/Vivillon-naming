@@ -693,6 +693,76 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 mention_author=False,
             )
 
+    async def test_pause_aliases_and_resume_command(self) -> None:
+        self.bot.command_permissions = {}
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.track_chat_event_message = Mock()
+        self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+
+        def command_message(content: str, channel_id: int) -> Mock:
+            message = Mock()
+            message.author = Mock(spec=discord.Member)
+            message.author.id = 100
+            message.author.bot = False
+            message.author.roles = []
+            message.guild.id = SERVER_ID
+            message.channel.id = channel_id
+            message.channel.guild.id = SERVER_ID
+            message.content = content
+            message.embeds = []
+            message.attachments = []
+            message.reply = AsyncMock()
+            return message
+
+        for channel_id, pause_command in ((210, "v!p"), (211, "v!pause")):
+            with self.subTest(pause_command=pause_command):
+                pause = command_message(pause_command, channel_id)
+                await self.bot.on_message(pause)
+
+                self.assertIn(channel_id, self.bot.muted_poketwo_channels)
+                pause.reply.assert_awaited_once_with(
+                    "Incense paused.",
+                    mention_author=False,
+                )
+
+                resume = command_message("v!q", channel_id)
+                await self.bot.on_message(resume)
+
+                self.assertNotIn(channel_id, self.bot.muted_poketwo_channels)
+                resume.reply.assert_awaited_once_with(
+                    "Incense resumed.",
+                    mention_author=False,
+                )
+
+    async def test_reserve_search_is_public_and_does_not_resume_channel(self) -> None:
+        channel_id = 212
+        self.bot.command_permissions = {str(SERVER_ID): 900}
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.track_chat_event_message = Mock()
+        self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+        self.bot.muted_poketwo_channels.add(channel_id)
+        self.bot.handle_reserve_command = AsyncMock()
+
+        message = Mock()
+        message.author = Mock(spec=discord.Member)
+        message.author.id = 100
+        message.author.bot = False
+        message.author.roles = []
+        message.guild.id = SERVER_ID
+        message.channel.id = channel_id
+        message.channel.guild.id = SERVER_ID
+        message.content = "v!r search pikachu"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.handle_reserve_command.assert_awaited_once_with(message)
+        self.bot.set_poketwo_blocked.assert_not_awaited()
+        self.assertIn(channel_id, self.bot.muted_poketwo_channels)
+        message.reply.assert_not_awaited()
+
     async def test_tracks_incense_commands_across_guilds_and_persists_them(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.incense_path = Path(directory) / "incenses.json"
@@ -4233,13 +4303,20 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_image_test_command("v!test shiny now"))
         self.assertFalse(is_image_test_command("test"))
 
-    async def test_real_missingno_blocks_poketwo_until_vr_command(self) -> None:
+    async def test_real_missingno_blocks_poketwo_until_vq_command(self) -> None:
         self.bot.handle_spawn = NamingBot.handle_spawn.__get__(self.bot, NamingBot)
+        self.bot.premium_servers[str(SERVER_ID)] = "gold"
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+            "pings": False,
+        }
         self.bot.image_http = Mock(close=AsyncMock())
         spawn = Mock()
         spawn.id = 123
         spawn.channel.id = 456
         spawn.channel.guild.id = SERVER_ID
+        spawn.guild = spawn.channel.guild
         spawn.channel.set_permissions = AsyncMock()
         spawn.attachments = [
             Mock(content_type="image/png", url="https://example.test/missingno.png")
@@ -4273,25 +4350,30 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(poketwo_message)
         self.bot.handle_spawn.assert_awaited_once_with(poketwo_message)
 
-        reserve_command = Mock()
-        reserve_command.author.bot = False
-        reserve_command.author.id = 789
-        reserve_command.channel.id = 456
-        reserve_command.channel.guild.id = SERVER_ID
-        reserve_command.channel.set_permissions = AsyncMock()
-        reserve_command.reply = AsyncMock()
-        reserve_command.content = "v!r list"
-        reserve_command.embeds = []
-        reserve_command.attachments = []
+        resume_command = Mock()
+        resume_command.author.bot = False
+        resume_command.author.id = 789
+        resume_command.author.roles = []
+        resume_command.guild.id = SERVER_ID
+        resume_command.channel.id = 456
+        resume_command.channel.guild.id = SERVER_ID
+        resume_command.channel.set_permissions = AsyncMock()
+        resume_command.reply = AsyncMock()
+        resume_command.content = "v!q"
+        resume_command.embeds = []
+        resume_command.attachments = []
         self.bot.handle_reserve_command = AsyncMock()
-        await self.bot.on_message(reserve_command)
+        self.bot.command_permissions = {}
+        self.bot.is_allowed_channel = Mock(return_value=True)
+        self.bot.track_chat_event_message = Mock()
+        await self.bot.on_message(resume_command)
 
         self.assertNotIn(456, self.bot.muted_poketwo_channels)
-        reserve_command.channel.set_permissions.assert_awaited_once()
-        reserve_command.reply.assert_awaited_once_with(
-            "Channel unpaused.", mention_author=False
+        resume_command.channel.set_permissions.assert_awaited_once()
+        resume_command.reply.assert_awaited_once_with(
+            "Incense resumed.", mention_author=False
         )
-        self.bot.handle_reserve_command.assert_awaited_once_with(reserve_command)
+        self.bot.handle_reserve_command.assert_not_awaited()
 
     async def test_channel_filter_allows_any_server_but_not_direct_messages(self) -> None:
         allowed_channel = Mock()
@@ -6515,8 +6597,11 @@ class CommandPermissionTests(unittest.TestCase):
         commands = {
             "v!grab": "general",
             "v!test shiny": "general",
-            "v!r search pikachu": "reserves",
+            "v!r search pikachu": None,
             "v!r": "reserves",
+            "v!p": "reserves",
+            "v!pause": "reserves",
+            "v!q": "reserves",
             "v!cd rare": "reserves",
             "v!settings": "settings",
             "v!settime @role": "general",

@@ -109,8 +109,9 @@ from Project Pokémon when available, or an animated sprite for unsupported
 species/forms. Other starboards use static artwork in the shiny form.
 After a Missingno match (real or `v!test`), Vivillon denies Pokétwo's Send Messages
 permission in that channel (needs Manage Permissions) so no more spawns appear.
-Vivillon keeps handling everything else normally. `v!r` in that channel restores
-Pokétwo's permission and replies `Channel unpaused.` (a bare `v!r` always replies).
+Vivillon keeps handling everything else normally. Use `v!p` or `v!pause` to pause
+Pokétwo in the current channel; the bot replies `Incense paused.` Use `v!q` to
+restore Pokétwo's permission and resume the channel.
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 
@@ -211,7 +212,7 @@ a one-hour fallback timer. A previously running incense is detected when
 Pokétwo next reports its status. Incense tracking is saved in `incenses.json`
 (override with `INCENSE_TRACKING_FILE`). A confirmed `@Pokétwo inc buy -y`
 purchase also pauses Pokétwo in that channel and replies
-`Incense has been paused.` The next `v!r` command unpauses the channel.
+`Incense has been paused.` Use `v!q` to resume the channel.
 
 Use `v!event` to start an event. The organizer can choose **Chat event**, and
 members join by reacting with ⏲️ to the sign-up message during its one-minute

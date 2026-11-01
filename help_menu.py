@@ -15,6 +15,13 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
         ],
     ),
     (
+        "⏸️ Channel Controls",
+        [
+            ("v!p / v!pause", "Pause Pokétwo in this channel."),
+            ("v!q", "Resume Pokétwo in this channel."),
+        ],
+    ),
+    (
         "📌 Reserves",
         [
             ("v!r add <pokemon, ...> @member", "Reserve Pokémon for a member (`all <pokemon>` covers every form)."),

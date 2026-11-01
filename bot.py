@@ -684,6 +684,10 @@ def command_permission_group(content: str) -> str | None:
         return "general"
     if is_image_test_command(content):
         return "general"
+    if re.match(r"^v!r\s+search(?:\s|$)", content, re.IGNORECASE):
+        return None
+    if re.fullmatch(r"v!(?:p|pause|q)", content, re.IGNORECASE):
+        return "reserves"
     if re.fullmatch(r"v!r(?:\s+.+)?", content, re.IGNORECASE):
         return "reserves"
     if re.match(
@@ -6758,6 +6762,34 @@ class NamingBot(discord.Client):
         self.track_chat_event_message(message)
 
         text = message_text(message)
+        if re.fullmatch(r"v!(?:p|pause)", message.content, re.IGNORECASE):
+            if channel_id is None or not await self.set_poketwo_blocked(
+                message.channel,
+                True,
+            ):
+                await message.reply(
+                    "I couldn't pause Pokétwo in this channel. "
+                    "Check the bot's channel permissions.",
+                    mention_author=False,
+                )
+                return
+            self.muted_poketwo_channels.add(channel_id)
+            await message.reply("Incense paused.", mention_author=False)
+            return
+        if re.fullmatch(r"v!q", message.content, re.IGNORECASE):
+            if channel_id not in self.muted_poketwo_channels:
+                await message.reply("This channel is not paused.", mention_author=False)
+                return
+            if not await self.set_poketwo_blocked(message.channel, False):
+                await message.reply(
+                    "I couldn't resume Pokétwo in this channel. "
+                    "Check the bot's channel permissions.",
+                    mention_author=False,
+                )
+                return
+            self.muted_poketwo_channels.discard(channel_id)
+            await message.reply("Incense resumed.", mention_author=False)
+            return
         if message.author.id != self.config.poketwo_bot_id:
             if COMMANDS_OFF_PATTERN.fullmatch(message.content):
                 await self.handle_command_lock_command(message, locked=True)
@@ -6824,20 +6856,7 @@ class NamingBot(discord.Client):
                 await self.handle_reserve_category_command(message)
                 return
             if re.match(r"^v!r(?:\s|$)", message.content, re.IGNORECASE):
-                was_paused = channel_id in self.muted_poketwo_channels
-                if was_paused:
-                    self.muted_poketwo_channels.discard(channel_id)
-                    await self.set_poketwo_blocked(message.channel, False)
-                if re.match(
-                    r"^v!r\s+(?:add|list|search|remove|clear|e|exchange)(?:\s|$)",
-                    message.content,
-                    re.IGNORECASE,
-                ):
-                    if was_paused:
-                        await message.reply("Channel unpaused.", mention_author=False)
-                    await self.handle_reserve_command(message)
-                else:
-                    await message.reply("Channel unpaused.", mention_author=False)
+                await self.handle_reserve_command(message)
                 return
             if is_image_test_command(message.content):
                 if image_url(message) is None:

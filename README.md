@@ -244,6 +244,9 @@ v!r add pikachu, eevee @member
 v!r add all arceus @member
 ```
 
+Names must match a Pokémon in the bot's catalog; unknown names are rejected
+instead of being saved as reservations.
+
 Use `all <pokemon>` to reserve every form of that Pokémon; the member is then
 mentioned when any matching form spawns. More than one member can reserve the
 same Pokémon. When a reserved Pokémon spawns, the bot lists and mentions its

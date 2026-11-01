@@ -6257,6 +6257,50 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(bot.reservations, {"1:pikachu": [123]})
 
+    async def test_unknown_pokemon_cannot_be_added_to_reservations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            role_id = 900
+            bot = SimpleNamespace(
+                command_permissions={"1": role_id},
+                reserve_categories={},
+                reservations={},
+                reserve_path=Path(directory) / "reserves.json",
+            )
+            message = Mock()
+            message.guild.id = 1
+            message.author = Mock(spec=discord.Member)
+            message.author.roles = [Mock(id=role_id)]
+            message.content = "v!r add towel <@123>"
+            target = Mock()
+            target.id = 123
+            target.mention = "<@123>"
+            message.mentions = [target]
+            message.reply = AsyncMock()
+
+            await NamingBot.handle_reserve_command(bot, message)
+
+            self.assertEqual(bot.reservations, {})
+            self.assertFalse(bot.reserve_path.exists())
+            message.reply.assert_awaited_once_with(
+                "Unknown Pokémon: towel.",
+                mention_author=False,
+            )
+
+    async def test_reserve_search_rejects_unknown_pokemon_name(self) -> None:
+        bot = SimpleNamespace(reservations={})
+        message = Mock()
+        message.guild.id = 1
+        message.content = "v!r search towel"
+        message.mentions = []
+        message.reply = AsyncMock()
+
+        await NamingBot.handle_reserve_search(bot, message)
+
+        message.reply.assert_awaited_once_with(
+            "**towel** is not a valid Pokémon name.",
+            mention_author=False,
+        )
+
     async def test_reserve_add_and_remove_expand_category_members(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bot = SimpleNamespace(

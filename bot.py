@@ -8686,6 +8686,15 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        unknown_names = [
+            name for name in pokemon_names if not is_known_pokemon_name(name)
+        ]
+        if unknown_names:
+            await message.reply(
+                f"Unknown Pokémon: {', '.join(unknown_names)}.",
+                mention_author=False,
+            )
+            return
 
         updated_reservations = {
             key: list(user_ids) for key, user_ids in self.reservations.items()
@@ -8907,6 +8916,12 @@ class NamingBot(discord.Client):
         if len(pokemon_name) > 60 or not is_valid_pokemon_name(pokemon_name):
             await message.reply(
                 "Usage: `v!r search <pokemon|@member>`",
+                mention_author=False,
+            )
+            return
+        if not is_known_pokemon_name(pokemon_name):
+            await message.reply(
+                f"**{pokemon_name}** is not a valid Pokémon name.",
                 mention_author=False,
             )
             return

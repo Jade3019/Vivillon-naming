@@ -4218,6 +4218,25 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
 
 class GuessFormatTests(unittest.TestCase):
+    def test_basculin_stripe_forms_use_species_name_and_catch_command(self) -> None:
+        for form in (
+            "Blue-Striped Basculin",
+            "Red-Striped Basculin",
+            "White-Striped Basculin",
+        ):
+            with self.subTest(form=form):
+                name = image_match.species_display_name(form)
+                guess_name = shown_form_name(name, form)
+                self.assertEqual(name, "Basculin")
+                self.assertEqual(
+                    format_guess(name, 100, guess_name),
+                    "Basculin: 100.00%",
+                )
+                self.assertEqual(
+                    format_catch_command(POKETWO_COMMAND_BOT_ID, name),
+                    "@Pokétwo#8236 c basculin",
+                )
+
     def test_alola_graveler_alias_uses_alolan_name(self) -> None:
         from image_match import family_name, species_display_name
 

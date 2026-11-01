@@ -126,6 +126,19 @@ class ImageMatcherTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "Shroodle")
 
+    def test_sandygast_spawn_reference_matches_as_sandygast(self) -> None:
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Sandygast"
+            / "spawn-reference.png"
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Sandygast")
+
     def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "urshifu-rapid-strike" / "1.png"

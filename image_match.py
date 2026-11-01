@@ -117,6 +117,10 @@ THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
 # Forms the matcher reports as-is so their own thumbnail can be chosen; the
 # Pokémon is still named after the species.
 THUMBNAIL_FORM_SPECIES = {
+    **{
+        f"{stripe}-Striped Basculin": "Basculin"
+        for stripe in ("Blue", "Red", "White")
+    },
     "Blue-Plumage Squawkabilly": "Squawkabilly",
     "Green-Plumage Squawkabilly": "Squawkabilly",
     "Hangry Morpeko": "Morpeko",

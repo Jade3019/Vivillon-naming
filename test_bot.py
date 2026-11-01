@@ -4073,6 +4073,20 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
 
 class GuessFormatTests(unittest.TestCase):
+    def test_alola_graveler_alias_uses_alolan_name(self) -> None:
+        from image_match import family_name, species_display_name
+
+        for alias in ("Alola Graveler", "alola-graveler", "alola_graveler"):
+            with self.subTest(alias=alias):
+                name = species_display_name(alias)
+                self.assertEqual(name, "Alolan Graveler")
+                self.assertEqual(family_name(alias), "Alolan Graveler")
+                self.assertEqual(format_guess(name, 100), "Alolan Graveler: 100.00%")
+                self.assertEqual(
+                    format_catch_command(POKETWO_COMMAND_BOT_ID, name),
+                    "@Pokétwo#8236 c alolan graveler",
+                )
+
     def test_maushold_family_variants_use_species_name_and_catch_command(self) -> None:
         from image_match import family_name, species_display_name
 

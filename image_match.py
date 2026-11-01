@@ -35,6 +35,7 @@ MAUSHOLD_FORMS = ("Family-Of-Three Maushold", "Family-Of-Four Maushold")
 MAUSHOLD_FORM_ALIASES = frozenset(
     {"family of three maushold", "family of four maushold"}
 )
+FORM_NAME_ALIASES = {"alola graveler": "Alolan Graveler"}
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
@@ -167,6 +168,7 @@ INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon", "Arceus"}
 
 def family_name(name: str) -> str:
     normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
+    name = FORM_NAME_ALIASES.get(normalized, name)
     if normalized in MAUSHOLD_FORM_ALIASES:
         return "Maushold"
     return FAMILY_OVERRIDES.get(name, base_pokemon_name(name))
@@ -174,6 +176,7 @@ def family_name(name: str) -> str:
 
 def species_display_name(name: str) -> str:
     normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
+    name = FORM_NAME_ALIASES.get(normalized, name)
     if normalized in MAUSHOLD_FORM_ALIASES:
         return "Maushold"
     return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))

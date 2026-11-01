@@ -119,6 +119,7 @@ bold “Copy Here >” label, when Assisted mode is on. Maushold's Family-of-Thr
 and Family-of-Four appearances are displayed simply as Maushold. A separate
 desktop copy card
 below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
+The model's “Alola Graveler” alias is normalized to “Alolan Graveler”.
 Assisted mode can be turned off to show names and mentions without catch commands.
 Discord displays both copy formats on mobile and desktop. Discord's copy controls
 depend on the client; the bot cannot directly write to a user's clipboard. Pure

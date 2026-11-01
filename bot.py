@@ -7180,6 +7180,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             all_channels = [*guild.text_channels, *guild.threads]
+            category_name = None
             channel_argument = command_match.group("channel")
             if channel_argument is not None:
                 channel_id_match = re.fullmatch(
@@ -7194,23 +7195,49 @@ class NamingBot(discord.Client):
                 requested_channel_id = int(
                     channel_id_match.group(1) or channel_id_match.group(2)
                 )
-                selected_channel = next(
+                selected_category = next(
                     (
-                        channel
-                        for channel in all_channels
-                        if channel.id == requested_channel_id
+                        category
+                        for category in guild.categories
+                        if category.id == requested_channel_id
                     ),
                     None,
                 )
-                if selected_channel is None:
-                    await progress.edit(
-                        content=(
-                            "I couldn't find that text channel or active thread "
-                            "in this server."
+                if selected_category is not None:
+                    all_channels = [
+                        channel
+                        for channel in all_channels
+                        if channel.category_id == selected_category.id
+                        or getattr(channel, "parent", None) is not None
+                        and channel.parent.category_id == selected_category.id
+                    ]
+                    category_name = selected_category.name
+                    if not all_channels:
+                        await progress.edit(
+                            content=(
+                                f"There are no text channels in the category "
+                                f"{category_name}."
+                            )
                         )
+                        return
+                else:
+                    selected_channel = next(
+                        (
+                            channel
+                            for channel in all_channels
+                            if channel.id == requested_channel_id
+                        ),
+                        None,
                     )
-                    return
-                all_channels = [selected_channel]
+                    if selected_channel is None:
+                        await progress.edit(
+                            content=(
+                                "I couldn't find that category, text channel "
+                                "or active thread in this server."
+                            )
+                        )
+                        return
+                    all_channels = [selected_channel]
             channels = []
             for channel in all_channels:
                 if guild.id in self.profile_backfill_stop_requests:
@@ -7238,10 +7265,15 @@ class NamingBot(discord.Client):
                 content=(
                     (
                         f"Backfilling profile data in #{channels[0].name}."
-                        if channel_argument is not None
+                        if channel_argument is not None and category_name is None
                         else (
                             f"Backfilling profile data across {len(channels)} "
-                            "readable channels and active threads."
+                            f"readable channels in the category {category_name}."
+                            if category_name is not None
+                            else (
+                                f"Backfilling profile data across {len(channels)} "
+                                "readable channels and active threads."
+                            )
                         )
                     )
                     + " This may take a while."

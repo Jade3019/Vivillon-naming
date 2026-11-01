@@ -1632,6 +1632,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         selected_channel = make_channel(789)
         other_channel = make_channel(790)
         guild.text_channels = [selected_channel, other_channel]
+        guild.categories = []
         progress = Mock()
         progress.edit = AsyncMock()
         command = Mock()
@@ -1654,6 +1655,49 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.bot.profile_stats_for_user(guild_id, 123)["box_shiny"],
             1,
         )
+
+    async def test_profile_backfill_category_only_scans_its_channels(self) -> None:
+        guild = Mock()
+        guild.id = next(iter(SERVER_IDS - {SERVER_ID}))
+        guild.me = Mock()
+        guild.threads = []
+        category = Mock()
+        category.id = 555
+        category.name = "catches"
+        guild.categories = [category]
+
+        def make_channel(channel_id: int, category_id: int) -> Mock:
+            channel = Mock()
+            channel.id = channel_id
+            channel.name = f"c-{channel_id}"
+            channel.category_id = category_id
+            channel.permissions_for.return_value.view_channel = True
+            channel.permissions_for.return_value.read_message_history = True
+
+            async def history(*, limit: int | None, oldest_first: bool):
+                return
+                yield
+
+            channel.history = Mock(side_effect=history)
+            return channel
+
+        inside = [make_channel(1, 555), make_channel(2, 555)]
+        outside = make_channel(3, 999)
+        guild.text_channels = [*inside, outside]
+        progress = Mock()
+        progress.edit = AsyncMock()
+        command = Mock()
+        command.guild = guild
+        command.author.guild_permissions.administrator = True
+        command.content = "v!backfill 555"
+        command.reply = AsyncMock(return_value=progress)
+        command.channel.send = AsyncMock()
+
+        await self.bot.handle_profile_backfill_command(command)
+
+        for channel in inside:
+            channel.history.assert_called_once()
+        outside.history.assert_not_called()
 
     async def test_profile_backfill_stop_saves_partial_results(self) -> None:
         guild = Mock()

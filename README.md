@@ -345,7 +345,9 @@ total catches, shinies, catches below 10% IV, catches at or above 90% IV, Gigant
 and Missingno catches. Each `Congratulations @user! You caught a` message
 adds one to Total; a spawn by itself does not count, and the total has no cap.
 Server administrators can run `v!backfill` in that server to scan readable
-text channels and active threads for earlier catches. Run `v!backfill stop` to
+text channels and active threads for earlier catches. Use `v!backfill <channel>`
+for one channel or `v!backfill <category id>` for only the channels in that
+category. Run `v!backfill stop` to
 stop an active scan; catches processed before stopping are saved. The bot needs
 View Channel and Read Message History permissions; channels it cannot read are
 reported and excluded. The bot posts cumulative totals and a scanned-message

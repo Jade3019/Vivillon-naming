@@ -1436,7 +1436,7 @@ def parse_catch_details(
         pokemon_text = body.split("!", 1)[0].strip()
         pokemon_text = re.sub(r"^a\s+", "", pokemon_text, flags=re.IGNORECASE)
         pokemon_text = re.sub(
-            r"\s*\(\s*(?:\d+(?:\.\d+)?|\?{2,})\s*%?\s*\)\s*$",
+            r"\s*\(\s*(?:\d+(?:[.,]\d+)?|\?{2,})\s*%?\s*\)\s*$",
             "",
             pokemon_text,
         ).strip()
@@ -1448,11 +1448,12 @@ def parse_catch_details(
         pokemon_text = re.sub(r"^[.!,:;]+\s*", "", pokemon_text)
         pokemon_text = pokemon_text.split("!", 1)[0].strip()
         pokemon_text = re.sub(
-            r"\s*\(\s*(?:\d+(?:\.\d+)?|\?{2,})\s*%?\s*\)\s*$",
+            r"\s*\(\s*(?:\d+(?:[.,]\d+)?|\?{2,})\s*%?\s*\)\s*$",
             "",
             pokemon_text,
         ).strip()
 
+    pokemon_text = re.sub(r"<a?:[A-Za-z0-9_~]+:\d+>", " ", pokemon_text).strip()
     gender = None
     if re.search(r"(?:♀|\bfemale\b)", body, re.IGNORECASE):
         gender = "Female"
@@ -1469,12 +1470,14 @@ def parse_catch_details(
         return None
 
     iv_match = re.search(
-        r"\(\s*(\d+(?:\.\d+)?|\?{2,})\s*%\s*\)"
-        r"|\bIV\s*[:=]\s*(\d+(?:\.\d+)?|\?{2,})\s*%?",
+        r"\(\s*(\d+(?:[.,]\d+)?|\?{2,})\s*%\s*\)"
+        r"|\bIV\s*[:=]\s*(\d+(?:[.,]\d+)?|\?{2,})\s*%?",
         text,
         re.IGNORECASE,
     )
     iv_text = next((value for value in iv_match.groups() if value), None) if iv_match else None
+    if iv_text:
+        iv_text = iv_text.replace(",", ".")
     if missingno and iv_text is None:
         iv_text = "???"
     iv_value = None
@@ -1569,9 +1572,11 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
         trainer = fields.get("trainer", "").strip()
         trainer_match = re.search(r"<@!?(\d+)>", trainer)
         pokemon_text = fields.get("pokemon", "").replace("’", "'").replace("‘", "'")
+        pokemon_text = re.sub(r"<a?:[A-Za-z0-9_~]+:\d+>", " ", pokemon_text).strip()
         level = fields.get("level", "???")
         iv_text = fields.get("ivs", fields.get("iv", ""))
-        iv_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", iv_text)
+        iv_text = iv_text.replace(",", ".")
+        iv_match = re.search(r"(\d+(?:[.,]\d+)?)\s*%?", iv_text)
         missingno = is_missingno_name(pokemon_text)
         gender = None
         if re.search(r"(?:♀|\bfemale\b)", pokemon_text, re.IGNORECASE):

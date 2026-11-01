@@ -2385,6 +2385,42 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         await self.bot.close()
 
+    def test_plain_catch_strips_custom_emoji_and_parses_decimal_comma_iv(self) -> None:
+        details = parse_catch_details(
+            "Congratulations <@123>! You caught a Level 14 "
+            "Sewaddle<:female:1207734084210532483>! (43,55%)!"
+        )
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details.pokemon, "Sewaddle")
+        self.assertEqual(details.gender, "Female")
+        self.assertEqual(details.iv, "43.55%")
+        self.assertEqual(details.iv_value, 43.55)
+
+    def test_catch_detection_strips_custom_emoji_and_parses_decimal_comma_iv(
+        self,
+    ) -> None:
+        import bot
+
+        embed = discord.Embed(title="Rare Catch Detected!")
+        embed.add_field(name="Trainer:", value="<@123>", inline=True)
+        embed.add_field(
+            name="Pokemon:",
+            value="Sewaddle<:female:1207734084210532483>",
+            inline=True,
+        )
+        embed.add_field(name="Level:", value="14", inline=True)
+        embed.add_field(name="IVs:", value="43,55%", inline=True)
+        embed.set_footer(text="Catch Detection System")
+        message = Mock(embeds=[embed])
+
+        details = bot.parse_catch_detection_details(message)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details.pokemon, "Sewaddle")
+        self.assertEqual(details.iv, "43.55%")
+        self.assertEqual(details.iv_value, 43.55)
+
     def test_parses_shiny_catch_details_and_only_shows_explicit_chain(self) -> None:
         details = parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Bagon ♀! "

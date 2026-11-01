@@ -625,6 +625,13 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
     def test_recognizes_only_poketwo_incense_commands(self) -> None:
         self.assertEqual(
             poketwo_incense_action(
+                f"<@{self.config.poketwo_bot_id}> inc buy -y",
+                self.config.poketwo_bot_id,
+            ),
+            "buy",
+        )
+        self.assertEqual(
+            poketwo_incense_action(
                 f"<@{self.config.poketwo_bot_id}> buy incense",
                 self.config.poketwo_bot_id,
             ),
@@ -658,6 +665,34 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
+    async def test_confirmed_incense_purchase_pauses_channel(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.incense_path = Path(directory) / "incenses.json"
+            self.bot.is_allowed_channel = Mock(return_value=False)
+            self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+            message = Mock()
+            message.author.bot = False
+            message.author.id = 100
+            message.guild.id = SERVER_ID
+            message.guild.name = "Test server"
+            message.channel.id = 200
+            message.channel.name = "incense-room"
+            message.content = f"<@{self.config.poketwo_bot_id}> inc buy -y"
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            await self.bot.on_message(message)
+
+            self.assertIn(200, self.bot.muted_poketwo_channels)
+            self.bot.set_poketwo_blocked.assert_awaited_once_with(
+                message.channel,
+                True,
+            )
+            message.reply.assert_awaited_once_with(
+                "Incense has been paused.",
+                mention_author=False,
+            )
+
     async def test_tracks_incense_commands_across_guilds_and_persists_them(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.incense_path = Path(directory) / "incenses.json"
@@ -669,6 +704,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             message.channel.id = 200
             message.channel.name = "incense-room"
             message.content = f"<@{self.config.poketwo_bot_id}> buy incense"
+            message.embeds = []
 
             await self.bot.on_message(message)
 
@@ -687,6 +723,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             second_server_message.channel.id = 201
             second_server_message.channel.name = "another-incense-room"
             second_server_message.content = "p!buy incense"
+            second_server_message.embeds = []
             await self.bot.on_message(second_server_message)
             self.assertEqual(len(self.bot.current_active_incenses()), 2)
 

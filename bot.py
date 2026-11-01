@@ -480,6 +480,8 @@ def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
     mention = rf"<@!?{poketwo_bot_id}>"
     match = re.search(
         rf"(?:^|\s)(?:{mention}\s+|p!\s*)"
+        rf"(?P<buy>inc\s+buy\s+-y)\b|"
+        rf"(?:^|\s)(?:{mention}\s+|p!\s*)"
         rf"(?P<start>buy\s+incense)\b|"
         rf"(?:^|\s)(?:{mention}\s+|p!\s*)"
         rf"(?P<stop>stopincense)\b",
@@ -488,6 +490,8 @@ def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
     )
     if match is None:
         return None
+    if match.group("buy"):
+        return "buy"
     return "start" if match.group("start") else "stop"
 
 
@@ -6647,7 +6651,7 @@ class NamingBot(discord.Client):
             mention_author=False,
         )
 
-    async def set_poketwo_blocked(self, channel, blocked: bool) -> None:
+    async def set_poketwo_blocked(self, channel, blocked: bool) -> bool:
         """Deny (or restore) Pokétwo's Send Messages permission in a channel."""
         try:
             guild = channel.guild
@@ -6664,8 +6668,10 @@ class NamingBot(discord.Client):
                 await channel.set_permissions(
                     target, overwrite=None, reason="v!r: restoring Pokétwo"
                 )
+            return True
         except Exception as error:
             logger.warning("Could not change Pokétwo permissions: %s", error)
+            return False
 
     async def on_message(self, message: discord.Message) -> None:
         # The org transport runs first, before the bot-author guard below would
@@ -6696,7 +6702,22 @@ class NamingBot(discord.Client):
             self.track_profile_catch(message)
             await self.track_profile_box_shiny(message)
             await self.handle_catch_starboard(message)
-        self.track_incense_command(message)
+        incense_action = self.track_incense_command(message)
+        if incense_action == "buy":
+            channel_id = getattr(message.channel, "id", None)
+            if channel_id is not None:
+                if await self.set_poketwo_blocked(message.channel, True):
+                    self.muted_poketwo_channels.add(channel_id)
+                    await message.reply(
+                        "Incense has been paused.",
+                        mention_author=False,
+                    )
+                else:
+                    await message.reply(
+                        "I couldn't pause incense in this channel. "
+                        "Check the bot permissions.",
+                        mention_author=False,
+                    )
         if not self.is_allowed_channel(message.channel):
             return
         channel_id = getattr(message.channel, "id", None)
@@ -7059,11 +7080,11 @@ class NamingBot(discord.Client):
         except OSError:
             logger.exception("Could not save incense tracking to %s", self.incense_path)
 
-    def track_incense_command(self, message: discord.Message) -> None:
+    def track_incense_command(self, message: discord.Message) -> str | None:
         guild = message.guild
         channel = message.channel
         if guild is None:
-            return
+            return None
         if message.author.id == self.config.poketwo_bot_id:
             status = re.search(
                 r"\bIncense\s*:\s*(Active|Inactive)\b",
@@ -7080,7 +7101,7 @@ class NamingBot(discord.Client):
                 message.content, self.config.poketwo_bot_id
             )
         if action is None:
-            return
+            return None
         channel_id = str(channel.id)
         if action == "stop":
             self.active_incenses.pop(channel_id, None)
@@ -7092,6 +7113,7 @@ class NamingBot(discord.Client):
                 "expires_at": int(time.time()) + INCENSE_DURATION_SECONDS,
             }
         self.save_active_incenses()
+        return action
 
     def current_active_incenses(self) -> list[dict[str, int | str]]:
         now = int(time.time())

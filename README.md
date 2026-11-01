@@ -209,7 +209,9 @@ is tracked from observed buy/stop commands and Pokétwo spawn messages that
 report `Incense: Active` or `Incense: Inactive`, including embed footers, with
 a one-hour fallback timer. A previously running incense is detected when
 Pokétwo next reports its status. Incense tracking is saved in `incenses.json`
-(override with `INCENSE_TRACKING_FILE`).
+(override with `INCENSE_TRACKING_FILE`). A confirmed `@Pokétwo inc buy -y`
+purchase also pauses Pokétwo in that channel and replies
+`Incense has been paused.` The next `v!r` command unpauses the channel.
 
 Use `v!event` to start an event. The organizer can choose **Chat event**, and
 members join by reacting with ⏲️ to the sign-up message during its one-minute

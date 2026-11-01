@@ -431,6 +431,19 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Enchanted Applin")
 
+    def test_discord_spawn_screenshot_is_recognized(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Enchanted Applin"
+            / "spawn-reference-discord.png"
+        )
+
+        result = matcher.match(image_path.read_bytes())
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "Enchanted Applin")
+
     def test_supplied_form_images_match_their_named_forms(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         forms = (

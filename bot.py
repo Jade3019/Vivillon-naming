@@ -2666,8 +2666,15 @@ def shinyhunter_user_ids_for_pokemon(
     shinyhunters: dict[str, list[int]],
     guild_id: int,
     pokemon_name: str,
+    *,
+    additional_names: tuple[str, ...] = (),
 ) -> list[int]:
-    return reserved_user_ids_for_pokemon(shinyhunters, guild_id, pokemon_name)
+    return reserved_user_ids_for_pokemon(
+        shinyhunters,
+        guild_id,
+        pokemon_name,
+        additional_names=additional_names,
+    )
 
 
 def parse_collection_add_command(content: str) -> list[str] | None:
@@ -6860,6 +6867,12 @@ class NamingBot(discord.Client):
 
         tier = match.group("tier")
         if tier is not None:
+            if message.guild is None or message.guild.id != SERVER_ID:
+                await message.reply(
+                    "Premium can only be granted from the main server.",
+                    mention_author=False,
+                )
+                return
             try:
                 is_owner = await self.is_application_owner(message.author.id)
             except discord.HTTPException:
@@ -9254,6 +9267,7 @@ class NamingBot(discord.Client):
                 self.shinyhunters,
                 message.guild.id,
                 name,
+                additional_names=(guess_name,),
             )
             if message.guild
             else []

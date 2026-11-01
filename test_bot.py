@@ -407,6 +407,7 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
         self.bot.is_application_owner = AsyncMock(return_value=True)
         message = Mock()
         message.content = "v!premium add silver 987654321"
+        message.guild.id = SERVER_ID
         message.author.id = 123
         message.author.bot = False
         message.reply = AsyncMock()
@@ -428,6 +429,7 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
         self.bot.is_application_owner = AsyncMock(return_value=False)
         message = Mock()
         message.content = "v!premium add gold 987654321"
+        message.guild.id = SERVER_ID
         message.author.id = 123
         message.reply = AsyncMock()
 
@@ -435,6 +437,19 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(self.bot.premium_servers, {})
         self.assertIn("Only the bot owner", message.reply.await_args.args[0])
+
+    async def test_premium_cannot_be_granted_outside_the_main_server(self) -> None:
+        self.bot.is_application_owner = AsyncMock(return_value=True)
+        message = Mock()
+        message.content = "v!premium add gold 987654321"
+        message.guild.id = SERVER_ID + 1
+        message.author.id = 123
+        message.reply = AsyncMock()
+
+        await self.bot.handle_premium_command(message)
+
+        self.assertEqual(self.bot.premium_servers, {})
+        self.assertIn("main server", message.reply.await_args.args[0])
 
     async def test_application_team_owner_is_authorized_and_owner_lookup_is_cached(
         self,
@@ -6250,6 +6265,18 @@ class CommandPermissionTests(unittest.TestCase):
         self.assertEqual(
             collection_user_ids_for_pokemon(
                 collections,
+                1,
+                "Meowscarada",
+                additional_names=("Oracle Meowscarada",),
+            ),
+            [5],
+        )
+
+    def test_shinyhunt_pings_for_custom_form_shown_name(self) -> None:
+        shinyhunters = {reservation_key(1, "oracle meowscarada"): [5]}
+        self.assertEqual(
+            shinyhunter_user_ids_for_pokemon(
+                shinyhunters,
                 1,
                 "Meowscarada",
                 additional_names=("Oracle Meowscarada",),

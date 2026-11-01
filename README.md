@@ -54,7 +54,8 @@ approval for privileged intents on larger bots.
    Chat Completions model.
 
    `v!premium` displays Bronze/Silver/Gold tier cards and shows which tier is
-   active for the current server. Only the bot owner can grant access with
+   active for the current server. Only the bot owner, and only from the main
+   server (`1530949341013868635`), can grant access with
    `v!premium add bronze <server id>`, `v!premium add silver <server id>`, or
    `v!premium add gold <server id>`. Tier assignments persist in
    `premium_servers.json` (or the path set by `PREMIUM_SERVERS_FILE`).

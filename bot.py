@@ -4622,7 +4622,10 @@ NAME_SUGGESTION_PREFIXES: Final[frozenset[str]] = frozenset(
         "gmax", "gigantamax", "primal",
     }
 )
-POKEMON_NAME_ALIASES: Final[dict[str, str]] = {"riffex": "toxtricity"}
+POKEMON_NAME_ALIASES: Final[dict[str, str]] = {
+    "riffex": "toxtricity",
+    "madusa simipour": "medusa simipour",
+}
 NAME_SUGGESTION_CUTOFF: Final[float] = 0.6
 NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 60
 

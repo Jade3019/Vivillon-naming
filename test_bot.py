@@ -6272,6 +6272,31 @@ class CommandPermissionTests(unittest.TestCase):
             [5],
         )
 
+    def test_custom_forms_ping_all_lists(self) -> None:
+        forms = {
+            "enchanted applin": "Applin",
+            "rotten applin": "Applin",
+            "madusa simipour": "Simipour",
+            "statue simipour": "Simipour",
+            "elixir reuniclus": "Reuniclus",
+            "cauldron reuniclus": "Reuniclus",
+            "oracle meowscarada": "Meowscarada",
+            "witch meowscarada": "Meowscarada",
+        }
+        shown = {"madusa simipour": "Medusa Simipour"}
+        for typed, species in forms.items():
+            data = {reservation_key_for_command(1, typed): [5]}
+            guess = shown.get(typed, typed.title())
+            for lookup in (
+                reserved_user_ids_for_pokemon,
+                shinyhunter_user_ids_for_pokemon,
+                collection_user_ids_for_pokemon,
+            ):
+                with self.subTest(typed=typed, lookup=lookup.__name__):
+                    self.assertEqual(
+                        lookup(data, 1, species, additional_names=(guess,)), [5]
+                    )
+
     def test_shinyhunt_pings_for_custom_form_shown_name(self) -> None:
         shinyhunters = {reservation_key(1, "oracle meowscarada"): [5]}
         self.assertEqual(

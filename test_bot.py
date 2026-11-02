@@ -763,6 +763,65 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(channel_id, self.bot.muted_poketwo_channels)
         message.reply.assert_not_awaited()
 
+    async def test_pause_all_pauses_active_incense_channels_in_current_server(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            now = int(time.time())
+            self.bot.incense_path = Path(directory) / "incenses.json"
+            self.bot.active_incenses = {
+                "210": {
+                    "guild": "Current server",
+                    "channel": "incense-room",
+                    "guild_id": SERVER_ID,
+                    "expires_at": now + 3600,
+                },
+                "211": {
+                    "guild": "Other server",
+                    "channel": "other-room",
+                    "guild_id": SERVER_ID + 1,
+                    "expires_at": now + 3600,
+                },
+                "212": {
+                    "guild": "Current server",
+                    "channel": "expired-room",
+                    "guild_id": SERVER_ID,
+                    "expires_at": now - 1,
+                },
+            }
+            guild = Mock()
+            guild.id = SERVER_ID
+            channel = Mock()
+            channel.id = 210
+            channel.guild.id = SERVER_ID
+            guild.get_channel = Mock(side_effect={210: channel}.get)
+            guild.get_thread = Mock(return_value=None)
+            self.bot.command_permissions = {}
+            self.bot.is_allowed_channel = Mock(return_value=True)
+            self.bot.track_chat_event_message = Mock()
+            self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+            message = Mock()
+            message.author = Mock(spec=discord.Member)
+            message.author.id = 100
+            message.author.bot = False
+            message.author.roles = []
+            message.guild = guild
+            message.channel.id = 213
+            message.channel.guild.id = SERVER_ID
+            message.content = "v!p all"
+            message.embeds = []
+            message.attachments = []
+            message.reply = AsyncMock()
+
+            await self.bot.on_message(message)
+
+            self.bot.set_poketwo_blocked.assert_awaited_once_with(channel, True)
+            self.assertEqual(self.bot.muted_poketwo_channels, {210})
+            self.assertNotIn("212", self.bot.active_incenses)
+            self.assertIn("211", self.bot.active_incenses)
+            message.reply.assert_awaited_once_with(
+                "Incense paused in 1 channel(s).",
+                mention_author=False,
+            )
+
     async def test_tracks_incense_commands_across_guilds_and_persists_them(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.incense_path = Path(directory) / "incenses.json"
@@ -6634,7 +6693,9 @@ class CommandPermissionTests(unittest.TestCase):
             "v!r search pikachu": None,
             "v!r": "reserves",
             "v!p": "reserves",
+            "v!p all": "reserves",
             "v!pause": "reserves",
+            "v!pause all": "reserves",
             "v!q": "reserves",
             "v!cd rare": "reserves",
             "v!settings": "settings",

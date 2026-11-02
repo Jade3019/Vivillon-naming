@@ -112,7 +112,8 @@ permission in that channel (needs Manage Permissions) so no more spawns appear.
 Vivillon keeps handling everything else normally. Use `v!p` or `v!pause` to pause
 Pokétwo in the current channel; the bot replies `Incense paused.` Use `v!q` to
 restore Pokétwo's permission and resume the channel. Use `v!r all` to resume all
-paused channels in the current server.
+paused channels in the current server. Use `v!p all` to pause every channel in
+the current server with an active tracked incense.
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 

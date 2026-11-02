@@ -686,7 +686,7 @@ def command_permission_group(content: str) -> str | None:
         return "general"
     if re.match(r"^v!r\s+search(?:\s|$)", content, re.IGNORECASE):
         return None
-    if re.fullmatch(r"v!(?:p|pause|q)", content, re.IGNORECASE):
+    if re.fullmatch(r"v!(?:p|pause)(?:\s+all)?|v!q", content, re.IGNORECASE):
         return "reserves"
     if re.fullmatch(r"v!r(?:\s+.+)?", content, re.IGNORECASE):
         return "reserves"
@@ -6711,6 +6711,47 @@ class NamingBot(discord.Client):
             logger.warning("Could not change Pokétwo permissions: %s", error)
             return False
 
+    async def pause_active_incense_channels(
+        self,
+        guild: discord.Guild,
+    ) -> tuple[int, int]:
+        self.current_active_incenses()
+        paused = 0
+        failed = 0
+        for channel_key, record in list(self.active_incenses.items()):
+            if str(record["guild_id"]) != str(guild.id):
+                continue
+            try:
+                channel_id = int(channel_key)
+            except ValueError:
+                logger.warning(
+                    "Could not read active incense channel id %r in guild %s",
+                    channel_key,
+                    guild.id,
+                )
+                failed += 1
+                continue
+            channel = guild.get_channel(channel_id)
+            if channel is None:
+                channel = guild.get_thread(channel_id)
+            if channel is None:
+                logger.warning(
+                    "Could not find active incense channel %s in guild %s",
+                    channel_id,
+                    guild.id,
+                )
+                failed += 1
+                continue
+            if channel_id in self.muted_poketwo_channels:
+                paused += 1
+                continue
+            if await self.set_poketwo_blocked(channel, True):
+                self.muted_poketwo_channels.add(channel_id)
+                paused += 1
+            else:
+                failed += 1
+        return paused, failed
+
     async def on_message(self, message: discord.Message) -> None:
         # The org transport runs first, before the bot-author guard below would
         # drop the org bot's own JSON requests, and before channel filtering.
@@ -6762,6 +6803,25 @@ class NamingBot(discord.Client):
         self.track_chat_event_message(message)
 
         text = message_text(message)
+        if re.fullmatch(r"v!(?:p|pause)\s+all", message.content, re.IGNORECASE):
+            if message.guild is None:
+                await message.reply(
+                    "This command can only be used in a server channel.",
+                    mention_author=False,
+                )
+                return
+            paused, failed = await self.pause_active_incense_channels(message.guild)
+            if not paused and not failed:
+                response = "No active incense channels in this server."
+            else:
+                response = f"Incense paused in {paused} channel(s)."
+                if failed:
+                    response += (
+                        f" Couldn't pause {failed} channel(s); "
+                        "check the bot permissions and logs."
+                    )
+            await message.reply(response, mention_author=False)
+            return
         if re.fullmatch(r"v!(?:p|pause)", message.content, re.IGNORECASE):
             if channel_id is None or not await self.set_poketwo_blocked(
                 message.channel,

@@ -747,7 +747,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                     mention_author=False,
                 )
 
-                resume = command_message("v!q", channel_id)
+                resume = command_message("v!r", channel_id)
                 await self.bot.on_message(resume)
 
                 self.assertNotIn(channel_id, self.bot.muted_poketwo_channels)
@@ -4598,7 +4598,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         resume_command.channel.guild.id = SERVER_ID
         resume_command.channel.set_permissions = AsyncMock()
         resume_command.reply = AsyncMock()
-        resume_command.content = "v!q"
+        resume_command.content = "v!r"
         resume_command.embeds = []
         resume_command.attachments = []
         self.bot.handle_reserve_command = AsyncMock()
@@ -6937,7 +6937,7 @@ class CommandPermissionTests(unittest.TestCase):
             "v!p all": "reserves",
             "v!pause": "reserves",
             "v!pause all": "reserves",
-            "v!q": "reserves",
+            "v!q": None,
             "v!cd rare": "reserves",
             "v!settings": "settings",
             "v!settime @role": "general",

@@ -714,7 +714,7 @@ def command_permission_group(content: str) -> str | None:
         return None
     if re.fullmatch(r"v!r\s+<@!?\d+>", content, re.IGNORECASE):
         return None
-    if re.fullmatch(r"v!(?:p|pause)(?:\s+all)?|v!q", content, re.IGNORECASE):
+    if re.fullmatch(r"v!(?:p|pause)(?:\s+all)?", content, re.IGNORECASE):
         return "reserves"
     if re.fullmatch(r"v!r(?:\s+.+)?", content, re.IGNORECASE):
         return "reserves"
@@ -6864,7 +6864,7 @@ class NamingBot(discord.Client):
             self.muted_poketwo_channels.add(channel_id)
             await message.reply("Incense paused.", mention_author=False)
             return
-        if re.fullmatch(r"v!q", message.content, re.IGNORECASE):
+        if re.fullmatch(r"v!r", message.content, re.IGNORECASE):
             if channel_id not in self.muted_poketwo_channels:
                 await message.reply("This channel is not paused.", mention_author=False)
                 return

@@ -4791,6 +4791,21 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Catch Alolan Geodude",
         )
 
+    def test_hisui_sneasel_uses_full_form_name_and_base_catch_command(self) -> None:
+        for alias in ("Hisui Sneasel", "Hisuian Sneasel"):
+            with self.subTest(alias=alias):
+                name = image_match.species_display_name(alias)
+                self.assertEqual(name, "Hisuian Sneasel")
+                self.assertEqual(image_match.family_name(alias), "Hisuian Sneasel")
+                self.assertEqual(
+                    format_spawn_reply(name, 100, POKETWO_COMMAND_BOT_ID),
+                    "Hisuian Sneasel: 100.00%\n"
+                    "**Copy Here >** `@Pokétwo#8236 c sneasel`",
+                )
+                embed = format_pc_catch_embed(name, alias)
+                self.assertEqual(embed.title, "Catch Hisuian Sneasel")
+                self.assertIn("@Pokétwo#8236 c sneasel", embed.description)
+
     def test_hangry_morpeko_uses_own_thumbnail_but_is_named_morpeko(self) -> None:
         self.assertEqual(image_match.species_display_name("Hangry Morpeko"), "Morpeko")
         embed = format_pc_catch_embed("Morpeko", "Hangry Morpeko")

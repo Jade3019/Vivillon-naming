@@ -51,6 +51,8 @@ RESERVE_ROLE_ID: Final[int] = 1532820386511720579
 POKETWO_COMMAND_BOT_ID: Final[int] = 716390085896962058
 CATCH_COMMAND_NAME_ALIASES: Final[dict[str, str]] = {
     "blade aegislash": "Aegislash",
+    "hisui sneasel": "Sneasel",
+    "hisuian sneasel": "Sneasel",
     "shield aegislash": "Aegislash",
 }
 PREMIUM_TIER_LIMITS: Final[dict[str, int]] = {

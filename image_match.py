@@ -30,10 +30,11 @@ MIN_MARGIN = 3
 SPECIES_MIN_VOTES = {
     "Boldore": 8,
     "East Shellos": 8,
+    "Enchanted Applin": 4,
     "Milcery": 6,
     "Shellos": 8,
 }
-SPECIES_MIN_MARGIN = {"Boldore": 4, "Milcery": 3}
+SPECIES_MIN_MARGIN = {"Boldore": 4, "Enchanted Applin": 2, "Milcery": 3}
 SHARED_DISTANCE = 150.0
 DUPLICATE_DISTANCE = 100.0
 BANK_FILE = "image_bank.npz"
@@ -45,6 +46,7 @@ FORM_NAME_ALIASES = {
     "alola geodude": "Alolan Geodude",
     "alola graveler": "Alolan Graveler",
     "ice eiscue": "Eiscue",
+    "hisui sneasel": "Hisuian Sneasel",
     "noice eiscue": "Eiscue",
 }
 # Bank entries that are kept separate for recognition but reported under another name.

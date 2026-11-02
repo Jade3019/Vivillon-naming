@@ -688,6 +688,80 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Enchanted Applin")
 
+    def test_applin_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Applin"
+            / "spawn-reference-002.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Applin")
+
+    def test_flamigo_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Flamigo"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Flamigo")
+
+    def test_enchanted_applin_accepts_four_clear_votes(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        form_label = matcher.names.index("Enchanted Applin")
+        rival_label = matcher.names.index("Pikachu")
+        form_train_index = int(
+            image_match.np.flatnonzero(matcher.labels == form_label)[0]
+        )
+        rival_train_index = int(
+            image_match.np.flatnonzero(matcher.labels == rival_label)[0]
+        )
+        matches = [
+            [
+                cv2.DMatch(index, form_train_index, 10.0),
+                cv2.DMatch(index, rival_train_index, 100.0),
+            ]
+            for index in range(4)
+        ]
+        matcher.matcher = Mock()
+        matcher.matcher.knnMatch.return_value = matches
+
+        with patch(
+            "image_match.compute_descriptors",
+            return_value=image_match.np.zeros((4, 128), dtype=image_match.np.float32),
+        ):
+            result = matcher._match(b"", False)
+
+        self.assertEqual(result, ("Enchanted Applin", 4))
+
     def test_supplied_form_images_match_their_named_forms(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         forms = (

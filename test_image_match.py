@@ -976,6 +976,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (
+            ("Duskull", "user-example.png"),
             ("Milcery", "user-example-1.png"),
             ("Unown Variant 2", "user-example-3.png"),
             (

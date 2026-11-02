@@ -152,6 +152,7 @@ from bot import (
     TypePingView,
     ClearTypePingsView,
     render_profile_image,
+    profile_background_tint,
     ProfileView,
     ProfileEditView,
     count_qualifying_sentences,
@@ -1933,7 +1934,15 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "Moonlit",
             [option.label for option in marshadow_editor.children[3].options],
         )
+        self.assertIn(
+            "Moonveil",
+            [option.label for option in marshadow_editor.children[3].options],
+        )
         ordinary_editor = ProfileEditView(ProfileView(self.bot, 123, SERVER_ID))
+        self.assertNotIn(
+            "Moonveil",
+            [option.label for option in ordinary_editor.children[3].options],
+        )
         self.assertNotIn(
             "Marshadow",
             [option.label for option in ordinary_editor.children[1].options],
@@ -2708,6 +2717,42 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         with Image.open(Path(__file__).with_name("middle background") / "Cosmog.png") as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_middle_background_tint_matches_selected_outer_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["background"] = "cosmog"
+        settings["middle_background"] = "cosmog"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(Path(__file__).with_name("background") / "cosmog.png") as source:
+            outer_background = ImageOps.fit(
+                source.convert("RGB"),
+                (1400, 825),
+            ).filter(ImageFilter.GaussianBlur(radius=12))
+        tint = profile_background_tint(outer_background)
+        with Image.open(
+            Path(__file__).with_name("middle background") / "Cosmog.png"
+        ) as source:
+            expected = Image.blend(
+                ImageOps.fit(source.convert("RGB"), (520, 825)),
+                Image.new("RGB", (520, 825), tint),
+                0.4,
+            )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -2722,6 +2767,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).with_name("middle background") / "hiszorua.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -2736,6 +2792,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).with_name("middle background") / "eevee.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -2750,6 +2817,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).with_name("middle background") / "Buneary.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -2764,6 +2842,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).with_name("middle background") / "Slakoth.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -2778,6 +2867,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).with_name("middle background") / "Marshadow.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        expected = Image.blend(
+            expected,
+            Image.new(
+                "RGB",
+                expected.size,
+                profile_background_tint(
+                    Image.new("RGB", (1400, 825), "#292A2F")
+                ),
+            ),
+            0.4,
+        )
         with Image.open(render_profile_image(settings, stats)) as image:
             actual = image.crop((430, 0, 950, 825))
 
@@ -3189,6 +3289,39 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_renders_moonveil_frame_for_designated_user(self) -> None:
+        self.bot.set_profile_setting(
+            PROFILE_MARSHADOW_USER_ID,
+            "frame",
+            "moonveil",
+        )
+        settings = self.bot.profile_settings_for_user(PROFILE_MARSHADOW_USER_ID)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MARSHADOW_USER_ID)
+        with Image.open(
+            render_profile_image({**settings, "frame": "none"}, stats)
+        ) as unframed:
+            base = unframed.convert("RGB")
+        with Image.open(Path(__file__).with_name("Frames") / "moonveil.png") as source:
+            left, top, right, bottom = PROFILE_FRAME_OPENINGS["moonveil"]
+            scale_x = base.width / (right - left)
+            scale_y = base.height / (bottom - top)
+            self.assertAlmostEqual(scale_x, scale_y, delta=0.01)
+            expected_size = (
+                round(source.width * scale_x),
+                round(source.height * scale_y),
+            )
+            card_scale = PROFILE_CARD_SCALES["moonveil"]
+            expected_card_size = (
+                round(base.width * card_scale),
+                round(base.height * card_scale),
+            )
+            self.assertEqual(source.getpixel((768, 512))[3], 0)
+            self.assertEqual(expected_card_size, (1540, 908))
+
+        with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.size, expected_size)
+            self.assertEqual(actual.mode, "RGBA")
+
     def test_restricted_assets_are_removed_from_other_users_on_load(self) -> None:
         flower_settings = {
             "text_color": "white",
@@ -3206,7 +3339,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "text_color": "white",
             "background": "marshadow",
             "middle_background": "marshadow",
-            "frame": "none",
+            "frame": "moonveil",
         }
         save_profile_data(
             self.bot.profile_data_path,
@@ -3263,7 +3396,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             profiles[str(PROFILE_MARSHADOW_USER_ID)]["frame"],
-            "none",
+            "moonveil",
         )
 
     def test_other_users_cannot_save_restricted_assets(self) -> None:
@@ -3292,6 +3425,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (PROFILE_MARSHADOW_USER_ID, "middle_background", "slakoth"),
             (PROFILE_MARSHADOW_USER_ID, "frame", "flowerspring"),
             (PROFILE_MARSHADOW_USER_ID, "frame", "moonlit"),
+            (123, "frame", "moonveil"),
         )
         for user_id, setting, value in restricted_selections:
             with self.subTest(user_id=user_id, setting=setting, value=value):

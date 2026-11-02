@@ -381,16 +381,19 @@ gray background on its left and right sides by default. The background picker
 also offers blurred Cosmog, Hisuian Zorua, and Moon Night images, plus a
 blurred Meadow Night image and a blurred, rotated Eevee image; the middle
 column defaults to white and can also use Cosmog, Hisuian Zorua, or Eevee.
-Text is drawn above both background layers. The
+Image-based middle backgrounds receive a subtle color tint sampled from the
+surrounding background, helping the two images blend together. Text is drawn
+above both background layers. The
 default picker choices are labeled **Default text color**, **Default
 background**, and **Default middle background**. The frame picker offers
 **No frame**, **Mystic**, **Gem**, and **Nightflower**. The Buneary background,
 Buneary middle background, and Flower Spring frame are limited to their
 designated profile; the Slakoth background, Slakoth middle background, and
 Moonlit frame are limited to a different designated profile. The Marshadow
-background and middle background are limited to a third designated profile;
-its frame is not available yet. Each set is hidden from other members and
-reset to defaults if found in their saved settings.
+background and middle background, plus the Moonveil frame, are limited to a
+third designated profile. Moonveil enlarges the profile card to fit its frame.
+Each set is hidden from other members and reset to defaults if found in their
+saved settings.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 

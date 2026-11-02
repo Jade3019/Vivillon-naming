@@ -19,7 +19,7 @@ from typing import Final
 import aiohttp
 import discord
 from aiohttp import web
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 from image_match import (
     CUSTOM_FORM_SPECIES,
     FORM_DISPLAY_NAMES,
@@ -249,6 +249,7 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "nightflower": ("Nightflower", "Nightflower profile frame"),
     "flowerspring": ("Flower Spring", "Flower Spring profile frame"),
     "moonlit": ("Moonlit", "Moonlit profile frame"),
+    "moonveil": ("Moonveil", "Moonveil profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
@@ -256,11 +257,13 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "nightflower": Path(__file__).with_name("Frames") / "nightflower.png",
     "flowerspring": Path(__file__).with_name("Frames") / "flowerspring.png",
     "moonlit": Path(__file__).with_name("Frames") / "moonlit.png",
+    "moonveil": Path(__file__).with_name("Frames") / "moonveil.png",
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
     "flowerspring": (42, 61, 909, 576),
     "moonlit": (45, 62, 963, 624),
+    "moonveil": (118, 130, 1418, 894),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -272,6 +275,7 @@ PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "nightflower": 1.0,
     "flowerspring": 1.0,
     "moonlit": 1.08,
+    "moonveil": 1.1,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
@@ -299,6 +303,7 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
     PROFILE_MARSHADOW_USER_ID: {
         "background": frozenset({"marshadow"}),
         "middle_background": frozenset({"marshadow"}),
+        "frame": frozenset({"moonveil"}),
     },
 }
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
@@ -5619,6 +5624,18 @@ def format_profile_iv_record(record: ProfileIvRecord) -> tuple[str, str]:
     )
 
 
+def profile_background_tint(image: Image.Image) -> tuple[int, int, int]:
+    left_color = ImageStat.Stat(image.crop((0, 0, 430, image.height))).mean
+    right_color = ImageStat.Stat(
+        image.crop((950, 0, image.width, image.height))
+    ).mean
+    return (
+        round((left_color[0] + right_color[0]) / 2),
+        round((left_color[1] + right_color[1]) / 2),
+        round((left_color[2] + right_color[2]) / 2),
+    )
+
+
 def render_profile_image(
     settings: dict[str, int | str],
     stats: dict[str, int],
@@ -5665,6 +5682,15 @@ def render_profile_image(
                 middle_background_image.convert("RGB"),
                 (520, height),
             )
+        middle_background = Image.blend(
+            middle_background,
+            Image.new(
+                "RGB",
+                middle_background.size,
+                profile_background_tint(image),
+            ),
+            0.4,
+        )
         image.paste(middle_background, (430, 0))
     heading_font = profile_font(36, bold=True)
     stat_font = profile_font(30)

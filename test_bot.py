@@ -6402,6 +6402,40 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(bot.reservations, {"1:pikachu": [123]})
 
+    async def test_vr_all_resumes_only_current_server_channels(self) -> None:
+        role_id = 900
+        guild = SimpleNamespace(id=1)
+        channel = SimpleNamespace(id=10, guild=guild)
+        thread = SimpleNamespace(id=11, guild=guild)
+        guild_channels = {10: channel}
+        guild.get_channel = guild_channels.get
+        guild.get_thread = lambda channel_id: thread if channel_id == 11 else None
+        bot = SimpleNamespace(
+            command_permissions={"1": role_id},
+            reservations={},
+            muted_poketwo_channels={10, 11, 20},
+            set_poketwo_blocked=AsyncMock(return_value=True),
+        )
+        message = Mock()
+        message.guild = guild
+        message.author = Mock(spec=discord.Member)
+        message.author.id = 456
+        message.author.roles = [Mock(id=role_id)]
+        message.content = "v!r all"
+        message.reply = AsyncMock()
+
+        await NamingBot.handle_reserve_command(bot, message)
+
+        self.assertEqual(bot.muted_poketwo_channels, {20})
+        self.assertEqual(
+            bot.set_poketwo_blocked.await_args_list,
+            [call(channel, False), call(thread, False)],
+        )
+        message.reply.assert_awaited_once_with(
+            "Resumed Pokétwo in 2 paused channel(s).",
+            mention_author=False,
+        )
+
     async def test_all_applin_reserve_asks_event_forms_or_all_forms(self) -> None:
         for choice, expected in (
             (

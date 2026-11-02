@@ -8731,6 +8731,38 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
             return
+        if re.fullmatch(r"v!r\s+all\s*", message.content, re.IGNORECASE):
+            paused_channels = []
+            for channel_id in self.muted_poketwo_channels.copy():
+                channel = message.guild.get_channel(channel_id)
+                if channel is None:
+                    channel = message.guild.get_thread(channel_id)
+                if channel is not None and channel.guild.id == message.guild.id:
+                    paused_channels.append((channel_id, channel))
+            if not paused_channels:
+                await message.reply(
+                    "No paused channels in this server.",
+                    mention_author=False,
+                )
+                return
+
+            resumed = 0
+            failed = 0
+            for channel_id, channel in paused_channels:
+                if await self.set_poketwo_blocked(channel, False):
+                    self.muted_poketwo_channels.discard(channel_id)
+                    resumed += 1
+                else:
+                    failed += 1
+            if failed:
+                response = (
+                    f"Resumed Pokétwo in {resumed} channel(s); "
+                    f"couldn't resume {failed} channel(s). Check the bot logs."
+                )
+            else:
+                response = f"Resumed Pokétwo in {resumed} paused channel(s)."
+            await message.reply(response, mention_author=False)
+            return
 
         parsed_command = parse_reserve_add_command(message.content)
         if parsed_command is None or len(message.mentions) != 1:

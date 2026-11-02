@@ -66,6 +66,7 @@ CUSTOM_FORM_SPECIES = {
     "Enchanted Applin": "Applin",
     "Rotten Applin": "Applin",
     "Heart Trim Furfrou": "Furfrou",
+    "Matron Trim Furfrou": "Furfrou",
     "Oracle Meowscarada": "Meowscarada",
     "Witch Meowscarada": "Meowscarada",
     "Medusa Simipour": "Simipour",

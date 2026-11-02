@@ -646,6 +646,7 @@ class VivillonTests(unittest.TestCase):
             "Blaze Breed Tauros": "Tauros",
             "Aqua Breed Tauros": "Tauros",
             "Heart Trim Furfrou": "Furfrou",
+            "Matron Trim Furfrou": "Furfrou",
             "Yellow-Plumage Squawkabilly": "Squawkabilly",
         }
         for form, species in forms.items():
@@ -953,6 +954,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             "Blaze Breed Tauros",
             "Aqua Breed Tauros",
             "Heart Trim Furfrou",
+            "Matron Trim Furfrou",
             "Yellow-Plumage Squawkabilly",
         )
         for form in forms:
@@ -970,6 +972,14 @@ class CustomFormRecognitionTests(unittest.TestCase):
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (
+            ("Smoliv", "user-example-1.png"),
+            ("Bellsprout", "user-example-2.png"),
+            ("Matron Trim Furfrou", "user-example-3.png"),
+            ("Oracle Meowscarada", "user-example-5.png"),
+            ("Gourgeist", "user-example-6.png"),
+            ("Gulpin", "user-example-7.png"),
+            ("Enchanted Applin", "user-example-8.png"),
+            ("Mimikyu", "user-example-9.png"),
             ("Bellsprout", "user-example-9.png"),
             ("Litwick", "user-example-18.png"),
             ("Enchanted Applin", "user-example-15.png"),

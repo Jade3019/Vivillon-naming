@@ -5247,6 +5247,20 @@ class GuessFormatTests(unittest.TestCase):
                 self.assertEqual(embed.title, f"Catch {form}")
                 self.assertIn("@Pokétwo#8236 c aegislash", embed.description)
 
+    def test_average_gourgeist_uses_species_name_in_spawn_output(self) -> None:
+        name = image_match.species_display_name("Average Gourgeist")
+
+        self.assertEqual(name, "Gourgeist")
+        self.assertEqual(format_guess(name, 100), "Gourgeist: 100.00%")
+        self.assertEqual(
+            format_catch_command(POKETWO_COMMAND_BOT_ID, name),
+            "@Pokétwo#8236 c gourgeist",
+        )
+        self.assertEqual(
+            format_pc_catch_embed(name, "Average Gourgeist").title,
+            "Catch Gourgeist",
+        )
+
     def test_eiscue_face_names_use_species_name_and_catch_command(self) -> None:
         from image_match import family_name, species_display_name
 

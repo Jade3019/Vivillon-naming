@@ -522,6 +522,28 @@ class ImageMatcherTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Finizen")
 
+    def test_palafin_spawn_reference_matches_normal_and_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Palafin"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, encoded = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(encoded.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Palafin")
+
     def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
         np = image_match.np
         descriptors = np.random.default_rng(24).random((8, 128), dtype=np.float32)
@@ -731,6 +753,72 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 result = matcher.match(buffer.tobytes())
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Flamigo")
+
+    def test_ditto_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Ditto"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Ditto")
+
+    def test_squawkabilly_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Squawkabilly"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Squawkabilly")
+
+    def test_oddish_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Oddish"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Oddish")
 
     def test_enchanted_applin_accepts_four_clear_votes(self) -> None:
         import cv2

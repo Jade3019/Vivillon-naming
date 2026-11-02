@@ -22,6 +22,10 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
                 "v!p all",
                 "Pause active incense channels in this server (checks recent history).",
             ),
+            (
+                "v!poff / v!pon",
+                "Disable/enable automatic pausing after confirmed incense purchases for this server.",
+            ),
             ("v!r", "Resume Pokétwo in this channel (no arguments)."),
             ("v!r all", "Resume all paused Pokétwo channels in this server."),
         ],

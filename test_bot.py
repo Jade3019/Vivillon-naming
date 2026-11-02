@@ -86,6 +86,7 @@ from bot import (
     load_server_settings,
     load_command_permissions,
     load_command_locks,
+    load_auto_pause_incense_settings,
     load_starboard_settings,
     load_reservations,
     load_reserve_categories,
@@ -714,6 +715,73 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 mention_author=False,
             )
             self.assertIn("200", self.bot.active_incenses)
+
+    async def test_auto_pause_incense_commands_persist_per_server(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.bot.auto_pause_incense_settings_path = (
+                Path(directory) / "auto_pause_incense_settings.json"
+            )
+            self.bot.auto_pause_incense_settings = {}
+            self.bot.is_allowed_channel = Mock(return_value=True)
+            self.bot.track_chat_event_message = Mock()
+
+            def command_message(content: str) -> Mock:
+                message = Mock()
+                message.author = Mock(spec=discord.Member)
+                message.author.id = 100
+                message.author.bot = False
+                message.author.roles = []
+                message.guild.id = SERVER_ID
+                message.channel.id = 200
+                message.channel.guild.id = SERVER_ID
+                message.content = content
+                message.embeds = []
+                message.attachments = []
+                message.reply = AsyncMock()
+                return message
+
+            off_command = command_message("v!poff")
+            await self.bot.on_message(off_command)
+            self.assertFalse(
+                self.bot.auto_pause_incense_enabled_for_guild(SERVER_ID)
+            )
+            off_command.reply.assert_awaited_once_with(
+                "Automatic incense pausing is now off for this server.",
+                mention_author=False,
+            )
+
+            on_command = command_message("v!pon")
+            await self.bot.on_message(on_command)
+            self.assertTrue(
+                self.bot.auto_pause_incense_enabled_for_guild(SERVER_ID)
+            )
+            self.assertTrue(
+                self.bot.auto_pause_incense_enabled_for_guild(SERVER_ID + 1)
+            )
+            on_command.reply.assert_awaited_once_with(
+                "Automatic incense pausing is now on for this server.",
+                mention_author=False,
+            )
+            self.assertEqual(
+                load_auto_pause_incense_settings(
+                    self.bot.auto_pause_incense_settings_path
+                ),
+                {str(SERVER_ID): True},
+            )
+
+    async def test_auto_pause_disabled_skips_confirmed_purchase_pause(self) -> None:
+        self.bot.auto_pause_incense_settings = {str(SERVER_ID): False}
+        self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+        message = Mock()
+        message.author.id = self.config.poketwo_bot_id
+        message.guild.id = SERVER_ID
+        message.channel.id = 200
+        message.reply = AsyncMock()
+
+        await self.bot.pause_confirmed_incense_purchase(message)
+
+        self.bot.set_poketwo_blocked.assert_not_awaited()
+        message.reply.assert_not_awaited()
 
     async def test_pause_aliases_and_resume_command(self) -> None:
         self.bot.command_permissions = {}

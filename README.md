@@ -218,6 +218,10 @@ Pokétwo next reports its status. Incense tracking is saved in `incenses.json`
 (override with `INCENSE_TRACKING_FILE`). A confirmed `@Pokétwo inc buy -y`
 purchase also pauses Pokétwo in that channel and replies
 `Incense has been paused.` Use `v!r` with no arguments to resume the channel.
+Use `v!poff` to disable automatic pausing after a confirmed incense purchase in
+this server, and `v!pon` to re-enable it. This setting is saved in
+`auto_pause_incense_settings.json` (override with
+`AUTO_PAUSE_INCENSE_SETTINGS_FILE`).
 
 Use `v!event` to start an event. The organizer can choose **Chat event**, and
 members join by reacting with ⏲️ to the sign-up message during its one-minute

@@ -628,6 +628,44 @@ def save_command_locks(path: Path, locks: dict[str, bool]) -> None:
         raise ValueError(f"Could not save command locks to {path}") from error
 
 
+def load_auto_pause_incense_settings(path: Path) -> dict[str, bool]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read auto-pause settings from {path}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"Auto-pause settings in {path} have an invalid format")
+
+    settings: dict[str, bool] = {}
+    for guild_id, enabled in data.items():
+        if (
+            not isinstance(guild_id, str)
+            or not guild_id.isdecimal()
+            or not isinstance(enabled, bool)
+        ):
+            raise ValueError(f"Auto-pause settings in {path} have an invalid entry")
+        settings[guild_id] = enabled
+    return settings
+
+
+def save_auto_pause_incense_settings(
+    path: Path,
+    settings: dict[str, bool],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save auto-pause settings to {path}") from error
+
+
 def load_premium_servers(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
@@ -5887,6 +5925,15 @@ class NamingBot(discord.Client):
             os.environ.get("INCENSE_TRACKING_FILE", "incenses.json")
         )
         self.active_incenses = self.load_active_incenses()
+        self.auto_pause_incense_settings_path = Path(
+            os.environ.get(
+                "AUTO_PAUSE_INCENSE_SETTINGS_FILE",
+                "auto_pause_incense_settings.json",
+            )
+        )
+        self.auto_pause_incense_settings = load_auto_pause_incense_settings(
+            self.auto_pause_incense_settings_path
+        )
         self.pokemon_named_count = 0
         self.failed_recognition_count = 0
         self.active_vision_requests = 0
@@ -6332,6 +6379,30 @@ class NamingBot(discord.Client):
             **SERVER_NAMING_DEFAULTS,
             **self.server_settings.get(str(guild_id), {}),
         }
+
+    def auto_pause_incense_enabled_for_guild(self, guild_id: int) -> bool:
+        return self.auto_pause_incense_settings.get(str(guild_id), True)
+
+    def set_auto_pause_incense_enabled(
+        self,
+        guild_id: int,
+        enabled: bool,
+    ) -> None:
+        if (
+            isinstance(guild_id, bool)
+            or not isinstance(guild_id, int)
+            or guild_id <= 0
+        ):
+            raise ValueError("An auto-pause setting requires a positive server ID.")
+        if not isinstance(enabled, bool):
+            raise ValueError("An auto-pause setting must be a boolean.")
+        updated_settings = dict(self.auto_pause_incense_settings)
+        updated_settings[str(guild_id)] = enabled
+        save_auto_pause_incense_settings(
+            self.auto_pause_incense_settings_path,
+            updated_settings,
+        )
+        self.auto_pause_incense_settings = updated_settings
 
     def commands_locked_for_guild(self, guild_id: int) -> bool:
         return self.command_locks.get(str(guild_id), False)
@@ -6831,6 +6902,32 @@ class NamingBot(discord.Client):
         self.track_chat_event_message(message)
 
         text = message_text(message)
+        if re.fullmatch(r"v!poff\s*", message.content, re.IGNORECASE):
+            if message.guild is None:
+                await message.reply(
+                    "This command can only be used in a server channel.",
+                    mention_author=False,
+                )
+                return
+            self.set_auto_pause_incense_enabled(message.guild.id, False)
+            await message.reply(
+                "Automatic incense pausing is now off for this server.",
+                mention_author=False,
+            )
+            return
+        if re.fullmatch(r"v!pon\s*", message.content, re.IGNORECASE):
+            if message.guild is None:
+                await message.reply(
+                    "This command can only be used in a server channel.",
+                    mention_author=False,
+                )
+                return
+            self.set_auto_pause_incense_enabled(message.guild.id, True)
+            await message.reply(
+                "Automatic incense pausing is now on for this server.",
+                mention_author=False,
+            )
+            return
         if re.fullmatch(r"v!(?:p|pause)\s+all", message.content, re.IGNORECASE):
             if message.guild is None:
                 await message.reply(
@@ -7252,6 +7349,10 @@ class NamingBot(discord.Client):
         message: discord.Message,
     ) -> None:
         if message.author.id != self.config.poketwo_bot_id:
+            return
+        if message.guild is None or not self.auto_pause_incense_enabled_for_guild(
+            message.guild.id
+        ):
             return
         channel_id = getattr(message.channel, "id", None)
         if channel_id is None:

@@ -33,6 +33,7 @@ SPECIES_MIN_VOTES = {
     "Enchanted Applin": 4,
     "Milcery": 6,
     "Shellos": 8,
+    "Oddish": 4,
 }
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Enchanted Applin": 2, "Milcery": 3}
 SHARED_DISTANCE = 150.0
@@ -64,6 +65,7 @@ CUSTOM_FORM_SPECIES = {
     "Partner Eevee": "Eevee",
     "Enchanted Applin": "Applin",
     "Rotten Applin": "Applin",
+    "Heart Trim Furfrou": "Furfrou",
     "Oracle Meowscarada": "Meowscarada",
     "Witch Meowscarada": "Meowscarada",
     "Medusa Simipour": "Simipour",
@@ -73,6 +75,7 @@ CUSTOM_FORM_SPECIES = {
     "Ride Cyclizar": "Cyclizar",
     "Battle Cyclizar": "Cyclizar",
     "Gliding Build Koraidon": "Koraidon",
+    "Yellow-Plumage Squawkabilly": "Squawkabilly",
     "Zenith Marshadow": "Marshadow",
     "Galarian Zen Darmanitan": "Darmanitan",
     "Zygarde Cell": "Zygarde",
@@ -664,9 +667,18 @@ class ImageMatcher:
         """
         if not self.names or self.matcher is None:
             return None
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+        mask = None
+        if image is not None and image.ndim == 3 and image.shape[2] == 4:
+            alpha = image[..., 3]
+            if np.any(alpha < 255):
+                mask = np.where(alpha > 128, 255, 0).astype(np.uint8)
         results = [
             result
-            for result in (self._match(data, False), self._match(data, True))
+            for result in (
+                self._match(data, False, mask=mask),
+                self._match(data, True, mask=mask),
+            )
             if result is not None
         ]
         if not results:
@@ -674,8 +686,8 @@ class ImageMatcher:
             results = [
                 result
                 for result in (
-                    self._match(data, False, relaxed=True),
-                    self._match(data, True, relaxed=True),
+                    self._match(data, False, mask=mask, relaxed=True),
+                    self._match(data, True, mask=mask, relaxed=True),
                 )
                 if result is not None
             ]

@@ -645,6 +645,8 @@ class VivillonTests(unittest.TestCase):
             "Combat Breed Tauros": "Tauros",
             "Blaze Breed Tauros": "Tauros",
             "Aqua Breed Tauros": "Tauros",
+            "Heart Trim Furfrou": "Furfrou",
+            "Yellow-Plumage Squawkabilly": "Squawkabilly",
         }
         for form, species in forms.items():
             with self.subTest(form=form):
@@ -864,6 +866,42 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Oddish")
 
+    def test_oddish_accepts_four_distinctive_votes(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        oddish_label = matcher.names.index("Oddish")
+        rival_label = matcher.names.index("Nymble")
+        oddish_train_index = int(
+            image_match.np.flatnonzero(matcher.labels == oddish_label)[0]
+        )
+        rival_train_index = int(
+            image_match.np.flatnonzero(matcher.labels == rival_label)[0]
+        )
+        matches = [
+            [
+                cv2.DMatch(index, oddish_train_index, 10.0),
+                cv2.DMatch(index, rival_train_index, 20.0),
+            ]
+            for index in range(4)
+        ]
+        matches.append(
+            [
+                cv2.DMatch(4, rival_train_index, 10.0),
+                cv2.DMatch(4, oddish_train_index, 20.0),
+            ]
+        )
+        matcher.matcher = Mock()
+        matcher.matcher.knnMatch.return_value = matches
+
+        with patch(
+            "image_match.compute_descriptors",
+            return_value=image_match.np.zeros((5, 128), dtype=image_match.np.float32),
+        ):
+            result = matcher._match(b"", False)
+
+        self.assertEqual(result, ("Oddish", 4))
+
     def test_enchanted_applin_accepts_four_clear_votes(self) -> None:
         import cv2
 
@@ -914,6 +952,8 @@ class CustomFormRecognitionTests(unittest.TestCase):
             "Combat Breed Tauros",
             "Blaze Breed Tauros",
             "Aqua Breed Tauros",
+            "Heart Trim Furfrou",
+            "Yellow-Plumage Squawkabilly",
         )
         for form in forms:
             with self.subTest(form=form):
@@ -926,6 +966,25 @@ class CustomFormRecognitionTests(unittest.TestCase):
 
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)
+
+    def test_user_reported_spawn_crops_are_recognized(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        examples = (
+            ("Bellsprout", "user-example-9.png"),
+            ("Litwick", "user-example-18.png"),
+            ("Enchanted Applin", "user-example-15.png"),
+        )
+        for expected, filename in examples:
+            with self.subTest(filename=filename):
+                image_path = (
+                    Path(__file__).with_name("pokemon_images")
+                    / expected
+                    / filename
+                )
+                result = matcher.match(image_path.read_bytes())
+
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], expected)
 
     def test_custom_forms_are_recognized_when_flipped(self) -> None:
         import cv2

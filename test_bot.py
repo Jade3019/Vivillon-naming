@@ -142,6 +142,7 @@ from bot import (
     PROFILE_FRAME_OPENINGS,
     PROFILE_FRAME_SCALES,
     PROFILE_CARD_SCALES,
+    PROFILE_SPECIAL_USER_ID,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1842,26 +1843,34 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 "Eevee",
                 "Moon Night",
                 "Meadow Night",
-                "Buneary",
             ],
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
-            [
-                "Default middle background",
-                "Cosmog",
-                "Hisuian Zorua",
-                "Eevee",
-                "Buneary",
-            ],
+            ["Default middle background", "Cosmog", "Hisuian Zorua", "Eevee"],
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
-            ["No frame", "Mystic", "Gem", "Nightflower", "Flower Spring"],
+            ["No frame", "Mystic", "Gem", "Nightflower"],
         )
         self.assertEqual(
             editor.children[0].options[0].label,
             "Default text color",
+        )
+
+    def test_only_designated_profile_has_the_new_asset_choices(self) -> None:
+        editor = ProfileEditView(
+            ProfileView(self.bot, PROFILE_SPECIAL_USER_ID, SERVER_ID)
+        )
+
+        self.assertIn("Buneary", [option.label for option in editor.children[1].options])
+        self.assertIn(
+            "Buneary",
+            [option.label for option in editor.children[2].options],
+        )
+        self.assertIn(
+            "Flower Spring",
+            [option.label for option in editor.children[3].options],
         )
 
     async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
@@ -2931,9 +2940,13 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_profile_card_renders_selected_flower_spring_frame(self) -> None:
-        self.bot.set_profile_setting(123, "frame", "flowerspring")
-        settings = self.bot.profile_settings_for_user(123)
-        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+        self.bot.set_profile_setting(
+            PROFILE_SPECIAL_USER_ID,
+            "frame",
+            "flowerspring",
+        )
+        settings = self.bot.profile_settings_for_user(PROFILE_SPECIAL_USER_ID)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_SPECIAL_USER_ID)
 
         with Image.open(
             render_profile_image({**settings, "frame": "none"}, stats)
@@ -2978,6 +2991,50 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(actual.size, frame.size)
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_restricted_assets_are_removed_from_other_users_on_load(self) -> None:
+        private_settings = {
+            "text_color": "white",
+            "background": "buneary",
+            "middle_background": "buneary",
+            "frame": "flowerspring",
+        }
+        save_profile_data(
+            self.bot.profile_data_path,
+            {
+                "123": dict(private_settings),
+                str(PROFILE_SPECIAL_USER_ID): dict(private_settings),
+            },
+            {},
+            {},
+            [],
+        )
+
+        profiles, _, _, _ = load_profile_data(self.bot.profile_data_path)
+
+        self.assertEqual(profiles["123"]["background"], "default")
+        self.assertEqual(profiles["123"]["middle_background"], "white")
+        self.assertEqual(profiles["123"]["frame"], "none")
+        self.assertEqual(
+            profiles[str(PROFILE_SPECIAL_USER_ID)]["background"],
+            "buneary",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_SPECIAL_USER_ID)]["middle_background"],
+            "buneary",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_SPECIAL_USER_ID)]["frame"],
+            "flowerspring",
+        )
+
+    def test_other_users_cannot_save_restricted_assets(self) -> None:
+        with self.assertRaises(ValueError):
+            self.bot.set_profile_setting(123, "background", "buneary")
+        with self.assertRaises(ValueError):
+            self.bot.set_profile_setting(123, "middle_background", "buneary")
+        with self.assertRaises(ValueError):
+            self.bot.set_profile_setting(123, "frame", "flowerspring")
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

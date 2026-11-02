@@ -270,6 +270,12 @@ PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "middle_background": PROFILE_MIDDLE_BACKGROUNDS,
     "frame": PROFILE_FRAMES,
 }
+PROFILE_SPECIAL_USER_ID: Final[int] = 1286779672549392527
+PROFILE_USER_ONLY_CHOICES: Final[dict[str, frozenset[str]]] = {
+    "background": frozenset({"buneary"}),
+    "middle_background": frozenset({"buneary"}),
+    "frame": frozenset({"flowerspring"}),
+}
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",
     "background": "Background",
@@ -283,6 +289,21 @@ PROFILE_EMOJI_URLS: Final[dict[str, str]] = {
     "gmax": "https://cdn.discordapp.com/emojis/1504098787658961028.png?size=64",
     "missingno": "https://cdn.discordapp.com/emojis/1563908280445575300.png?size=64",
 }
+
+
+def profile_setting_choices_for_user(
+    user_id: int,
+    setting: str,
+) -> dict[str, tuple[str, str]]:
+    choices = PROFILE_SETTING_CHOICES.get(setting, {})
+    if user_id == PROFILE_SPECIAL_USER_ID:
+        return choices
+    restricted_choices = PROFILE_USER_ONLY_CHOICES.get(setting, frozenset())
+    return {
+        value: choice
+        for value, choice in choices.items()
+        if value not in restricted_choices
+    }
 
 
 def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -5376,6 +5397,10 @@ def load_profile_data(
         for setting, legacy_choices in PROFILE_LEGACY_CHOICES.items():
             if profile[setting] in legacy_choices:
                 profile[setting] = PROFILE_DEFAULTS[setting]
+        if user_id != str(PROFILE_SPECIAL_USER_ID):
+            for setting, restricted_choices in PROFILE_USER_ONLY_CHOICES.items():
+                if profile[setting] in restricted_choices:
+                    profile[setting] = PROFILE_DEFAULTS[setting]
         profiles[user_id] = profile
 
     profile_stats: dict[str, dict[str, int]] = {}
@@ -5775,7 +5800,7 @@ class ProfileEditSelect(discord.ui.Select):
         current_value = profile_view.bot.profile_settings_for_user(
             profile_view.user_id
         )[setting]
-        choices = PROFILE_SETTING_CHOICES[setting]
+        choices = profile_setting_choices_for_user(profile_view.user_id, setting)
         super().__init__(
             placeholder=PROFILE_SETTING_LABELS[setting],
             options=[
@@ -6032,10 +6057,15 @@ class NamingBot(discord.Client):
         )
 
     def profile_settings_for_user(self, user_id: int) -> dict[str, int | str]:
-        return {
+        settings = {
             **PROFILE_DEFAULTS,
             **self.profiles.get(str(user_id), {}),
         }
+        if user_id != PROFILE_SPECIAL_USER_ID:
+            for setting, restricted_choices in PROFILE_USER_ONLY_CHOICES.items():
+                if settings[setting] in restricted_choices:
+                    settings[setting] = PROFILE_DEFAULTS[setting]
+        return settings
 
     def profile_stats_for_user(
         self,
@@ -6085,7 +6115,7 @@ class NamingBot(discord.Client):
         return emoji_assets
 
     def set_profile_setting(self, user_id: int, setting: str, value: str) -> None:
-        choices = PROFILE_SETTING_CHOICES.get(setting)
+        choices = profile_setting_choices_for_user(user_id, setting)
         if choices is None or value not in choices:
             raise ValueError(f"Invalid profile setting: {setting}")
         profiles = {key: dict(profile) for key, profile in self.profiles.items()}

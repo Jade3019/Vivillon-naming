@@ -249,7 +249,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
-    "flowerspring": (142, 123, 1009, 638),
+    "flowerspring": (42, 61, 909, 576),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,

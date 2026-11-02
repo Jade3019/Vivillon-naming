@@ -208,6 +208,7 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "moonnight": ("Moon Night", "Moon Night blurred profile background"),
     "meadownight": ("Meadow Night", "Meadow Night blurred profile background"),
     "buneary": ("Buneary", "Buneary blurred profile background"),
+    "slakoth": ("Slakoth", "Slakoth blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
@@ -216,6 +217,7 @@ PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "moonnight": Path(__file__).with_name("background") / "moonnight.png",
     "meadownight": Path(__file__).with_name("background") / "meadownight.png",
     "buneary": Path(__file__).with_name("background") / "buneary.png",
+    "slakoth": Path(__file__).with_name("background") / "slakoth.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),
@@ -223,12 +225,14 @@ PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "hiszorua": ("Hisuian Zorua", "Hisuian Zorua middle background"),
     "eevee": ("Eevee", "Eevee middle background"),
     "buneary": ("Buneary", "Buneary middle background"),
+    "slakoth": ("Slakoth", "Slakoth middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
     "hiszorua": Path(__file__).with_name("middle background") / "hiszorua.png",
     "eevee": Path(__file__).with_name("middle background") / "eevee.png",
     "buneary": Path(__file__).with_name("middle background") / "Buneary.png",
+    "slakoth": Path(__file__).with_name("middle background") / "Slakoth.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),
@@ -240,16 +244,19 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "gem": ("Gem", "Gem profile frame"),
     "nightflower": ("Nightflower", "Nightflower profile frame"),
     "flowerspring": ("Flower Spring", "Flower Spring profile frame"),
+    "moonlit": ("Moonlit", "Moonlit profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
     "gem": Path(__file__).with_name("Frames") / "gem.png",
     "nightflower": Path(__file__).with_name("Frames") / "nightflower.png",
     "flowerspring": Path(__file__).with_name("Frames") / "flowerspring.png",
+    "moonlit": Path(__file__).with_name("Frames") / "moonlit.png",
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
     "flowerspring": (42, 61, 909, 576),
+    "moonlit": (45, 62, 963, 624),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -260,6 +267,7 @@ PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "gem": 1.0,
     "nightflower": 1.0,
     "flowerspring": 1.0,
+    "moonlit": 1.08,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
@@ -270,11 +278,19 @@ PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
     "middle_background": PROFILE_MIDDLE_BACKGROUNDS,
     "frame": PROFILE_FRAMES,
 }
-PROFILE_SPECIAL_USER_ID: Final[int] = 1286779672549392527
-PROFILE_USER_ONLY_CHOICES: Final[dict[str, frozenset[str]]] = {
-    "background": frozenset({"buneary"}),
-    "middle_background": frozenset({"buneary"}),
-    "frame": frozenset({"flowerspring"}),
+PROFILE_FLOWER_SPRING_USER_ID: Final[int] = 1286779672549392527
+PROFILE_MOONLIT_USER_ID: Final[int] = 883224024161873940
+PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
+    PROFILE_FLOWER_SPRING_USER_ID: {
+        "background": frozenset({"buneary"}),
+        "middle_background": frozenset({"buneary"}),
+        "frame": frozenset({"flowerspring"}),
+    },
+    PROFILE_MOONLIT_USER_ID: {
+        "background": frozenset({"slakoth"}),
+        "middle_background": frozenset({"slakoth"}),
+        "frame": frozenset({"moonlit"}),
+    },
 }
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",
@@ -296,9 +312,10 @@ def profile_setting_choices_for_user(
     setting: str,
 ) -> dict[str, tuple[str, str]]:
     choices = PROFILE_SETTING_CHOICES.get(setting, {})
-    if user_id == PROFILE_SPECIAL_USER_ID:
-        return choices
-    restricted_choices = PROFILE_USER_ONLY_CHOICES.get(setting, frozenset())
+    restricted_choices = set()
+    for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
+        if owner_id != user_id:
+            restricted_choices.update(owner_choices.get(setting, frozenset()))
     return {
         value: choice
         for value, choice in choices.items()
@@ -5397,10 +5414,11 @@ def load_profile_data(
         for setting, legacy_choices in PROFILE_LEGACY_CHOICES.items():
             if profile[setting] in legacy_choices:
                 profile[setting] = PROFILE_DEFAULTS[setting]
-        if user_id != str(PROFILE_SPECIAL_USER_ID):
-            for setting, restricted_choices in PROFILE_USER_ONLY_CHOICES.items():
-                if profile[setting] in restricted_choices:
-                    profile[setting] = PROFILE_DEFAULTS[setting]
+        for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
+            if user_id != str(owner_id):
+                for setting, restricted_choices in owner_choices.items():
+                    if profile[setting] in restricted_choices:
+                        profile[setting] = PROFILE_DEFAULTS[setting]
         profiles[user_id] = profile
 
     profile_stats: dict[str, dict[str, int]] = {}
@@ -5778,7 +5796,11 @@ def render_profile_image(
             fill=255,
         )
         profile_card.putalpha(card_mask)
-        framed_image.alpha_composite(profile_card, dest=profile_position)
+        card_position = (
+            profile_position[0] - (profile_card.width - width) // 2,
+            profile_position[1] - (profile_card.height - height) // 2,
+        )
+        framed_image.alpha_composite(profile_card, dest=card_position)
         framed_image.alpha_composite(frame)
         image = framed_image
 
@@ -6061,10 +6083,11 @@ class NamingBot(discord.Client):
             **PROFILE_DEFAULTS,
             **self.profiles.get(str(user_id), {}),
         }
-        if user_id != PROFILE_SPECIAL_USER_ID:
-            for setting, restricted_choices in PROFILE_USER_ONLY_CHOICES.items():
-                if settings[setting] in restricted_choices:
-                    settings[setting] = PROFILE_DEFAULTS[setting]
+        for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
+            if user_id != owner_id:
+                for setting, restricted_choices in owner_choices.items():
+                    if settings[setting] in restricted_choices:
+                        settings[setting] = PROFILE_DEFAULTS[setting]
         return settings
 
     def profile_stats_for_user(

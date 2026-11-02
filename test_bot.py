@@ -142,7 +142,8 @@ from bot import (
     PROFILE_FRAME_OPENINGS,
     PROFILE_FRAME_SCALES,
     PROFILE_CARD_SCALES,
-    PROFILE_SPECIAL_USER_ID,
+    PROFILE_FLOWER_SPRING_USER_ID,
+    PROFILE_MOONLIT_USER_ID,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1859,18 +1860,50 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_only_designated_profile_has_the_new_asset_choices(self) -> None:
-        editor = ProfileEditView(
-            ProfileView(self.bot, PROFILE_SPECIAL_USER_ID, SERVER_ID)
+        flower_editor = ProfileEditView(
+            ProfileView(self.bot, PROFILE_FLOWER_SPRING_USER_ID, SERVER_ID)
+        )
+        moonlit_editor = ProfileEditView(
+            ProfileView(self.bot, PROFILE_MOONLIT_USER_ID, SERVER_ID)
         )
 
-        self.assertIn("Buneary", [option.label for option in editor.children[1].options])
+        self.assertIn("Buneary", [option.label for option in flower_editor.children[1].options])
         self.assertIn(
             "Buneary",
-            [option.label for option in editor.children[2].options],
+            [option.label for option in flower_editor.children[2].options],
         )
         self.assertIn(
             "Flower Spring",
-            [option.label for option in editor.children[3].options],
+            [option.label for option in flower_editor.children[3].options],
+        )
+        self.assertNotIn(
+            "Slakoth",
+            [option.label for option in flower_editor.children[1].options],
+        )
+        self.assertNotIn(
+            "Moonlit",
+            [option.label for option in flower_editor.children[3].options],
+        )
+
+        self.assertIn(
+            "Slakoth",
+            [option.label for option in moonlit_editor.children[1].options],
+        )
+        self.assertIn(
+            "Slakoth",
+            [option.label for option in moonlit_editor.children[2].options],
+        )
+        self.assertIn(
+            "Moonlit",
+            [option.label for option in moonlit_editor.children[3].options],
+        )
+        self.assertNotIn(
+            "Buneary",
+            [option.label for option in moonlit_editor.children[1].options],
+        )
+        self.assertNotIn(
+            "Flower Spring",
+            [option.label for option in moonlit_editor.children[3].options],
         )
 
     async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
@@ -2685,6 +2718,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_uses_selected_slakoth_middle_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(PROFILE_MOONLIT_USER_ID)
+        settings["middle_background"] = "slakoth"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MOONLIT_USER_ID)
+
+        with Image.open(
+            Path(__file__).with_name("middle background") / "Slakoth.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
+
     def test_profile_card_uses_blurred_background_behind_text(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
         settings["background"] = "cosmog"
@@ -2776,6 +2823,23 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         with Image.open(
             Path(__file__).with_name("background") / "buneary.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            self.assertEqual(
+                image.crop((300, 700, 430, 825)).tobytes(),
+                expected.crop((300, 700, 430, 825)).tobytes(),
+            )
+
+    def test_profile_card_uses_blurred_slakoth_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(PROFILE_MOONLIT_USER_ID)
+        settings["background"] = "slakoth"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MOONLIT_USER_ID)
+
+        with Image.open(
+            Path(__file__).with_name("background") / "slakoth.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
                 ImageFilter.GaussianBlur(radius=12)
@@ -2941,12 +3005,15 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
     def test_profile_card_renders_selected_flower_spring_frame(self) -> None:
         self.bot.set_profile_setting(
-            PROFILE_SPECIAL_USER_ID,
+            PROFILE_FLOWER_SPRING_USER_ID,
             "frame",
             "flowerspring",
         )
-        settings = self.bot.profile_settings_for_user(PROFILE_SPECIAL_USER_ID)
-        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_SPECIAL_USER_ID)
+        settings = self.bot.profile_settings_for_user(PROFILE_FLOWER_SPRING_USER_ID)
+        stats = self.bot.profile_stats_for_user(
+            SERVER_ID,
+            PROFILE_FLOWER_SPRING_USER_ID,
+        )
 
         with Image.open(
             render_profile_image({**settings, "frame": "none"}, stats)
@@ -2992,18 +3059,87 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(actual.mode, "RGBA")
             self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_renders_selected_moonlit_frame_at_reference_size(self) -> None:
+        self.bot.set_profile_setting(PROFILE_MOONLIT_USER_ID, "frame", "moonlit")
+        settings = self.bot.profile_settings_for_user(PROFILE_MOONLIT_USER_ID)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MOONLIT_USER_ID)
+
+        with Image.open(
+            render_profile_image({**settings, "frame": "none"}, stats)
+        ) as unframed:
+            base = unframed.convert("RGB")
+        with Image.open(Path(__file__).with_name("Frames") / "moonlit.png") as source:
+            left, top, right, bottom = PROFILE_FRAME_OPENINGS["moonlit"]
+            scale_x = base.width / (right - left)
+            scale_y = base.height / (bottom - top)
+            frame = source.convert("RGBA").resize(
+                (
+                    round(source.width * scale_x),
+                    round(source.height * scale_y),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        frame.putalpha(
+            frame.getchannel("A").point(
+                lambda alpha: round(
+                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
+                )
+            )
+        )
+        expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_scale = PROFILE_CARD_SCALES["moonlit"]
+        profile_position = (
+            round(left * scale_x),
+            round(top * scale_y),
+        )
+        profile_card = base.convert("RGBA").resize(
+            (
+                round(base.width * profile_scale),
+                round(base.height * profile_scale),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+        profile_position = (
+            profile_position[0] - (profile_card.width - base.width) // 2,
+            profile_position[1] - (profile_card.height - base.height) // 2,
+        )
+        self.assertEqual(frame.size, (1539, 1020))
+        self.assertEqual(profile_card.size, (1512, 891))
+        self.assertEqual(profile_position, (13, 58))
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=round(PROFILE_FRAME_CORNER_RADIUS * profile_scale),
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        expected.alpha_composite(profile_card, dest=profile_position)
+        expected.alpha_composite(frame)
+
+        with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.size, (1539, 1020))
+            self.assertEqual(actual.mode, "RGBA")
+            self.assertEqual(actual.tobytes(), expected.tobytes())
+
     def test_restricted_assets_are_removed_from_other_users_on_load(self) -> None:
-        private_settings = {
+        flower_settings = {
             "text_color": "white",
             "background": "buneary",
             "middle_background": "buneary",
             "frame": "flowerspring",
         }
+        moonlit_settings = {
+            "text_color": "white",
+            "background": "slakoth",
+            "middle_background": "slakoth",
+            "frame": "moonlit",
+        }
         save_profile_data(
             self.bot.profile_data_path,
             {
-                "123": dict(private_settings),
-                str(PROFILE_SPECIAL_USER_ID): dict(private_settings),
+                "123": dict(flower_settings),
+                str(PROFILE_FLOWER_SPRING_USER_ID): dict(flower_settings),
+                str(PROFILE_MOONLIT_USER_ID): dict(moonlit_settings),
             },
             {},
             {},
@@ -3016,25 +3152,117 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profiles["123"]["middle_background"], "white")
         self.assertEqual(profiles["123"]["frame"], "none")
         self.assertEqual(
-            profiles[str(PROFILE_SPECIAL_USER_ID)]["background"],
+            profiles[str(PROFILE_FLOWER_SPRING_USER_ID)]["background"],
             "buneary",
         )
         self.assertEqual(
-            profiles[str(PROFILE_SPECIAL_USER_ID)]["middle_background"],
+            profiles[str(PROFILE_FLOWER_SPRING_USER_ID)]["middle_background"],
             "buneary",
         )
         self.assertEqual(
-            profiles[str(PROFILE_SPECIAL_USER_ID)]["frame"],
+            profiles[str(PROFILE_FLOWER_SPRING_USER_ID)]["frame"],
             "flowerspring",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_MOONLIT_USER_ID)]["background"],
+            "slakoth",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_MOONLIT_USER_ID)]["middle_background"],
+            "slakoth",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_MOONLIT_USER_ID)]["frame"],
+            "moonlit",
         )
 
     def test_other_users_cannot_save_restricted_assets(self) -> None:
-        with self.assertRaises(ValueError):
-            self.bot.set_profile_setting(123, "background", "buneary")
-        with self.assertRaises(ValueError):
-            self.bot.set_profile_setting(123, "middle_background", "buneary")
-        with self.assertRaises(ValueError):
-            self.bot.set_profile_setting(123, "frame", "flowerspring")
+        restricted_selections = (
+            (123, "background", "buneary"),
+            (123, "middle_background", "buneary"),
+            (123, "frame", "flowerspring"),
+            (123, "background", "slakoth"),
+            (123, "middle_background", "slakoth"),
+            (123, "frame", "moonlit"),
+            (PROFILE_FLOWER_SPRING_USER_ID, "background", "slakoth"),
+            (PROFILE_FLOWER_SPRING_USER_ID, "middle_background", "slakoth"),
+            (PROFILE_FLOWER_SPRING_USER_ID, "frame", "moonlit"),
+            (PROFILE_MOONLIT_USER_ID, "background", "buneary"),
+            (PROFILE_MOONLIT_USER_ID, "middle_background", "buneary"),
+            (PROFILE_MOONLIT_USER_ID, "frame", "flowerspring"),
+        )
+        for user_id, setting, value in restricted_selections:
+            with self.subTest(user_id=user_id, setting=setting, value=value):
+                with self.assertRaises(ValueError):
+                    self.bot.set_profile_setting(user_id, setting, value)
+
+    def test_profile_settings_hide_assets_reserved_for_other_users(self) -> None:
+        profiles = (
+            (
+                123,
+                "buneary",
+                "buneary",
+                "flowerspring",
+                "default",
+                "white",
+                "none",
+            ),
+            (
+                PROFILE_FLOWER_SPRING_USER_ID,
+                "slakoth",
+                "slakoth",
+                "moonlit",
+                "default",
+                "white",
+                "none",
+            ),
+            (
+                PROFILE_MOONLIT_USER_ID,
+                "buneary",
+                "buneary",
+                "flowerspring",
+                "default",
+                "white",
+                "none",
+            ),
+            (
+                PROFILE_FLOWER_SPRING_USER_ID,
+                "buneary",
+                "buneary",
+                "flowerspring",
+                "buneary",
+                "buneary",
+                "flowerspring",
+            ),
+            (
+                PROFILE_MOONLIT_USER_ID,
+                "slakoth",
+                "slakoth",
+                "moonlit",
+                "slakoth",
+                "slakoth",
+                "moonlit",
+            ),
+        )
+        for (
+            user_id,
+            background,
+            middle,
+            frame,
+            expected_background,
+            expected_middle,
+            expected_frame,
+        ) in profiles:
+            with self.subTest(user_id=user_id, background=background, frame=frame):
+                self.bot.profiles[str(user_id)] = {
+                    "background": background,
+                    "middle_background": middle,
+                    "frame": frame,
+                }
+                settings = self.bot.profile_settings_for_user(user_id)
+                self.assertEqual(settings["background"], expected_background)
+                self.assertEqual(settings["middle_background"], expected_middle)
+                self.assertEqual(settings["frame"], expected_frame)
 
     def test_profile_card_renders_iv_records_on_the_right(self) -> None:
         self.assertEqual(

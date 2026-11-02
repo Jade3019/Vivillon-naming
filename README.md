@@ -384,10 +384,12 @@ column defaults to white and can also use Cosmog, Hisuian Zorua, or Eevee.
 Text is drawn above both background layers. The
 default picker choices are labeled **Default text color**, **Default
 background**, and **Default middle background**. The frame picker offers
-**No frame**, **Mystic**, **Gem**, and **Nightflower**. Only the designated
-profile can use the Buneary background, Buneary middle background, and Flower
-Spring frame; these choices are hidden from other members and reset to defaults
-if found in their saved settings.
+**No frame**, **Mystic**, **Gem**, and **Nightflower**. The Buneary background,
+Buneary middle background, and Flower Spring frame are limited to their
+designated profile; the Slakoth background, Slakoth middle background, and
+Moonlit frame are limited to a different designated profile. Each set is
+hidden from other members and reset to defaults if found in their saved
+settings.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 

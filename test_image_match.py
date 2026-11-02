@@ -647,6 +647,7 @@ class VivillonTests(unittest.TestCase):
             "Aqua Breed Tauros": "Tauros",
             "Heart Trim Furfrou": "Furfrou",
             "Matron Trim Furfrou": "Furfrou",
+            "Debutante Trim Furfrou": "Furfrou",
             "Trash Burmy": "Burmy",
             "High-speed Flight Configuration Genesect": "Genesect",
             "Yellow-Plumage Squawkabilly": "Squawkabilly",
@@ -976,6 +977,15 @@ class CustomFormRecognitionTests(unittest.TestCase):
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (
+            ("Wiglett", "user-example-2.png"),
+            ("Unown Variant 26", "user-example.png"),
+            ("Debutante Trim Furfrou", "user-example.png"),
+            ("Toedscool", "user-example.png"),
+            ("Spheal", "user-example.png"),
+            ("Unfezant", "user-example.png"),
+            ("Swalot", "user-example.png"),
+            ("Wiglett", "user-example-3.png"),
+            ("Pumpkaboo", "user-example.png"),
             ("Duskull", "user-example.png"),
             ("Milcery", "user-example-1.png"),
             ("Unown Variant 2", "user-example-3.png"),
@@ -1012,6 +1022,10 @@ class CustomFormRecognitionTests(unittest.TestCase):
                     import bot
 
                     self.assertEqual(bot.display_pokemon_name(result[0]), "Unown B")
+                if expected == "Unown Variant 26":
+                    import bot
+
+                    self.assertEqual(bot.display_pokemon_name(result[0]), "Unown Z")
 
     def test_custom_forms_are_recognized_when_flipped(self) -> None:
         import cv2

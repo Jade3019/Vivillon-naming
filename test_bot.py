@@ -590,7 +590,6 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
-            "pings": False,
         }
         message = Mock()
         message.id = 9001
@@ -1018,7 +1017,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(
                 self.bot.naming_settings_for_guild(SERVER_ID),
-                {"enabled": True, "assisted": True, "pings": False},
+                {"enabled": True, "assisted": True},
             )
             updated = self.bot.toggle_naming_setting(SERVER_ID, "enabled")
             self.assertFalse(updated["enabled"])
@@ -1030,7 +1029,15 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(
                 load_server_settings(self.bot.server_settings_path)[str(SERVER_ID)],
-                {"enabled": False, "assisted": False, "pings": False},
+                {"enabled": False, "assisted": False},
+            )
+            self.bot.server_settings_path.write_text(
+                f'{{"{SERVER_ID}":{{"enabled":true,"assisted":false,"pings":true}}}}',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                load_server_settings(self.bot.server_settings_path)[str(SERVER_ID)],
+                {"enabled": True, "assisted": False},
             )
 
     async def test_naming_settings_button_requires_permission_and_saves(self) -> None:
@@ -1108,7 +1115,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         interaction.response.edit_message.assert_awaited_once()
         interaction.response.send_message.assert_not_awaited()
 
-    async def test_spawn_settings_disable_names_filter_pings_and_remove_copy_text(
+    async def test_spawn_settings_disable_names_and_name_without_ping_targets(
         self,
     ) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
@@ -1128,7 +1135,6 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": False,
             "assisted": True,
-            "pings": False,
         }
         disabled_message = spawn_message(701)
         with patch(
@@ -1150,8 +1156,9 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(return_value=("Pikachu", 99.0)),
         ) as recognize:
             await self.bot.handle_spawn(unpinged_message)
-        unpinged_message.reply.assert_not_awaited()
-        recognize.assert_not_awaited()
+        unpinged_message.reply.assert_awaited_once()
+        recognize.assert_awaited_once()
+        self.assertIn("Pikachu", unpinged_message.reply.await_args.args[0])
 
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -1187,12 +1194,45 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("c charizard", name_only_content)
         self.assertIsNone(name_only_message.reply.await_args.kwargs["embed"])
 
+    async def test_unmatched_spawn_reports_failure_instead_of_silently_skipping(
+        self,
+    ) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+        }
+        message = Mock()
+        message.id = 710
+        message.guild.id = SERVER_ID
+        message.channel.id = 1210
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(
+                side_effect=bot_module.NoMatchError("No reference match")
+            ),
+        ) as recognize:
+            await self.bot.handle_spawn(message)
+
+        recognize.assert_awaited_once()
+        message.reply.assert_awaited_once_with(
+            "I couldn't confidently identify this spawn. Check the bot logs or add "
+            "recognition coverage for this Pokémon.",
+            mention_author=False,
+        )
+        self.assertEqual(self.bot.failed_recognition_count, 1)
+
     async def test_afk_preferences_filter_shinyhunt_and_collection_pings(self) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
-            "pings": False,
         }
         self.bot.shinyhunters = {reservation_key(SERVER_ID, "Absol"): [123]}
         self.bot.collections = {reservation_key(SERVER_ID, "Absol"): [456]}
@@ -1245,7 +1285,10 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         ):
             await self.bot.handle_spawn(muted_message)
 
-        muted_message.reply.assert_not_awaited()
+        muted_message.reply.assert_awaited_once()
+        muted_content = muted_message.reply.await_args.args[0]
+        self.assertIn("Absol", muted_content)
+        self.assertNotIn("<@456>", muted_content)
 
     async def test_spawns_reload_saved_collection_and_shinyhunt_clear_state(self) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
@@ -3200,7 +3243,6 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
-            "pings": True,
         }
         with tempfile.TemporaryDirectory() as directory:
             self.bot.type_ping_path = Path(directory) / "type_pings.json"
@@ -3245,7 +3287,6 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
-            "pings": False,
         }
         with tempfile.TemporaryDirectory() as directory:
             self.bot.type_ping_path = Path(directory) / "type_pings.json"
@@ -4454,7 +4495,6 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
-            "pings": False,
         }
         self.bot.image_http = Mock(close=AsyncMock())
         spawn = Mock()

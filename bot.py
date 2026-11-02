@@ -4625,17 +4625,6 @@ class NamingSettingsView(discord.ui.LayoutView):
                     bot, guild_id, "assisted", settings["assisted"]
                 ),
             ),
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    "### Pings\n"
-                    f"{'🟢 On' if settings['pings'] else '🔴 Off'}\n"
-                    "Only name Pokémon when a collection, shinyhunt, or reserve "
-                    "member should be pinged."
-                ),
-                accessory=NamingSettingToggleButton(
-                    bot, guild_id, "pings", settings["pings"]
-                ),
-            ),
             discord.ui.Separator(),
             discord.ui.Section(
                 discord.ui.TextDisplay("↩️ Back to the Control Panel."),
@@ -5016,11 +5005,11 @@ def save_reserve_categories(
 SERVER_NAMING_DEFAULTS: Final[dict[str, bool]] = {
     "enabled": True,
     "assisted": True,
-    "pings": False,
 }
 SERVER_NAMING_SETTING_KEYS: Final[frozenset[str]] = frozenset(
     SERVER_NAMING_DEFAULTS
 )
+LEGACY_SERVER_NAMING_SETTING_KEYS: Final[frozenset[str]] = frozenset({"pings"})
 
 
 def load_server_settings(path: Path) -> dict[str, dict[str, bool]]:
@@ -5041,6 +5030,7 @@ def load_server_settings(path: Path) -> dict[str, dict[str, bool]]:
             or not isinstance(guild_settings, dict)
             or any(
                 key not in SERVER_NAMING_SETTING_KEYS
+                and key not in LEGACY_SERVER_NAMING_SETTING_KEYS
                 or not isinstance(value, bool)
                 for key, value in guild_settings.items()
             )
@@ -5048,7 +5038,11 @@ def load_server_settings(path: Path) -> dict[str, dict[str, bool]]:
             raise ValueError(f"Server settings in {path} have an invalid entry")
         settings[guild_id] = {
             **SERVER_NAMING_DEFAULTS,
-            **guild_settings,
+            **{
+                key: value
+                for key, value in guild_settings.items()
+                if key in SERVER_NAMING_SETTING_KEYS
+            },
         }
     return settings
 
@@ -6486,35 +6480,6 @@ class NamingBot(discord.Client):
         save_type_pings(self.type_ping_path, updated_type_pings)
         self.type_pings = updated_type_pings
         return selected_types
-
-    def has_active_ping_targets(self, guild_id: int) -> bool:
-        guild_prefix = f"{guild_id}:"
-        if any(
-            key.startswith(guild_prefix) and user_ids
-            for key, user_ids in self.reservations.items()
-        ):
-            return True
-
-        for registrations, setting in (
-            (self.shinyhunters, "shinyhunt"),
-            (self.collections, "collection"),
-        ):
-            if any(
-                key.startswith(guild_prefix)
-                and any(
-                    self.afk_settings_for_user(guild_id, user_id)[setting]
-                    for user_id in user_ids
-                )
-                for key, user_ids in registrations.items()
-            ):
-                return True
-        if any(
-            key.startswith(guild_prefix)
-            and enabled_types
-            for key, enabled_types in self.type_pings.items()
-        ):
-            return True
-        return False
 
     def toggle_afk_setting(
         self, guild_id: int, user_id: int, setting: str
@@ -9463,11 +9428,6 @@ class NamingBot(discord.Client):
                     mention_author=False,
                 )
                 return
-            if naming_settings["pings"] and not self.has_active_ping_targets(
-                message.guild.id
-            ):
-                return
-
         url = image_url(message)
         if not url:
             logger.warning("Image test or spawn message %s had no image", message.id)
@@ -9530,6 +9490,12 @@ class NamingBot(discord.Client):
                 if test_mode:
                     await message.reply(
                         "I couldn't match that test image to a reference Pokémon.",
+                        mention_author=False,
+                    )
+                else:
+                    await message.reply(
+                        "I couldn't confidently identify this spawn. Check the "
+                        "bot logs or add recognition coverage for this Pokémon.",
                         mention_author=False,
                     )
                 return
@@ -9671,13 +9637,6 @@ class NamingBot(discord.Client):
             assisted = True
         else:
             if not naming_settings["enabled"]:
-                return
-            if naming_settings["pings"] and not (
-                reserved_user_ids
-                or shinyhunter_user_ids
-                or collection_user_ids
-                or type_ping_user_ids
-            ):
                 return
             assisted = naming_settings["assisted"]
 

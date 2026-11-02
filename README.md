@@ -119,10 +119,13 @@ history to recover incense activity it missed.
 
 Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 
-When naming is enabled and a spawn qualifies under Pings mode, the bot replies
-with one predicted name and its estimated confidence percentage (for example,
-`Pikachu: 85.00%`). The confidence is a model estimate, not a calibrated
-probability. The vision model
+When naming is enabled, the bot attempts to recognize every Pokétwo spawn with
+an image and replies with one predicted name and its estimated confidence
+percentage (for example, `Pikachu: 85.00%`). Registered reserve, shinyhunt,
+collection, and type-ping members are mentioned when they match; registrations
+do not limit which spawns are named. The confidence is a model estimate, not a
+calibrated probability. If recognition has no verified match, the bot reports
+that instead of silently skipping the spawn. The vision model
 compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
@@ -152,13 +155,10 @@ This application does not bypass those restrictions.
 
 Use `v!settings` to configure naming separately for each server. Members with
 Manage Server permission can turn naming on or off, disable Assisted mode to
-remove catch-command copy messages while keeping Pokémon names, and enable
-Pings mode to name only Pokémon with a matching reserve, shinyhunt, or collection
-or type-ping member. With Pings mode on, Vivillon skips image analysis if the
-server has no active targets in those categories; when targets exist, it still
-has to identify each spawn to check for a match. Settings are saved to
-`server_settings.json` by default; set `SERVER_SETTINGS_FILE` to use another
-path.
+remove catch-command copy messages while keeping Pokémon names. Naming attempts
+are independent of whether anyone has registered to receive a ping. Settings are
+saved to `server_settings.json` by default; set `SERVER_SETTINGS_FILE` to use
+another path.
 
 Manage Server members can use `v!permission <role id>` to grant that server role
 access to `v!grab`, `v!test`, reserve and category commands, `v!settings`,

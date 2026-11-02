@@ -1270,10 +1270,9 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         alert_channel.send.assert_awaited_once()
         alert = alert_channel.send.await_args.args[0]
         self.assertIn(f"<@{bot_module.RECOGNITION_ALERT_USER_ID}>", alert)
-        self.assertIn(
-            f"[#spawn-channel]({error_message.jump_url})",
-            alert,
-        )
+        self.assertIn("<#1210>", alert)
+        self.assertIn(error_message.jump_url, alert)
+        self.assertNotIn("[#", alert)
         allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
         self.assertEqual(
             [user.id for user in allowed_mentions.users],

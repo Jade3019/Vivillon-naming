@@ -9459,12 +9459,10 @@ class NamingBot(discord.Client):
                 )
                 return
 
-        channel_name = discord.utils.escape_markdown(
-            error_message.channel.name, as_needed=True
-        )
         content = (
             f"<@{RECOGNITION_ALERT_USER_ID}> Vivillon couldn't confidently identify "
-            f"the spawn in [#{channel_name}]({error_message.jump_url})."
+            f"the spawn in <#{error_message.channel.id}>.\n"
+            f"Jump to the error message: {error_message.jump_url}"
         )
         allowed_mentions = discord.AllowedMentions(
             users=[discord.Object(id=RECOGNITION_ALERT_USER_ID)],

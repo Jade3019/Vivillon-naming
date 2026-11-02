@@ -650,6 +650,7 @@ class VivillonTests(unittest.TestCase):
             "Debutante Trim Furfrou": "Furfrou",
             "Trash Burmy": "Burmy",
             "High-speed Flight Configuration Genesect": "Genesect",
+            "White-Plumage Squawkabilly": "Squawkabilly",
             "Yellow-Plumage Squawkabilly": "Squawkabilly",
         }
         for form, species in forms.items():
@@ -977,6 +978,17 @@ class CustomFormRecognitionTests(unittest.TestCase):
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (
+            ("Applin", "user-example.png"),
+            ("Gulpin", "user-example-8.png"),
+            ("Dreepy", "user-example.png"),
+            ("Snorunt", "user-example.png"),
+            ("Snom", "user-example-5.png"),
+            ("Toedscool", "user-example-2.png"),
+            ("Wiglett", "user-example-4.png"),
+            ("White-Plumage Squawkabilly", "user-example.png"),
+            ("Wingull", "user-example.png"),
+            ("Rotten Applin", "user-example-2.png"),
+            ("Wiglett", "user-example-5.png"),
             ("Wiglett", "user-example-2.png"),
             ("Unown Variant 26", "user-example.png"),
             ("Debutante Trim Furfrou", "user-example.png"),

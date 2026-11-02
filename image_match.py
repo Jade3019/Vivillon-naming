@@ -79,6 +79,7 @@ CUSTOM_FORM_SPECIES = {
     "Ride Cyclizar": "Cyclizar",
     "Battle Cyclizar": "Cyclizar",
     "Gliding Build Koraidon": "Koraidon",
+    "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
     "Zenith Marshadow": "Marshadow",
     "Galarian Zen Darmanitan": "Darmanitan",

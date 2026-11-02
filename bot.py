@@ -209,6 +209,7 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "meadownight": ("Meadow Night", "Meadow Night blurred profile background"),
     "buneary": ("Buneary", "Buneary blurred profile background"),
     "slakoth": ("Slakoth", "Slakoth blurred profile background"),
+    "marshadow": ("Marshadow", "Marshadow blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
@@ -218,6 +219,7 @@ PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "meadownight": Path(__file__).with_name("background") / "meadownight.png",
     "buneary": Path(__file__).with_name("background") / "buneary.png",
     "slakoth": Path(__file__).with_name("background") / "slakoth.png",
+    "marshadow": Path(__file__).with_name("background") / "marshadow.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),
@@ -226,6 +228,7 @@ PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "eevee": ("Eevee", "Eevee middle background"),
     "buneary": ("Buneary", "Buneary middle background"),
     "slakoth": ("Slakoth", "Slakoth middle background"),
+    "marshadow": ("Marshadow", "Marshadow middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
@@ -233,6 +236,7 @@ PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "eevee": Path(__file__).with_name("middle background") / "eevee.png",
     "buneary": Path(__file__).with_name("middle background") / "Buneary.png",
     "slakoth": Path(__file__).with_name("middle background") / "Slakoth.png",
+    "marshadow": Path(__file__).with_name("middle background") / "Marshadow.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),
@@ -280,6 +284,7 @@ PROFILE_SETTING_CHOICES: Final[dict[str, dict[str, tuple[str, str]]]] = {
 }
 PROFILE_FLOWER_SPRING_USER_ID: Final[int] = 1286779672549392527
 PROFILE_MOONLIT_USER_ID: Final[int] = 883224024161873940
+PROFILE_MARSHADOW_USER_ID: Final[int] = 1398882668401135657
 PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
     PROFILE_FLOWER_SPRING_USER_ID: {
         "background": frozenset({"buneary"}),
@@ -290,6 +295,10 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
         "background": frozenset({"slakoth"}),
         "middle_background": frozenset({"slakoth"}),
         "frame": frozenset({"moonlit"}),
+    },
+    PROFILE_MARSHADOW_USER_ID: {
+        "background": frozenset({"marshadow"}),
+        "middle_background": frozenset({"marshadow"}),
     },
 }
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {

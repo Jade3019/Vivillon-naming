@@ -143,6 +143,7 @@ from bot import (
     PROFILE_FRAME_SCALES,
     PROFILE_CARD_SCALES,
     PROFILE_FLOWER_SPRING_USER_ID,
+    PROFILE_MARSHADOW_USER_ID,
     PROFILE_MOONLIT_USER_ID,
     save_profile_data,
     save_type_pings,
@@ -1866,6 +1867,9 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         moonlit_editor = ProfileEditView(
             ProfileView(self.bot, PROFILE_MOONLIT_USER_ID, SERVER_ID)
         )
+        marshadow_editor = ProfileEditView(
+            ProfileView(self.bot, PROFILE_MARSHADOW_USER_ID, SERVER_ID)
+        )
 
         self.assertIn("Buneary", [option.label for option in flower_editor.children[1].options])
         self.assertIn(
@@ -1904,6 +1908,39 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(
             "Flower Spring",
             [option.label for option in moonlit_editor.children[3].options],
+        )
+        self.assertIn(
+            "Marshadow",
+            [option.label for option in marshadow_editor.children[1].options],
+        )
+        self.assertIn(
+            "Marshadow",
+            [option.label for option in marshadow_editor.children[2].options],
+        )
+        self.assertNotIn(
+            "Buneary",
+            [option.label for option in marshadow_editor.children[1].options],
+        )
+        self.assertNotIn(
+            "Slakoth",
+            [option.label for option in marshadow_editor.children[1].options],
+        )
+        self.assertNotIn(
+            "Flower Spring",
+            [option.label for option in marshadow_editor.children[3].options],
+        )
+        self.assertNotIn(
+            "Moonlit",
+            [option.label for option in marshadow_editor.children[3].options],
+        )
+        ordinary_editor = ProfileEditView(ProfileView(self.bot, 123, SERVER_ID))
+        self.assertNotIn(
+            "Marshadow",
+            [option.label for option in ordinary_editor.children[1].options],
+        )
+        self.assertNotIn(
+            "Marshadow",
+            [option.label for option in ordinary_editor.children[2].options],
         )
 
     async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
@@ -2732,6 +2769,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_uses_selected_marshadow_middle_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(PROFILE_MARSHADOW_USER_ID)
+        settings["middle_background"] = "marshadow"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MARSHADOW_USER_ID)
+
+        with Image.open(
+            Path(__file__).with_name("middle background") / "Marshadow.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
+
     def test_profile_card_uses_blurred_background_behind_text(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
         settings["background"] = "cosmog"
@@ -2840,6 +2891,23 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         with Image.open(
             Path(__file__).with_name("background") / "slakoth.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            self.assertEqual(
+                image.crop((300, 700, 430, 825)).tobytes(),
+                expected.crop((300, 700, 430, 825)).tobytes(),
+            )
+
+    def test_profile_card_uses_blurred_marshadow_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(PROFILE_MARSHADOW_USER_ID)
+        settings["background"] = "marshadow"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, PROFILE_MARSHADOW_USER_ID)
+
+        with Image.open(
+            Path(__file__).with_name("background") / "marshadow.png"
         ) as source:
             expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
                 ImageFilter.GaussianBlur(radius=12)
@@ -3134,12 +3202,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "middle_background": "slakoth",
             "frame": "moonlit",
         }
+        marshadow_settings = {
+            "text_color": "white",
+            "background": "marshadow",
+            "middle_background": "marshadow",
+            "frame": "none",
+        }
         save_profile_data(
             self.bot.profile_data_path,
             {
                 "123": dict(flower_settings),
+                "456": dict(marshadow_settings),
                 str(PROFILE_FLOWER_SPRING_USER_ID): dict(flower_settings),
                 str(PROFILE_MOONLIT_USER_ID): dict(moonlit_settings),
+                str(PROFILE_MARSHADOW_USER_ID): dict(marshadow_settings),
             },
             {},
             {},
@@ -3151,6 +3227,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profiles["123"]["background"], "default")
         self.assertEqual(profiles["123"]["middle_background"], "white")
         self.assertEqual(profiles["123"]["frame"], "none")
+        self.assertEqual(profiles["456"]["background"], "default")
+        self.assertEqual(profiles["456"]["middle_background"], "white")
         self.assertEqual(
             profiles[str(PROFILE_FLOWER_SPRING_USER_ID)]["background"],
             "buneary",
@@ -3175,6 +3253,18 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             profiles[str(PROFILE_MOONLIT_USER_ID)]["frame"],
             "moonlit",
         )
+        self.assertEqual(
+            profiles[str(PROFILE_MARSHADOW_USER_ID)]["background"],
+            "marshadow",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_MARSHADOW_USER_ID)]["middle_background"],
+            "marshadow",
+        )
+        self.assertEqual(
+            profiles[str(PROFILE_MARSHADOW_USER_ID)]["frame"],
+            "none",
+        )
 
     def test_other_users_cannot_save_restricted_assets(self) -> None:
         restricted_selections = (
@@ -3190,11 +3280,37 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             (PROFILE_MOONLIT_USER_ID, "background", "buneary"),
             (PROFILE_MOONLIT_USER_ID, "middle_background", "buneary"),
             (PROFILE_MOONLIT_USER_ID, "frame", "flowerspring"),
+            (123, "background", "marshadow"),
+            (123, "middle_background", "marshadow"),
+            (PROFILE_FLOWER_SPRING_USER_ID, "background", "marshadow"),
+            (PROFILE_FLOWER_SPRING_USER_ID, "middle_background", "marshadow"),
+            (PROFILE_MOONLIT_USER_ID, "background", "marshadow"),
+            (PROFILE_MOONLIT_USER_ID, "middle_background", "marshadow"),
+            (PROFILE_MARSHADOW_USER_ID, "background", "buneary"),
+            (PROFILE_MARSHADOW_USER_ID, "middle_background", "buneary"),
+            (PROFILE_MARSHADOW_USER_ID, "background", "slakoth"),
+            (PROFILE_MARSHADOW_USER_ID, "middle_background", "slakoth"),
+            (PROFILE_MARSHADOW_USER_ID, "frame", "flowerspring"),
+            (PROFILE_MARSHADOW_USER_ID, "frame", "moonlit"),
         )
         for user_id, setting, value in restricted_selections:
             with self.subTest(user_id=user_id, setting=setting, value=value):
                 with self.assertRaises(ValueError):
                     self.bot.set_profile_setting(user_id, setting, value)
+
+        self.bot.set_profile_setting(
+            PROFILE_MARSHADOW_USER_ID,
+            "background",
+            "marshadow",
+        )
+        self.bot.set_profile_setting(
+            PROFILE_MARSHADOW_USER_ID,
+            "middle_background",
+            "marshadow",
+        )
+        settings = self.bot.profile_settings_for_user(PROFILE_MARSHADOW_USER_ID)
+        self.assertEqual(settings["background"], "marshadow")
+        self.assertEqual(settings["middle_background"], "marshadow")
 
     def test_profile_settings_hide_assets_reserved_for_other_users(self) -> None:
         profiles = (
@@ -3242,6 +3358,33 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 "slakoth",
                 "slakoth",
                 "moonlit",
+            ),
+            (
+                PROFILE_MARSHADOW_USER_ID,
+                "slakoth",
+                "slakoth",
+                "moonlit",
+                "default",
+                "white",
+                "none",
+            ),
+            (
+                PROFILE_MARSHADOW_USER_ID,
+                "marshadow",
+                "marshadow",
+                "none",
+                "marshadow",
+                "marshadow",
+                "none",
+            ),
+            (
+                456,
+                "marshadow",
+                "marshadow",
+                "none",
+                "default",
+                "white",
+                "none",
             ),
         )
         for (

@@ -647,6 +647,7 @@ class VivillonTests(unittest.TestCase):
             "Aqua Breed Tauros": "Tauros",
             "Heart Trim Furfrou": "Furfrou",
             "Matron Trim Furfrou": "Furfrou",
+            "Trash Burmy": "Burmy",
             "High-speed Flight Configuration Genesect": "Genesect",
             "Yellow-Plumage Squawkabilly": "Squawkabilly",
         }
@@ -956,6 +957,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             "Aqua Breed Tauros",
             "Heart Trim Furfrou",
             "Matron Trim Furfrou",
+            "Trash Burmy",
             "High-speed Flight Configuration Genesect",
             "Yellow-Plumage Squawkabilly",
         )
@@ -980,6 +982,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 "High-speed Flight Configuration Genesect",
                 "user-example-5.png",
             ),
+            ("Trash Burmy", "user-example.png"),
             ("Squawkabilly", "user-example-6.png"),
             ("Smoliv", "user-example-1.png"),
             ("Bellsprout", "user-example-2.png"),

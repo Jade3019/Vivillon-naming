@@ -67,6 +67,7 @@ CUSTOM_FORM_SPECIES = {
     "Rotten Applin": "Applin",
     "Heart Trim Furfrou": "Furfrou",
     "Matron Trim Furfrou": "Furfrou",
+    "Trash Burmy": "Burmy",
     "High-speed Flight Configuration Genesect": "Genesect",
     "Oracle Meowscarada": "Meowscarada",
     "Witch Meowscarada": "Meowscarada",

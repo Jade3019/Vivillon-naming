@@ -67,6 +67,7 @@ CUSTOM_FORM_SPECIES = {
     "Rotten Applin": "Applin",
     "Heart Trim Furfrou": "Furfrou",
     "Matron Trim Furfrou": "Furfrou",
+    "High-speed Flight Configuration Genesect": "Genesect",
     "Oracle Meowscarada": "Meowscarada",
     "Witch Meowscarada": "Meowscarada",
     "Medusa Simipour": "Simipour",
@@ -126,6 +127,7 @@ FORM_DISPLAY_NAMES = {
         f"Unown Variant {number}": f"{letter} Unown"
         for number, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1)
     },
+    "Unown Variant 2": "Unown B",
 }
 THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
 

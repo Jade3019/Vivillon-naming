@@ -495,6 +495,22 @@ def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
     return "start" if match.group("start") else "stop"
 
 
+def incense_action_from_message(
+    message: discord.Message,
+    poketwo_bot_id: int,
+) -> str | None:
+    if message.author.id == poketwo_bot_id:
+        status = re.search(
+            r"\bIncense\s*:\s*(Active|Inactive)\b",
+            message_text(message),
+            re.IGNORECASE,
+        )
+        if status is None:
+            return None
+        return "start" if status.group(1).casefold() == "active" else "stop"
+    return poketwo_incense_action(message.content, poketwo_bot_id)
+
+
 def image_url(message: discord.Message) -> str | None:
     if message.attachments:
         for attachment in message.attachments:
@@ -6717,7 +6733,7 @@ class NamingBot(discord.Client):
     ) -> tuple[int, int]:
         self.current_active_incenses()
         paused = 0
-        failed = 0
+        failed = await self.recover_active_incenses_from_history(guild)
         for channel_key, record in list(self.active_incenses.items()):
             if str(record["guild_id"]) != str(guild.id):
                 continue
@@ -6751,6 +6767,54 @@ class NamingBot(discord.Client):
             else:
                 failed += 1
         return paused, failed
+
+    async def recover_active_incenses_from_history(
+        self,
+        guild: discord.Guild,
+    ) -> int:
+        now = int(time.time())
+        recovered = False
+        failed = 0
+        for channel in guild.text_channels:
+            channel_key = str(channel.id)
+            if channel_key in self.active_incenses:
+                continue
+            try:
+                async for message in channel.history(limit=100):
+                    action = incense_action_from_message(
+                        message,
+                        self.config.poketwo_bot_id,
+                    )
+                    if action is None:
+                        continue
+                    if action != "stop":
+                        expires_at = (
+                            int(message.created_at.timestamp())
+                            + INCENSE_DURATION_SECONDS
+                        )
+                        if expires_at > now:
+                            self.active_incenses[channel_key] = {
+                                "guild": guild.name,
+                                "channel": getattr(
+                                    channel,
+                                    "name",
+                                    f"channel-{channel.id}",
+                                ),
+                                "guild_id": guild.id,
+                                "expires_at": expires_at,
+                            }
+                            recovered = True
+                    break
+            except (discord.Forbidden, discord.HTTPException) as error:
+                logger.warning(
+                    "Could not scan recent incense status in channel %s: %s",
+                    channel.id,
+                    error,
+                )
+                failed += 1
+        if recovered:
+            self.save_active_incenses()
+        return failed
 
     async def on_message(self, message: discord.Message) -> None:
         # The org transport runs first, before the bot-author guard below would
@@ -6817,8 +6881,8 @@ class NamingBot(discord.Client):
                 response = f"Incense paused in {paused} channel(s)."
                 if failed:
                     response += (
-                        f" Couldn't pause {failed} channel(s); "
-                        "check the bot permissions and logs."
+                        f" Couldn't scan or pause {failed} channel(s); "
+                        "check Read Message History, Manage Permissions, and logs."
                     )
             await message.reply(response, mention_author=False)
             return
@@ -7198,21 +7262,10 @@ class NamingBot(discord.Client):
         channel = message.channel
         if guild is None:
             return None
-        if message.author.id == self.config.poketwo_bot_id:
-            status = re.search(
-                r"\bIncense\s*:\s*(Active|Inactive)\b",
-                message_text(message),
-                re.IGNORECASE,
-            )
-            if status is None:
-                return
-            action = (
-                "start" if status.group(1).casefold() == "active" else "stop"
-            )
-        else:
-            action = poketwo_incense_action(
-                message.content, self.config.poketwo_bot_id
-            )
+        action = incense_action_from_message(
+            message,
+            self.config.poketwo_bot_id,
+        )
         if action is None:
             return None
         channel_id = str(channel.id)

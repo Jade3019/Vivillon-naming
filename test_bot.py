@@ -789,6 +789,8 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             }
             guild = Mock()
             guild.id = SERVER_ID
+            guild.name = "Current server"
+            guild.text_channels = []
             channel = Mock()
             channel.id = 210
             channel.guild.id = SERVER_ID
@@ -819,6 +821,90 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("211", self.bot.active_incenses)
             message.reply.assert_awaited_once_with(
                 "Incense paused in 1 channel(s).",
+                mention_author=False,
+            )
+
+    async def test_pause_all_recovers_untracked_active_incense_from_history(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            now = int(time.time())
+            self.bot.incense_path = Path(directory) / "incenses.json"
+            self.bot.active_incenses = {
+                "210": {
+                    "guild": "Current server",
+                    "channel": "tracked-room",
+                    "guild_id": SERVER_ID,
+                    "expires_at": now + 3600,
+                },
+            }
+            guild = Mock()
+            guild.id = SERVER_ID
+            guild.name = "Current server"
+            tracked_channel = Mock()
+            tracked_channel.id = 210
+            tracked_channel.guild = guild
+            recovered_channel = Mock()
+            recovered_channel.id = 214
+            recovered_channel.name = "missed-room"
+            recovered_channel.guild = guild
+
+            async def history():
+                yield SimpleNamespace(
+                    author=SimpleNamespace(id=self.config.poketwo_bot_id),
+                    content="",
+                    embeds=[
+                        SimpleNamespace(
+                            title="",
+                            description="Incense: Active",
+                            author=SimpleNamespace(name=""),
+                            footer=SimpleNamespace(text=""),
+                            fields=[],
+                        )
+                    ],
+                    created_at=SimpleNamespace(
+                        timestamp=lambda: now - 30,
+                    ),
+                )
+
+            recovered_channel.history = Mock(
+                return_value=history(),
+            )
+            guild.text_channels = [tracked_channel, recovered_channel]
+            channels = {210: tracked_channel, 214: recovered_channel}
+            guild.get_channel = Mock(side_effect=channels.get)
+            guild.get_thread = Mock(return_value=None)
+            self.bot.command_permissions = {}
+            self.bot.is_allowed_channel = Mock(return_value=True)
+            self.bot.track_chat_event_message = Mock()
+            self.bot.set_poketwo_blocked = AsyncMock(return_value=True)
+            message = Mock()
+            message.author = Mock(spec=discord.Member)
+            message.author.id = 100
+            message.author.bot = False
+            message.author.roles = []
+            message.guild = guild
+            message.channel.id = 213
+            message.channel.guild.id = SERVER_ID
+            message.content = "v!p all"
+            message.embeds = []
+            message.attachments = []
+            message.reply = AsyncMock()
+
+            await self.bot.on_message(message)
+
+            self.assertEqual(
+                self.bot.set_poketwo_blocked.await_args_list,
+                [call(tracked_channel, True), call(recovered_channel, True)],
+            )
+            recovered_channel.history.assert_called_once_with(limit=100)
+            self.assertIn("214", self.bot.active_incenses)
+            self.assertEqual(
+                self.bot.active_incenses["214"]["expires_at"],
+                now - 30 + bot_module.INCENSE_DURATION_SECONDS,
+            )
+            message.reply.assert_awaited_once_with(
+                "Incense paused in 2 channel(s).",
                 mention_author=False,
             )
 

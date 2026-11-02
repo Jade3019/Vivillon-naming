@@ -18,7 +18,10 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
         "⏸️ Channel Controls",
         [
             ("v!p / v!pause", "Pause Pokétwo in this channel."),
-            ("v!p all", "Pause active incense channels in this server."),
+            (
+                "v!p all",
+                "Pause active incense channels in this server (checks recent history).",
+            ),
             ("v!q", "Resume Pokétwo in this channel."),
         ],
     ),

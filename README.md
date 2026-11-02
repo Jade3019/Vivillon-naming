@@ -379,12 +379,13 @@ public **Edit** menu appears only after the owner presses **Edit**; changing a
 setting updates the card without a confirmation reply. The card has the normal
 gray background on its left and right sides by default. The background picker
 also offers blurred Cosmog, Hisuian Zorua, and Moon Night images, plus a
-blurred Meadow Night image and a blurred, rotated Eevee image; the middle column
-defaults to white and can also use Cosmog, Hisuian Zorua, or Eevee. Text is drawn
+blurred Meadow Night image, a blurred Buneary image, and a blurred, rotated
+Eevee image; the middle column defaults to white and can also use Cosmog,
+Hisuian Zorua, Eevee, or Buneary. Text is drawn
 above both background layers. The
 default picker choices are labeled **Default text color**, **Default
 background**, and **Default middle background**. The frame picker offers
-**No frame**, **Mystic**, **Gem**, and **Nightflower**.
+**No frame**, **Mystic**, **Gem**, **Nightflower**, and **Flower Spring**.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 

@@ -1842,15 +1842,22 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 "Eevee",
                 "Moon Night",
                 "Meadow Night",
+                "Buneary",
             ],
         )
         self.assertEqual(
             [option.label for option in editor.children[2].options],
-            ["Default middle background", "Cosmog", "Hisuian Zorua", "Eevee"],
+            [
+                "Default middle background",
+                "Cosmog",
+                "Hisuian Zorua",
+                "Eevee",
+                "Buneary",
+            ],
         )
         self.assertEqual(
             [option.label for option in editor.children[3].options],
-            ["No frame", "Mystic", "Gem", "Nightflower"],
+            ["No frame", "Mystic", "Gem", "Nightflower", "Flower Spring"],
         )
         self.assertEqual(
             editor.children[0].options[0].label,
@@ -2655,6 +2662,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(actual.tobytes(), expected.tobytes())
 
+    def test_profile_card_uses_selected_buneary_middle_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["middle_background"] = "buneary"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            Path(__file__).with_name("middle background") / "Buneary.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (520, 825))
+        with Image.open(render_profile_image(settings, stats)) as image:
+            actual = image.crop((430, 0, 950, 825))
+
+        self.assertEqual(actual.tobytes(), expected.tobytes())
+
     def test_profile_card_uses_blurred_background_behind_text(self) -> None:
         settings = self.bot.profile_settings_for_user(123)
         settings["background"] = "cosmog"
@@ -2731,6 +2752,23 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             expected = source.convert("RGB").transpose(
                 Image.Transpose.ROTATE_90
             ).resize((1400, 825), Image.Resampling.LANCZOS).filter(
+                ImageFilter.GaussianBlur(radius=12)
+            )
+        with Image.open(render_profile_image(settings, stats)) as image:
+            self.assertEqual(
+                image.crop((300, 700, 430, 825)).tobytes(),
+                expected.crop((300, 700, 430, 825)).tobytes(),
+            )
+
+    def test_profile_card_uses_blurred_buneary_background(self) -> None:
+        settings = self.bot.profile_settings_for_user(123)
+        settings["background"] = "buneary"
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            Path(__file__).with_name("background") / "buneary.png"
+        ) as source:
+            expected = ImageOps.fit(source.convert("RGB"), (1400, 825)).filter(
                 ImageFilter.GaussianBlur(radius=12)
             )
         with Image.open(render_profile_image(settings, stats)) as image:
@@ -2876,6 +2914,53 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(frame.size, (1539, 1020))
         self.assertEqual(base.size, (1400, 825))
         self.assertEqual(profile_position, (68, 91))
+        profile_card = base.convert("RGBA")
+        card_mask = Image.new("L", profile_card.size, 0)
+        ImageDraw.Draw(card_mask).rounded_rectangle(
+            (0, 0, profile_card.width - 1, profile_card.height - 1),
+            radius=PROFILE_FRAME_CORNER_RADIUS,
+            fill=255,
+        )
+        profile_card.putalpha(card_mask)
+        expected.alpha_composite(profile_card, dest=profile_position)
+        expected.alpha_composite(frame)
+
+        with Image.open(render_profile_image(settings, stats)) as actual:
+            self.assertEqual(actual.size, frame.size)
+            self.assertEqual(actual.mode, "RGBA")
+            self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_profile_card_renders_selected_flower_spring_frame(self) -> None:
+        self.bot.set_profile_setting(123, "frame", "flowerspring")
+        settings = self.bot.profile_settings_for_user(123)
+        stats = self.bot.profile_stats_for_user(SERVER_ID, 123)
+
+        with Image.open(
+            render_profile_image({**settings, "frame": "none"}, stats)
+        ) as unframed:
+            base = unframed.convert("RGB")
+        with Image.open(
+            Path(__file__).with_name("Frames") / "flowerspring.png"
+        ) as source:
+            left, top, right, bottom = PROFILE_FRAME_OPENINGS["flowerspring"]
+            scale_x = base.width / (right - left)
+            scale_y = base.height / (bottom - top)
+            frame = source.convert("RGBA").resize(
+                (
+                    round(source.width * scale_x),
+                    round(source.height * scale_y),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        frame.putalpha(
+            frame.getchannel("A").point(
+                lambda alpha: round(
+                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
+                )
+            )
+        )
+        expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        profile_position = (round(left * scale_x), round(top * scale_y))
         profile_card = base.convert("RGBA")
         card_mask = Image.new("L", profile_card.size, 0)
         ImageDraw.Draw(card_mask).rounded_rectangle(

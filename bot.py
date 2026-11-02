@@ -207,6 +207,7 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "eevee": ("Eevee", "Eevee blurred, rotated profile background"),
     "moonnight": ("Moon Night", "Moon Night blurred profile background"),
     "meadownight": ("Meadow Night", "Meadow Night blurred profile background"),
+    "buneary": ("Buneary", "Buneary blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
@@ -214,17 +215,20 @@ PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "eevee": Path(__file__).with_name("background") / "eevee.png",
     "moonnight": Path(__file__).with_name("background") / "moonnight.png",
     "meadownight": Path(__file__).with_name("background") / "meadownight.png",
+    "buneary": Path(__file__).with_name("background") / "buneary.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),
     "cosmog": ("Cosmog", "Cosmog middle background"),
     "hiszorua": ("Hisuian Zorua", "Hisuian Zorua middle background"),
     "eevee": ("Eevee", "Eevee middle background"),
+    "buneary": ("Buneary", "Buneary middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
     "hiszorua": Path(__file__).with_name("middle background") / "hiszorua.png",
     "eevee": Path(__file__).with_name("middle background") / "eevee.png",
+    "buneary": Path(__file__).with_name("middle background") / "Buneary.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),
@@ -235,14 +239,17 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "mystic": ("Mystic", "Mystic profile frame"),
     "gem": ("Gem", "Gem profile frame"),
     "nightflower": ("Nightflower", "Nightflower profile frame"),
+    "flowerspring": ("Flower Spring", "Flower Spring profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
     "gem": Path(__file__).with_name("Frames") / "gem.png",
     "nightflower": Path(__file__).with_name("Frames") / "nightflower.png",
+    "flowerspring": Path(__file__).with_name("Frames") / "flowerspring.png",
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
+    "flowerspring": (142, 123, 1009, 638),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -252,6 +259,7 @@ PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
     "gem": 1.0,
     "nightflower": 1.0,
+    "flowerspring": 1.0,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6

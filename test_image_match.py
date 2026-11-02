@@ -798,6 +798,28 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], "Squawkabilly")
 
+    def test_yellow_squawkabilly_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Yellow-Plumage Squawkabilly"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Yellow-Plumage Squawkabilly")
+
     def test_oddish_spawn_is_recognized_when_mirrored(self) -> None:
         import cv2
 

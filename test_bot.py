@@ -664,7 +664,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-    async def test_confirmed_incense_purchase_pauses_channel(self) -> None:
+    async def test_incense_purchase_pauses_only_after_poketwo_confirmation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.bot.incense_path = Path(directory) / "incenses.json"
             self.bot.is_allowed_channel = Mock(return_value=False)
@@ -682,15 +682,38 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
             await self.bot.on_message(message)
 
+            self.bot.set_poketwo_blocked.assert_not_awaited()
+            message.reply.assert_not_awaited()
+            self.assertNotIn("200", self.bot.active_incenses)
+
+            response = Mock()
+            response.author.bot = True
+            response.author.id = self.config.poketwo_bot_id
+            response.guild = message.guild
+            response.channel = message.channel
+            response.content = "You do not have enough shards."
+            response.embeds = []
+            response.reply = AsyncMock()
+
+            await self.bot.on_message(response)
+
+            self.bot.set_poketwo_blocked.assert_not_awaited()
+            response.reply.assert_not_awaited()
+
+            response.content = "You purchased an Incense for 50 shards!"
+
+            await self.bot.on_message(response)
+
             self.assertIn(200, self.bot.muted_poketwo_channels)
             self.bot.set_poketwo_blocked.assert_awaited_once_with(
                 message.channel,
                 True,
             )
-            message.reply.assert_awaited_once_with(
+            response.reply.assert_awaited_once_with(
                 "Incense has been paused.",
                 mention_author=False,
             )
+            self.assertIn("200", self.bot.active_incenses)
 
     async def test_pause_aliases_and_resume_command(self) -> None:
         self.bot.command_permissions = {}
@@ -6592,6 +6615,37 @@ class ReserveCategoryTests(unittest.TestCase):
 
 
 class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_member_can_view_own_reserves_without_manager_role(self) -> None:
+        bot = SimpleNamespace(
+            command_permissions={"1": 900},
+            reservations={"1:pikachu": [123], "1:eevee": [456]},
+        )
+        message = Mock()
+        message.guild.id = 1
+        message.author = Mock(spec=discord.Member)
+        message.author.id = 123
+        message.author.display_name = "Test member"
+        message.author.roles = []
+        message.content = "v!r <@!123>"
+        message.reply = AsyncMock()
+
+        with patch("bot.reply_with_reservation_embeds", new=AsyncMock()) as reply:
+            await NamingBot.handle_reserve_command(bot, message)
+
+            reply.assert_awaited_once()
+            embeds = reply.await_args.args[1]
+            self.assertEqual(embeds[0].title, "Pokémon reserved by Test member")
+            self.assertEqual(embeds[0].description, "Pikachu")
+
+            message.content = "v!r <@456>"
+            await NamingBot.handle_reserve_command(bot, message)
+
+        message.reply.assert_awaited_once_with(
+            "Only reserve managers or members with the configured "
+            "command role can add, remove, or clear reservations.",
+            mention_author=False,
+        )
+
     async def test_configured_role_can_add_reservations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             role_id = 900
@@ -6846,6 +6900,7 @@ class CommandPermissionTests(unittest.TestCase):
             "v!grab": "general",
             "v!test shiny": "general",
             "v!r search pikachu": None,
+            "v!r <@100>": None,
             "v!r": "reserves",
             "v!p": "reserves",
             "v!p all": "reserves",

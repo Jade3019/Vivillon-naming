@@ -666,6 +666,28 @@ class VivillonTests(unittest.TestCase):
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
 class CustomFormRecognitionTests(unittest.TestCase):
+    def test_sealeo_spawn_is_recognized_when_mirrored(self) -> None:
+        import cv2
+
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Sealeo"
+            / "spawn-reference.png"
+        )
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        if image is None:
+            return
+
+        for candidate in (image, cv2.flip(image, 1)):
+            with self.subTest(mirrored=candidate is not image):
+                success, buffer = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(buffer.tobytes())
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], "Sealeo")
+
     def test_yamask_spawn_reference_is_recognized_when_mirrored(self) -> None:
         import cv2
 

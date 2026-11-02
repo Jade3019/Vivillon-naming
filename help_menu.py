@@ -36,6 +36,7 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
             ("v!categorylist", "List categories and their Pokémon counts."),
             ("v!categorydelete <name> / v!cd <name>", "Delete a category."),
             ("v!r search <pokemon|@member>", "See who reserved a Pokémon, or what a member reserved."),
+            ("v!r @you", "See your own reserved Pokémon."),
             ("v!r list", "Show every reserve in the server."),
             ("v!r e @owner", "Reply to a reserve list to hand those reserves to another member."),
             ("v!r clear", "Clear every reserve in the server."),

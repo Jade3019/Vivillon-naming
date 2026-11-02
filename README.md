@@ -232,7 +232,8 @@ remove the sign-up reaction when registration closes.
 
 Any server member can view reservations with `v!r list`, search who reserved a
 Pokémon with `v!r search pikachu`, or see one member's reserved Pokémon with
-`v!r search @member`. Use `v!r search all arceus` to list Arceus by type
+`v!r search @member`. Members can also see their own reserved Pokémon with
+`v!r @you`. Use `v!r search all arceus` to list Arceus by type
 (for example, `fairy arceus @member`) and show the reservers for each type.
 Use `v!r search all pichu` for its regular and spiky-eared forms. This catalog
 covers alternate and regional forms across Pokémon. Results

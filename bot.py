@@ -502,6 +502,12 @@ def incense_action_from_message(
     poketwo_bot_id: int,
 ) -> str | None:
     if message.author.id == poketwo_bot_id:
+        if re.search(
+            r"\bYou purchased an Incense\b",
+            message_text(message),
+            re.IGNORECASE,
+        ):
+            return "buy"
         status = re.search(
             r"\bIncense\s*:\s*(Active|Inactive)\b",
             message_text(message),
@@ -703,6 +709,8 @@ def command_permission_group(content: str) -> str | None:
     if is_image_test_command(content):
         return "general"
     if re.match(r"^v!r\s+search(?:\s|$)", content, re.IGNORECASE):
+        return None
+    if re.fullmatch(r"v!r\s+<@!?\d+>", content, re.IGNORECASE):
         return None
     if re.fullmatch(r"v!(?:p|pause)(?:\s+all)?|v!q", content, re.IGNORECASE):
         return "reserves"
@@ -6814,20 +6822,7 @@ class NamingBot(discord.Client):
             await self.handle_catch_starboard(message)
         incense_action = self.track_incense_command(message)
         if incense_action == "buy":
-            channel_id = getattr(message.channel, "id", None)
-            if channel_id is not None:
-                if await self.set_poketwo_blocked(message.channel, True):
-                    self.muted_poketwo_channels.add(channel_id)
-                    await message.reply(
-                        "Incense has been paused.",
-                        mention_author=False,
-                    )
-                else:
-                    await message.reply(
-                        "I couldn't pause incense in this channel. "
-                        "Check the bot permissions.",
-                        mention_author=False,
-                    )
+            await self.pause_confirmed_incense_purchase(message)
         if not self.is_allowed_channel(message.channel):
             return
         channel_id = getattr(message.channel, "id", None)
@@ -7235,6 +7230,8 @@ class NamingBot(discord.Client):
         )
         if action is None:
             return None
+        if action == "buy" and message.author.id != self.config.poketwo_bot_id:
+            return action
         channel_id = str(channel.id)
         if action == "stop":
             self.active_incenses.pop(channel_id, None)
@@ -7247,6 +7244,28 @@ class NamingBot(discord.Client):
             }
         self.save_active_incenses()
         return action
+
+    async def pause_confirmed_incense_purchase(
+        self,
+        message: discord.Message,
+    ) -> None:
+        if message.author.id != self.config.poketwo_bot_id:
+            return
+        channel_id = getattr(message.channel, "id", None)
+        if channel_id is None:
+            return
+        if await self.set_poketwo_blocked(message.channel, True):
+            self.muted_poketwo_channels.add(channel_id)
+            await message.reply(
+                "Incense has been paused.",
+                mention_author=False,
+            )
+        else:
+            await message.reply(
+                "I couldn't pause incense in this channel. "
+                "Check the bot permissions.",
+                mention_author=False,
+            )
 
     def current_active_incenses(self) -> list[dict[str, int | str]]:
         now = int(time.time())
@@ -8118,7 +8137,9 @@ class NamingBot(discord.Client):
         self.track_profile_catch(after)
         await self.track_profile_box_shiny(after)
         await self.handle_catch_starboard(after)
-        self.track_incense_command(after)
+        incense_action = self.track_incense_command(after)
+        if incense_action == "buy":
+            await self.pause_confirmed_incense_purchase(after)
         if not self.is_allowed_channel(after.channel):
             return
         text = message_text(after)
@@ -8772,6 +8793,26 @@ class NamingBot(discord.Client):
             await message.reply("Usage: `v!r list`", mention_author=False)
             return
 
+        member_match = re.fullmatch(
+            r"v!r\s+<@!?(\d+)>\s*",
+            message.content,
+            re.IGNORECASE,
+        )
+        if (
+            member_match is not None
+            and int(member_match.group(1)) == message.author.id
+        ):
+            embeds = format_reservation_embeds(
+                message.author.display_name,
+                reserved_pokemon_for_user(
+                    self.reservations,
+                    message.guild.id,
+                    message.author.id,
+                ),
+            )
+            await reply_with_reservation_embeds(message, embeds)
+            return
+
         if re.match(r"^v!r\s+search(?:\s|$)", message.content, re.IGNORECASE):
             await self.handle_reserve_search(message)
             return
@@ -8784,6 +8825,13 @@ class NamingBot(discord.Client):
             await message.reply(
                 "Only reserve managers or members with the configured "
                 "command role can add, remove, or clear reservations.",
+                mention_author=False,
+            )
+            return
+        if member_match is not None:
+            await message.reply(
+                "Use `v!r @you` to see your own reserves, or "
+                "`v!r search @member` to see another member's reserves.",
                 mention_author=False,
             )
             return

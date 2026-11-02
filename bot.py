@@ -76,6 +76,8 @@ PRIVILEGED_MANAGER_IDS: Final[dict[int, int]] = {
 INCENSE_DURATION_SECONDS: Final[int] = 60 * 60
 API_STATUS_WINDOW_SECONDS: Final[int] = 5 * 60
 RECOGNITION_WINDOW_SECONDS: Final[float] = 1.0
+RECOGNITION_ALERT_CHANNEL_ID: Final[int] = 1531476097970212915
+RECOGNITION_ALERT_USER_ID: Final[int] = 729509574486523907
 API_STATUS_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!api\s*$",
     re.IGNORECASE,
@@ -9443,6 +9445,42 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
 
+    async def send_recognition_failure_alert(
+        self, error_message: discord.Message
+    ) -> None:
+        channel = self.get_channel(RECOGNITION_ALERT_CHANNEL_ID)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(RECOGNITION_ALERT_CHANNEL_ID)
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not load recognition alert channel %s",
+                    RECOGNITION_ALERT_CHANNEL_ID,
+                )
+                return
+
+        channel_name = discord.utils.escape_markdown(
+            error_message.channel.name, as_needed=True
+        )
+        content = (
+            f"<@{RECOGNITION_ALERT_USER_ID}> Vivillon couldn't confidently identify "
+            f"the spawn in [#{channel_name}]({error_message.jump_url})."
+        )
+        allowed_mentions = discord.AllowedMentions(
+            users=[discord.Object(id=RECOGNITION_ALERT_USER_ID)],
+            roles=False,
+            everyone=False,
+            replied_user=False,
+        )
+        try:
+            await channel.send(content, allowed_mentions=allowed_mentions)
+        except discord.HTTPException:
+            logger.exception(
+                "Could not send recognition alert for message %s to channel %s",
+                error_message.id,
+                RECOGNITION_ALERT_CHANNEL_ID,
+            )
+
     async def handle_spawn(
         self,
         message: discord.Message,
@@ -9543,11 +9581,12 @@ class NamingBot(discord.Client):
                         mention_author=False,
                     )
                 else:
-                    await message.reply(
+                    error_message = await message.reply(
                         "I couldn't confidently identify this spawn. Check the "
                         "bot logs or add recognition coverage for this Pokémon.",
                         mention_author=False,
                     )
+                    await self.send_recognition_failure_alert(error_message)
                 return
             except OpenAIError:
                 self.failed_recognition_count += 1

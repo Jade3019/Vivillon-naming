@@ -1229,18 +1229,33 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         message.id = 710
         message.guild.id = SERVER_ID
         message.channel.id = 1210
+        message.channel.name = "spawn-channel"
         message.attachments = [
             Mock(content_type="image/png", url="https://example.test/spawn.png")
         ]
         message.embeds = []
-        message.reply = AsyncMock()
+        error_message = Mock(
+            id=711,
+            channel=message.channel,
+            jump_url="https://discord.com/channels/1/1210/711",
+        )
+        message.reply = AsyncMock(return_value=error_message)
+        alert_channel = Mock(spec=discord.TextChannel)
+        alert_channel.send = AsyncMock()
 
-        with patch(
-            "bot.recognize_pokemon",
-            new=AsyncMock(
-                side_effect=bot_module.NoMatchError("No reference match")
-            ),
-        ) as recognize:
+        with (
+            patch.object(
+                self.bot,
+                "get_channel",
+                return_value=alert_channel,
+            ) as get_channel,
+            patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(
+                    side_effect=bot_module.NoMatchError("No reference match")
+                ),
+            ) as recognize,
+        ):
             await self.bot.handle_spawn(message)
 
         recognize.assert_awaited_once()
@@ -1249,6 +1264,23 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             "recognition coverage for this Pokémon.",
             mention_author=False,
         )
+        get_channel.assert_called_once_with(
+            bot_module.RECOGNITION_ALERT_CHANNEL_ID
+        )
+        alert_channel.send.assert_awaited_once()
+        alert = alert_channel.send.await_args.args[0]
+        self.assertIn(f"<@{bot_module.RECOGNITION_ALERT_USER_ID}>", alert)
+        self.assertIn(
+            f"[#spawn-channel]({error_message.jump_url})",
+            alert,
+        )
+        allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
+        self.assertEqual(
+            [user.id for user in allowed_mentions.users],
+            [bot_module.RECOGNITION_ALERT_USER_ID],
+        )
+        self.assertFalse(allowed_mentions.roles)
+        self.assertFalse(allowed_mentions.everyone)
         self.assertEqual(self.bot.failed_recognition_count, 1)
 
     async def test_afk_preferences_filter_shinyhunt_and_collection_pings(self) -> None:

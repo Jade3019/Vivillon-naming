@@ -377,7 +377,11 @@ lowest IV catches, plus the highest and lowest IV among shiny catches. The
 profile card is public. Its
 public **Edit** menu appears only after the owner presses **Edit**; changing a
 setting updates the card without a confirmation reply. The card has the normal
-gray background on its left and right sides by default. The background picker
+gray background on its left and right sides by default. The bot owner can use
+`v!profile @user` to preview another member's
+appearance. Only the bot owner can edit this temporary preview; changes update
+the public preview card but are not saved to the member's profile. Other
+members can still view profiles, but only edit their own. The background picker
 also offers blurred Cosmog, Hisuian Zorua, and Moon Night images, plus a
 blurred Meadow Night image and a blurred, rotated Eevee image; the middle
 column defaults to white and can also use Cosmog, Hisuian Zorua, or Eevee.

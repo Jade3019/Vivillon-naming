@@ -5854,9 +5854,7 @@ class ProfileEditSelect(discord.ui.Select):
     ) -> None:
         self.profile_view = profile_view
         self.setting = setting
-        current_value = profile_view.bot.profile_settings_for_user(
-            profile_view.user_id
-        )[setting]
+        current_value = profile_view.settings_for_display()[setting]
         choices = profile_setting_choices_for_user(profile_view.user_id, setting)
         super().__init__(
             placeholder=PROFILE_SETTING_LABELS[setting],
@@ -5875,25 +5873,42 @@ class ProfileEditSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if interaction.user.id != self.profile_view.user_id:
+        if not await self.profile_view.can_edit(interaction.user.id):
             await interaction.response.send_message(
-                "Only the member who opened this profile can edit it.",
+                (
+                    "Only the bot owner who opened this preview can edit it."
+                    if self.profile_view.preview_settings is not None
+                    else "Only the member who opened this profile can edit it."
+                ),
                 ephemeral=True,
             )
             return
         try:
-            self.profile_view.bot.set_profile_setting(
-                self.profile_view.user_id,
-                self.setting,
-                self.values[0],
-            )
+            if self.profile_view.preview_settings is not None:
+                choices = profile_setting_choices_for_user(
+                    self.profile_view.user_id,
+                    self.setting,
+                )
+                if self.values[0] not in choices:
+                    raise ValueError(f"Invalid profile setting: {self.setting}")
+                self.profile_view.preview_settings[self.setting] = self.values[0]
+            else:
+                self.profile_view.bot.set_profile_setting(
+                    self.profile_view.user_id,
+                    self.setting,
+                    self.values[0],
+                )
         except ValueError:
             logger.exception(
-                "Could not save profile settings for user %s",
+                "Could not update profile settings for user %s",
                 self.profile_view.user_id,
             )
             await interaction.response.send_message(
-                "I couldn't save your profile settings. Check the bot logs.",
+                (
+                    "I couldn't update the profile preview. Check the bot logs."
+                    if self.profile_view.preview_settings is not None
+                    else "I couldn't save your profile settings. Check the bot logs."
+                ),
                 ephemeral=True,
             )
             return
@@ -5910,7 +5925,11 @@ class ProfileEditSelect(discord.ui.Select):
                 self.profile_view.user_id,
             )
             await interaction.followup.send(
-                "Your setting was saved, but I couldn't refresh the profile image.",
+                (
+                    "Your preview changed, but I couldn't refresh the profile image."
+                    if self.profile_view.preview_settings is not None
+                    else "Your setting was saved, but I couldn't refresh the profile image."
+                ),
                 ephemeral=True,
             )
 
@@ -5932,16 +5951,24 @@ class ProfileEditButton(discord.ui.Button):
         self.profile_view = profile_view
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if interaction.user.id != self.profile_view.user_id:
+        if not await self.profile_view.can_edit(interaction.user.id):
             await interaction.response.send_message(
-                "Only the member who opened this profile can edit it.",
+                (
+                    "Only the bot owner who opened this preview can edit it."
+                    if self.profile_view.preview_settings is not None
+                    else "Only the member who opened this profile can edit it."
+                ),
                 ephemeral=True,
             )
             return
         await interaction.response.send_message(
-            "Choose your profile colors and appearance.",
+            (
+                "Choose appearance settings to preview. Changes won't be saved."
+                if self.profile_view.preview_settings is not None
+                else "Choose your profile colors and appearance."
+            ),
             view=ProfileEditView(self.profile_view),
-            ephemeral=False,
+            ephemeral=self.profile_view.preview_settings is not None,
         )
 
 
@@ -5951,18 +5978,39 @@ class ProfileView(discord.ui.View):
         bot: "NamingBot",
         user_id: int,
         guild_id: int,
+        *,
+        preview_owner_id: int | None = None,
     ) -> None:
         super().__init__(timeout=900)
         self.bot = bot
         self.user_id = user_id
         self.guild_id = guild_id
+        self.preview_owner_id = preview_owner_id
+        self.preview_settings = (
+            dict(bot.profile_settings_for_user(user_id))
+            if preview_owner_id is not None
+            else None
+        )
         self.message: discord.Message | None = None
         self.add_item(ProfileEditButton(self))
+
+    def settings_for_display(self) -> dict[str, int | str]:
+        if self.preview_settings is not None:
+            return self.preview_settings
+        return self.bot.profile_settings_for_user(self.user_id)
+
+    async def can_edit(self, user_id: int) -> bool:
+        if self.preview_settings is None:
+            return user_id == self.user_id
+        return (
+            user_id == self.preview_owner_id
+            and await self.bot.is_application_owner(user_id)
+        )
 
     async def refresh(self) -> None:
         if self.message is None:
             return
-        settings = self.bot.profile_settings_for_user(self.user_id)
+        settings = self.settings_for_display()
         stats = self.bot.profile_stats_for_user(self.guild_id, self.user_id)
         records = self.bot.profile_records_for_user(self.guild_id, self.user_id)
         emoji_assets = await self.bot.load_profile_emoji_assets()
@@ -7831,21 +7879,38 @@ class NamingBot(discord.Client):
             )
             return
         user_id = int(match.group(1)) if match.group(1) else message.author.id
+        preview_owner_id = None
+        if user_id != message.author.id and await self.is_application_owner(
+            message.author.id
+        ):
+            preview_owner_id = message.author.id
         settings = self.profile_settings_for_user(user_id)
         stats = self.profile_stats_for_user(message.guild.id, user_id)
         records = self.profile_records_for_user(message.guild.id, user_id)
         emoji_assets = await self.load_profile_emoji_assets()
-        view = ProfileView(self, user_id, message.guild.id)
-        response = await message.reply(
-            file=discord.File(
-                render_profile_image(
-                    settings,
-                    stats,
-                    emoji_assets,
-                    records,
-                ),
-                filename="profile.png",
+        view = ProfileView(
+            self,
+            user_id,
+            message.guild.id,
+            preview_owner_id=preview_owner_id,
+        )
+        profile_file = discord.File(
+            render_profile_image(
+                settings,
+                stats,
+                emoji_assets,
+                records,
             ),
+            filename="profile.png",
+        )
+        response = await message.reply(
+            content=(
+                "Owner preview only: appearance changes are temporary and "
+                "will not be saved to this member's profile."
+                if preview_owner_id is not None
+                else None
+            ),
+            file=profile_file,
             view=view,
             mention_author=False,
         )

@@ -145,6 +145,7 @@ from bot import (
     PROFILE_FLOWER_SPRING_USER_ID,
     PROFILE_MARSHADOW_USER_ID,
     PROFILE_MOONLIT_USER_ID,
+    PROFILE_DEFAULTS,
     save_profile_data,
     save_type_pings,
     type_ping_user_ids_for_pokemon,
@@ -1806,6 +1807,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         message.embeds = []
         message.attachments = []
         message.reply = AsyncMock(return_value=Mock())
+        self.bot.is_application_owner = AsyncMock(return_value=False)
         self.bot.profile_stats[f"{SERVER_ID}:456"] = {
             "total": 25,
             "shiny": 2,
@@ -1820,6 +1822,74 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         view = message.reply.await_args.kwargs["view"]
         self.assertEqual(view.user_id, 456)
         self.assertEqual(view.guild_id, SERVER_ID)
+        self.assertIsNone(view.preview_settings)
+
+    async def test_owner_can_open_temporary_profile_preview(self) -> None:
+        message = Mock()
+        message.author.bot = False
+        message.author.id = 123
+        message.channel.guild.id = SERVER_ID
+        message.guild.id = SERVER_ID
+        message.content = "v!profile <@!456>"
+        message.embeds = []
+        message.attachments = []
+        message.reply = AsyncMock(return_value=Mock())
+        self.bot.is_application_owner = AsyncMock(return_value=True)
+
+        await self.bot.on_message(message)
+
+        kwargs = message.reply.await_args.kwargs
+        view = kwargs["view"]
+        self.assertEqual(view.user_id, 456)
+        self.assertEqual(view.preview_owner_id, 123)
+        self.assertEqual(view.preview_settings, PROFILE_DEFAULTS)
+        self.assertIn("temporary", kwargs["content"])
+
+    async def test_profile_preview_edits_only_temporary_settings(self) -> None:
+        self.bot.set_profile_setting(456, "text_color", "blue")
+        self.bot.is_application_owner = AsyncMock(return_value=True)
+        profile_view = ProfileView(
+            self.bot,
+            456,
+            SERVER_ID,
+            preview_owner_id=123,
+        )
+        select = ProfileEditView(profile_view).children[0]
+        select._values = ["pink"]
+        interaction = Mock()
+        interaction.user.id = 123
+        interaction.response.defer = AsyncMock()
+        interaction.message.edit = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await select.callback(interaction)
+
+        self.assertEqual(profile_view.preview_settings["text_color"], "pink")
+        self.assertEqual(self.bot.profile_settings_for_user(456)["text_color"], "blue")
+        self.assertEqual(
+            load_profile_data(self.bot.profile_data_path)[0]["456"]["text_color"],
+            "blue",
+        )
+
+    async def test_only_preview_owner_can_edit_preview(self) -> None:
+        self.bot.is_application_owner = AsyncMock(return_value=True)
+        profile_view = ProfileView(
+            self.bot,
+            456,
+            SERVER_ID,
+            preview_owner_id=123,
+        )
+        interaction = Mock()
+        interaction.user.id = 789
+        interaction.response.send_message = AsyncMock()
+
+        await profile_view.children[0].callback(interaction)
+
+        interaction.response.send_message.assert_awaited_once()
+        self.assertTrue(
+            interaction.response.send_message.await_args.kwargs["ephemeral"]
+        )
+        self.bot.is_application_owner.assert_not_called()
 
     async def test_edit_button_opens_four_personalized_dropdowns(self) -> None:
         profile_view = ProfileView(self.bot, 123, SERVER_ID)

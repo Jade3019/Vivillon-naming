@@ -274,6 +274,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertIn("Enchanted Applin (base species: Applin)", prompt)
         self.assertIn("return its exact listed form name", prompt)
+        self.assertIn("Always provide your single best Pokémon guess", prompt)
 
     async def test_inconclusive_local_match_uses_vision_prediction(self) -> None:
         import bot
@@ -629,6 +630,65 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             9001,
             1.0,
         )
+
+    async def test_low_confidence_guess_warns_without_catch_command(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+        }
+        message = Mock()
+        message.id = 9003
+        message.guild.id = SERVER_ID
+        message.channel.id = 9004
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Pikachu", 49.99)),
+        ):
+            await self.bot.handle_spawn(message)
+
+        message.reply.assert_awaited_once()
+        self.assertEqual(
+            message.reply.await_args.args[0],
+            "Pikachu: 49.99%\n"
+            "⚠️ This guess is below 50% confidence. Please verify it before catching.",
+        )
+        self.assertEqual(
+            message.reply.await_args.kwargs["mention_author"],
+            False,
+        )
+
+    async def test_guess_at_50_percent_uses_normal_spawn_reply(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+        }
+        message = Mock()
+        message.id = 9005
+        message.guild.id = SERVER_ID
+        message.channel.id = 9006
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with patch(
+            "bot.recognize_pokemon",
+            new=AsyncMock(return_value=("Pikachu", 50.0)),
+        ):
+            await self.bot.handle_spawn(message)
+
+        message.reply.assert_awaited_once()
+        self.assertIn("Pikachu: 50.00%", message.reply.await_args.args[0])
+        self.assertNotIn("below 50%", message.reply.await_args.args[0])
 
     def test_recognizes_only_poketwo_incense_commands(self) -> None:
         self.assertEqual(

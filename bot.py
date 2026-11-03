@@ -618,7 +618,7 @@ def image_url(message: discord.Message) -> str | None:
     return None
 
 
-LOW_ACCURACY_THRESHOLD = 90
+LOW_ACCURACY_THRESHOLD = 50
 
 
 def load_low_accuracy_channels(path: Path) -> dict[str, int]:
@@ -1092,10 +1092,10 @@ async def request_prediction(
                     "form. Return JSON only, "
                     "in the form "
                     '{"name":"one Pokémon or custom form name","confidence":85.34}. '
-                    "Include a form or "
-                    "regional name when needed to identify the shown Pokémon. If the "
-                    "image is not recognizable as a Pokémon, set name to an empty "
-                    "string and confidence to 0."
+                    "Include a form or regional name when needed to identify the "
+                    "shown Pokémon. Always provide your single best Pokémon guess, "
+                    "even when the image is unclear or you are uncertain; lower the "
+                    "confidence instead of returning an empty name."
                 ),
             },
             {
@@ -10083,6 +10083,14 @@ class NamingBot(discord.Client):
             return
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
+            if not test_mode:
+                await message.reply(
+                    f"{format_guess(name, confidence)}\n"
+                    f"⚠️ This guess is below {LOW_ACCURACY_THRESHOLD}% confidence. "
+                    "Please verify it before catching.",
+                    mention_author=False,
+                )
+                return
         thumbnail_name = name
         name = species_display_name(name)
         guess_name = shown_form_name(name, thumbnail_name)

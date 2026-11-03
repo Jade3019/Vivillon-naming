@@ -396,7 +396,8 @@ designated profile; the Slakoth background, Slakoth middle background, and
 Moonlit frame are limited to a different designated profile. The Marshadow
 background and middle background, plus the Moonveil frame, are limited to a
 third designated profile. Moonveil enlarges the profile card to fit its frame.
-Each set is hidden from other members and reset to defaults if found in their
+The Jirachi background, middle background, and frame are limited to a
+fourth designated profile. Each set is hidden from other members and reset to defaults if found in their
 saved settings.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.

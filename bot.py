@@ -320,14 +320,17 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
         "frame": frozenset({"jirachi"}),
     },
 }
+PROFILE_MUSIC_USER_ID: Final[int] = 729509574486523907
+PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {
+    "return_to_me": (
+        "Return to me",
+        "Plays a looping song only you can hear",
+        Path(__file__).with_name("music") / "return_to_me.mp3",
+    ),
+}
 PROFILE_MUSIC: Final[dict[int, dict[str, tuple[str, str, Path]]]] = {
-    PROFILE_JIRACHI_USER_ID: {
-        "return_to_me": (
-            "Return to me",
-            "Plays a looping song only you can hear",
-            Path(__file__).with_name("music") / "return_to_me.mp3",
-        ),
-    },
+    PROFILE_JIRACHI_USER_ID: PROFILE_RETURN_TO_ME,
+    PROFILE_MUSIC_USER_ID: PROFILE_RETURN_TO_ME,
 }
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",

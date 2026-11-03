@@ -1879,6 +1879,10 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
     ) -> None:
         other_view = ProfileEditView(ProfileView(self.bot, 456, SERVER_ID))
         self.assertEqual(len(other_view.children), 4)
+        self.assertEqual(
+            len(ProfileEditView(ProfileView(self.bot, 729509574486523907, SERVER_ID)).children),
+            5,
+        )
 
         profile_view = ProfileView(self.bot, PROFILE_JIRACHI_USER_ID, SERVER_ID)
         editor = ProfileEditView(profile_view)

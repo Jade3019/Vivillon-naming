@@ -631,34 +631,55 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             1.0,
         )
 
-    async def test_low_confidence_guess_warns_without_catch_command(self) -> None:
+    async def test_low_confidence_guess_is_named_and_reported_to_alert_channel(
+        self,
+    ) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
         self.bot.server_settings[str(SERVER_ID)] = {
             "enabled": True,
             "assisted": False,
         }
+        self.bot.low_accuracy_channels = {}
         message = Mock()
         message.id = 9003
         message.guild.id = SERVER_ID
         message.channel.id = 9004
+        message.jump_url = "https://discord.com/channels/1/9004/9003"
         message.attachments = [
             Mock(content_type="image/png", url="https://example.test/spawn.png")
         ]
         message.embeds = []
         message.reply = AsyncMock()
+        alert_channel = Mock(spec=discord.TextChannel)
+        alert_channel.send = AsyncMock()
 
-        with patch(
-            "bot.recognize_pokemon",
-            new=AsyncMock(return_value=("Pikachu", 49.99)),
+        with (
+            patch.object(
+                self.bot,
+                "get_channel",
+                return_value=alert_channel,
+            ) as get_channel,
+            patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Pikachu", 49.99)),
+            ),
         ):
             await self.bot.handle_spawn(message)
 
         message.reply.assert_awaited_once()
-        self.assertEqual(
-            message.reply.await_args.args[0],
-            "Pikachu: 49.99%\n"
-            "⚠️ This guess is below 50% confidence. Please verify it before catching.",
-        )
+        self.assertIn("Pikachu: 49.99%", message.reply.await_args.args[0])
+        self.assertNotIn("below 50%", message.reply.await_args.args[0])
+        get_channel.assert_called_once_with(bot_module.RECOGNITION_ALERT_CHANNEL_ID)
+        alert_channel.send.assert_awaited_once()
+        alert = alert_channel.send.await_args.args[0]
+        self.assertIn("Pikachu", alert)
+        self.assertIn("49.99%", alert)
+        self.assertIn("below 50%", alert)
+        self.assertIn(message.jump_url, alert)
+        allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
+        self.assertFalse(allowed_mentions.users)
+        self.assertFalse(allowed_mentions.roles)
+        self.assertFalse(allowed_mentions.everyone)
         self.assertEqual(
             message.reply.await_args.kwargs["mention_author"],
             False,

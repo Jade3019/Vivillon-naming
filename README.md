@@ -130,7 +130,9 @@ that instead of silently skipping the spawn. The vision model
 compares visible traits such as silhouette, proportions, face, colors, and
 markings to identify Pokémon across the National Pokédex and distinguish similar
 species and forms. Image recognition can still make mistakes, so check guesses
-before relying on them. Vivillon predictions are checked against a known
+before relying on them. Guesses below 50% are still named, and a low-accuracy
+alert with the confidence and source link is sent to the recognition alert
+channel. Vivillon predictions are checked against a known
 pattern, and unverified Vivillon guesses are rejected. It then posts the
 matching Pokétwo catch command as inline code for easier copying, preceded by a
 bold “Copy Here >” label, when Assisted mode is on. Maushold's Family-of-Three

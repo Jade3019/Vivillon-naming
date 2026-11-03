@@ -8433,21 +8433,43 @@ class NamingBot(discord.Client):
         self, message: discord.Message, name: str, confidence: float
     ) -> None:
         guild = message.guild
-        channel_id = self.low_accuracy_channels.get(str(guild.id)) if guild else None
-        if channel_id is None:
-            return
-        channel = self.get_channel(channel_id)
-        if channel is None:
-            return
-        try:
-            await channel.send(
-                f"⚠️ Low accuracy: **{display_pokemon_name(name)}** at "
-                f"{confidence:.2f}% (below {LOW_ACCURACY_THRESHOLD}%)\n"
-                f"{message.jump_url}",
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-        except discord.HTTPException:
-            logger.warning("Could not send low accuracy report", exc_info=True)
+        channel_ids = [RECOGNITION_ALERT_CHANNEL_ID]
+        configured_channel_id = (
+            self.low_accuracy_channels.get(str(guild.id)) if guild else None
+        )
+        if (
+            configured_channel_id is not None
+            and configured_channel_id not in channel_ids
+        ):
+            channel_ids.append(configured_channel_id)
+
+        content = (
+            f"⚠️ Low accuracy: **{display_pokemon_name(name)}** at "
+            f"{confidence:.2f}% (below {LOW_ACCURACY_THRESHOLD}%)\n"
+            f"{message.jump_url}"
+        )
+        for channel_id in channel_ids:
+            channel = self.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await self.fetch_channel(channel_id)
+                except discord.HTTPException:
+                    logger.exception(
+                        "Could not load low accuracy report channel %s",
+                        channel_id,
+                    )
+                    continue
+            try:
+                await channel.send(
+                    content,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not send low accuracy report for message %s to channel %s",
+                    message.id,
+                    channel_id,
+                )
 
     async def handle_low_accuracy_command(self, message: discord.Message) -> None:
         permissions = member_guild_permissions(message.author)
@@ -10083,14 +10105,6 @@ class NamingBot(discord.Client):
             return
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
-            if not test_mode:
-                await message.reply(
-                    f"{format_guess(name, confidence)}\n"
-                    f"⚠️ This guess is below {LOW_ACCURACY_THRESHOLD}% confidence. "
-                    "Please verify it before catching.",
-                    mention_author=False,
-                )
-                return
         thumbnail_name = name
         name = species_display_name(name)
         guess_name = shown_form_name(name, thumbnail_name)

@@ -304,7 +304,9 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, ("Palafin", 97.0))
         request_prediction.assert_awaited_once()
 
-    async def test_unverified_vision_vivillon_prediction_is_rejected(self) -> None:
+    async def test_unverified_vision_vivillon_prediction_is_named_at_low_confidence(
+        self,
+    ) -> None:
         import bot
 
         image_bytes = b"spawn image"
@@ -320,15 +322,14 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("bot.vivillon_form_by_pattern", return_value=None),
         ):
-            with self.assertRaisesRegex(
-                bot.NoMatchError, "was not image-verified"
-            ):
-                await bot.recognize_pokemon(
-                    "https://example.test/spawn.png",
-                    client=Mock(),
-                    http=Mock(),
-                    model="test-model",
-                )
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=Mock(),
+                http=Mock(),
+                model="test-model",
+            )
+
+        self.assertEqual(result, ("Vivillon", 49.99))
 
     async def test_reference_match_log_includes_split_timings(self) -> None:
         import bot
@@ -364,9 +365,11 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             r"\[download \d+\.\d{2}s, match \d+\.\d{2}s\]$",
         )
 
-    async def test_no_reference_match_log_includes_split_timings(self) -> None:
+    async def test_no_reference_match_uses_low_confidence_local_guess(self) -> None:
         import bot
 
+        matcher = Mock(entries=["Pikachu"])
+        matcher.best_guess.return_value = ("Pikachu", 3)
         with (
             patch(
                 "bot.download_image",
@@ -374,16 +377,23 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("bot.asyncio.to_thread", new=AsyncMock(return_value=None)),
             patch("bot.logger.info") as log_info,
+            patch("bot.logger.warning") as log_warning,
         ):
-            with self.assertRaises(bot.NoMatchError):
-                await bot.recognize_pokemon(
-                    "https://example.test/spawn.png",
-                    client=None,
-                    http=Mock(),
-                    model="test-model",
-                    matcher=Mock(entries=["Pikachu"]),
-                )
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=None,
+                http=Mock(),
+                model="test-model",
+                matcher=matcher,
+            )
 
+        self.assertEqual(result, ("Pikachu", 1.2))
+        matcher.best_guess.assert_called_once_with(b"spawn image")
+        log_warning.assert_called_once_with(
+            "Using low-confidence local guess %s (%d reference votes)",
+            "Pikachu",
+            3,
+        )
         no_match_log = next(
             call for call in log_info.call_args_list
             if call.args[0].startswith("No reference match")
@@ -398,6 +408,45 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             rendered_log,
             r"\[download \d+\.\d{2}s, match \d+\.\d{2}s\]$",
         )
+
+    async def test_no_client_and_no_local_candidate_raises_no_match(self) -> None:
+        import bot
+
+        with self.assertRaises(bot.NoMatchError):
+            await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=None,
+                http=Mock(),
+                model="test-model",
+            )
+
+    async def test_vision_timeout_uses_low_confidence_local_guess(self) -> None:
+        import bot
+
+        matcher = Mock(entries=["Pikachu"])
+        matcher.best_guess.return_value = ("Pikachu", 3)
+        with (
+            patch(
+                "bot.request_prediction",
+                new=AsyncMock(side_effect=asyncio.TimeoutError),
+            ),
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
+            patch("bot.asyncio.to_thread", new=AsyncMock(return_value=None)),
+            patch("bot.logger.exception"),
+        ):
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=Mock(),
+                http=Mock(),
+                model="test-model",
+                matcher=matcher,
+            )
+
+        self.assertEqual(result, ("Pikachu", 1.2))
+        matcher.best_guess.assert_called_once_with(b"spawn image")
 
 
 class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):

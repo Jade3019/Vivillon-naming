@@ -124,22 +124,22 @@ When naming is enabled, the bot attempts to recognize every Pokétwo spawn with
 an image and replies with one predicted name and its estimated confidence
 percentage (for example, `Pikachu: 85.00%`). Registered reserve, shinyhunt,
 collection, and type-ping members are mentioned when they match; registrations
-do not limit which spawns are named. The confidence is a model estimate, not a
+do not limit which spawns are named. The confidence is an estimate, not a
 calibrated probability. If recognition has no verified match, the bot reports
-that in the recognition alert channel without posting an error reply in the
-spawn channel. The vision model compares visible traits such as silhouette,
-proportions, face, colors, and
-markings to identify Pokémon across the National Pokédex and distinguish similar
-species and forms. Image recognition can still make mistakes, so check guesses
-before relying on them. Guesses below 50% are still named, and a low-accuracy
-alert mentioning the configured alert recipient, with the confidence and source
-link, is sent to the recognition alert channel. Unmatched spawns are reported
-there without posting an error reply in the spawn channel. Vivillon predictions
-are checked against a known pattern, and unverified Vivillon guesses are
-rejected. It then posts the
-matching Pokétwo catch command as inline code for easier copying, preceded by a
-bold “Copy Here >” label, when Assisted mode is on. Maushold's Family-of-Three
-and Family-of-Four appearances are displayed simply as Maushold. A separate
+when no guess is available, without posting an error reply in the spawn channel.
+If the vision model is unavailable, the bot names the best local reference
+candidate when possible and reports it as a low-confidence guess. The vision
+model compares visible traits such as silhouette, proportions, face, colors,
+and markings to identify Pokémon across the National Pokédex and distinguish
+similar species and forms. Image recognition can still make mistakes, so check
+guesses before relying on them. Guesses below 50% are still named, and a
+low-accuracy alert mentioning the configured alert recipient, with the
+confidence and source link, is sent to the recognition alert channel. An
+unverified Vivillon form prediction is still named at low confidence. It then
+posts the matching Pokétwo catch command as inline code for easier copying,
+preceded by a bold “Copy Here >” label, when Assisted mode is on. Maushold's
+Family-of-Three and Family-of-Four appearances are displayed simply as
+Maushold. A separate
 desktop copy card
 below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
 The model's “Alola Graveler” alias is normalized to “Alolan Graveler”.

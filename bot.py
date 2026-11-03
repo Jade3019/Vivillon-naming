@@ -22,6 +22,7 @@ from aiohttp import web
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 from image_match import (
     CUSTOM_FORM_SPECIES,
+    FEATURES_PER_IMAGE,
     FORM_DISPLAY_NAMES,
     ARCEUS_FORM_SET,
     SILVALLY_FORMS,
@@ -965,6 +966,25 @@ class NoMatchError(Exception):
     pass
 
 
+def local_fallback_prediction(
+    matcher: ImageMatcher | None,
+    image_bytes: bytes,
+) -> tuple[str, float] | None:
+    if matcher is None:
+        return None
+    guess = matcher.best_guess(image_bytes)
+    if guess is None:
+        return None
+    name, votes = guess
+    confidence = min(49.99, votes * 100 / FEATURES_PER_IMAGE)
+    logger.warning(
+        "Using low-confidence local guess %s (%d reference votes)",
+        name,
+        votes,
+    )
+    return name, confidence
+
+
 async def download_image(
     http: aiohttp.ClientSession, url: str
 ) -> tuple[bytes, str]:
@@ -1014,6 +1034,13 @@ async def recognize_pokemon(
     )
 
     if client is None:
+        fallback = (
+            local_fallback_prediction(matcher, downloaded[0])
+            if downloaded is not None
+            else None
+        )
+        if fallback is not None:
+            return fallback
         raise NoMatchError("No reference image matched and OpenAI is not configured")
 
     prediction: tuple[str, float] | None = None
@@ -1026,6 +1053,13 @@ async def recognize_pokemon(
         except BadRequestError:
             logger.info("OpenAI could not fetch the image URL; uploading it instead")
             downloaded = await download_image(http, url)
+        except (OpenAIError, asyncio.TimeoutError, ValueError):
+            logger.exception("Vision prediction failed; trying a local best guess")
+            downloaded = await download_image(http, url)
+            fallback = local_fallback_prediction(matcher, downloaded[0])
+            if fallback is not None:
+                return fallback
+            raise
         else:
             if prediction[0] not in VIVILLON_FORM_SET or cv2 is None:
                 return prediction
@@ -1034,18 +1068,26 @@ async def recognize_pokemon(
     image_bytes, content_type = downloaded
     if prediction is None:
         encoded_image = base64.b64encode(image_bytes).decode("ascii")
-        prediction = await request_prediction(
-            f"data:{content_type};base64,{encoded_image}",
-            client=client,
-            model=model,
-            detail=detail,
-        )
+        try:
+            prediction = await request_prediction(
+                f"data:{content_type};base64,{encoded_image}",
+                client=client,
+                model=model,
+                detail=detail,
+            )
+        except (OpenAIError, asyncio.TimeoutError, ValueError):
+            logger.exception("Vision prediction failed; trying a local best guess")
+            fallback = local_fallback_prediction(matcher, image_bytes)
+            if fallback is not None:
+                return fallback
+            raise
     if prediction[0] in VIVILLON_FORM_SET and cv2 is not None:
         matched_form = await asyncio.to_thread(vivillon_form_by_pattern, image_bytes)
         if matched_form is None:
-            logger.info("Rejected an unverified Vivillon vision prediction")
-            raise NoMatchError("Vision prediction of Vivillon was not image-verified")
-        prediction = matched_form, prediction[1]
+            logger.info("Keeping an unverified Vivillon guess at low confidence")
+            prediction = prediction[0], min(prediction[1], LOW_ACCURACY_THRESHOLD - 0.01)
+        else:
+            prediction = matched_form, prediction[1]
     return prediction
 
 
@@ -1130,8 +1172,8 @@ async def request_prediction(
     ):
         raise ValueError("Vision model response included an invalid confidence percentage")
     name = unicodedata.normalize("NFC", name.strip())
-    if len(name) > 60 or (
-        name and not is_valid_pokemon_name(name) and not is_missingno_name(name)
+    if not name or len(name) > 60 or (
+        not is_valid_pokemon_name(name) and not is_missingno_name(name)
     ):
         raise ValueError("Vision model returned an invalid Pokémon name")
     return name, float(confidence)
@@ -10050,10 +10092,7 @@ class NamingBot(discord.Client):
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
                 self.failed_recognition_count += 1
                 logger.exception("Could not recognize spawn in message %s", message.id)
-                await message.reply(
-                    "I couldn't identify that spawn. Check the bot logs for details.",
-                    mention_author=False,
-                )
+                await self.send_recognition_failure_alert(message)
                 return
             except NoMatchError:
                 self.failed_recognition_count += 1
@@ -10069,10 +10108,7 @@ class NamingBot(discord.Client):
             except OpenAIError:
                 self.failed_recognition_count += 1
                 logger.exception("Vision request failed for message %s", message.id)
-                await message.reply(
-                    "I couldn't identify that spawn because the vision request failed.",
-                    mention_author=False,
-                )
+                await self.send_recognition_failure_alert(message)
                 return
         finally:
             if waiting_for_vision_slot:
@@ -10100,10 +10136,7 @@ class NamingBot(discord.Client):
             message.id,
         )
         if not name:
-            await message.reply(
-                "I couldn't confidently identify that Pokémon.",
-                mention_author=False,
-            )
+            await self.send_recognition_failure_alert(message)
             return
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)

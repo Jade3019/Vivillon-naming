@@ -674,12 +674,7 @@ class ImageMatcher:
         """
         if not self.names or self.matcher is None:
             return None
-        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
-        mask = None
-        if image is not None and image.ndim == 3 and image.shape[2] == 4:
-            alpha = image[..., 3]
-            if np.any(alpha < 255):
-                mask = np.where(alpha > 128, 255, 0).astype(np.uint8)
+        mask = self._transparency_mask(data)
         results = [
             result
             for result in (
@@ -716,6 +711,40 @@ class ImageMatcher:
             break
         else:
             return None
+        return self._postprocess_match(data, name, votes)
+
+    def best_guess(self, data: bytes) -> tuple[str, int] | None:
+        """Return the top local candidate without applying match thresholds."""
+        if not self.names or self.matcher is None:
+            return None
+        mask = self._transparency_mask(data)
+        results = [
+            result
+            for result in (
+                self._match(data, False, mask=mask, allow_weak=True),
+                self._match(data, True, mask=mask, allow_weak=True),
+            )
+            if result is not None
+        ]
+        if not results:
+            return None
+        name, votes = max(results, key=lambda result: result[1])
+        if name in VIVILLON_FORM_SET:
+            name = "Vivillon"
+        return self._postprocess_match(data, name, votes)
+
+    @staticmethod
+    def _transparency_mask(data: bytes):
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+        if image is None or image.ndim != 3 or image.shape[2] != 4:
+            return None
+        alpha = image[..., 3]
+        if not np.any(alpha < 255):
+            return None
+        return np.where(alpha > 128, 255, 0).astype(np.uint8)
+
+    @staticmethod
+    def _postprocess_match(data: bytes, name: str, votes: int) -> tuple[str, int]:
         if name in ("Palafin", "Finizen"):
             if has_belly_patch(data) is True:
                 name = "Palafin"
@@ -725,7 +754,14 @@ class ImageMatcher:
             name = arceus_form_by_color(data) or name
         return name, votes
 
-    def _match(self, data: bytes, mirror: bool, mask=None, relaxed: bool = False) -> tuple[str, int] | None:
+    def _match(
+        self,
+        data: bytes,
+        mirror: bool,
+        mask=None,
+        relaxed: bool = False,
+        allow_weak: bool = False,
+    ) -> tuple[str, int] | None:
         descriptors = compute_descriptors(data, mirror, mask)
         if descriptors is None or len(descriptors) < 2:
             return None
@@ -770,6 +806,8 @@ class ImageMatcher:
             else:
                 min_votes = max(MIN_VOTES, min_votes - 2)
                 min_margin = max(MIN_MARGIN, min_margin - 1)
-        if best >= min_votes and best - second >= max(min_margin, 0.3 * best):
+        if allow_weak or (
+            best >= min_votes and best - second >= max(min_margin, 0.3 * best)
+        ):
             return DISPLAY_NAMES.get(name, name), best
         return None

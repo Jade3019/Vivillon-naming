@@ -437,8 +437,10 @@ class ImageMatcherTests(unittest.TestCase):
             ):
                 image_matcher.knnMatch.return_value = neighbours
                 result = matcher._match(b"spawn image", False, relaxed=True)
+                fallback = matcher.best_guess(b"spawn image")
 
         self.assertIsNone(result)
+        self.assertEqual(fallback, ("Shellos", 5))
 
     def test_shellos_requires_more_votes_than_a_weak_goomy_lookalike(self) -> None:
         np = image_match.np

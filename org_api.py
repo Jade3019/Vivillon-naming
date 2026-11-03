@@ -135,6 +135,9 @@ def create_app(
     async def guard(request: web.Request, handler: Any) -> web.StreamResponse:
         if request.path == "/api/org/health":
             return await handler(request)
+        # Public static pages (the music Activity) live outside /api/.
+        if request.method == "GET" and not request.path.startswith("/api/"):
+            return await handler(request)
         supplied = request.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied.encode(), f"Bearer {api_key}".encode()):
             return web.json_response(

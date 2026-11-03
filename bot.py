@@ -4900,7 +4900,7 @@ def suggest_pokemon_name(name: str) -> str | None:
     return f"{original_prefix} {suggestion}".strip() if prefix else suggestion
 
 
-def create_activity_app(client_id: int) -> web.Application:
+def add_activity_routes(app: web.Application, client_id: int) -> None:
     """Serve the Discord Activity that loops the profile song."""
     index = (ACTIVITY_DIR / "index.html").read_text(encoding="utf-8").replace(
         "__CLIENT_ID__", str(client_id)
@@ -4910,10 +4910,14 @@ def create_activity_app(client_id: int) -> web.Application:
         del request
         return web.Response(text=index, content_type="text/html")
 
-    app = web.Application()
     app.router.add_get("/", serve_index)
     app.router.add_get("/index.html", serve_index)
     app.router.add_static("/", ACTIVITY_DIR, follow_symlinks=False)
+
+
+def create_activity_app(client_id: int) -> web.Application:
+    app = web.Application()
+    add_activity_routes(app, client_id)
     return app
 
 
@@ -6968,9 +6972,16 @@ class NamingBot(discord.Client):
             self.org_add_reserve,
             self.org_remove_reserve,
         )
+        port = _org_api_port_from_environment()
+        if (
+            self.application_id is not None
+            and os.environ.get("MUSIC_ACTIVITY_PORT", "").strip() == str(port)
+        ):
+            # The host exposes a single port, so the Activity shares the Org API.
+            add_activity_routes(app, self.application_id)
+            logger.info("Music Activity is served on the Org API port %s", port)
         self.org_runner = web.AppRunner(app)
         await self.org_runner.setup()
-        port = _org_api_port_from_environment()
         try:
             await web.TCPSite(self.org_runner, "0.0.0.0", port).start()
         except OSError:
@@ -6987,6 +6998,8 @@ class NamingBot(discord.Client):
             port = int(raw_port)
         except ValueError:
             logger.error("MUSIC_ACTIVITY_PORT must be a valid port number")
+            return
+        if port == _org_api_port_from_environment():
             return
         if self.application_id is None:
             logger.error("Music Activity needs the bot's application ID")

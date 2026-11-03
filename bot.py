@@ -5990,10 +5990,9 @@ class ProfileMusicSelect(discord.ui.Select):
                 ephemeral=True,
             )
             return
-        label, _description, path = track
+        _label, _description, path = track
         try:
             await interaction.response.send_message(
-                f"{label} - press play. Only you can see and hear this.",
                 file=discord.File(path, filename=path.name),
                 ephemeral=True,
             )

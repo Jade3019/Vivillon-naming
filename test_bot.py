@@ -672,12 +672,16 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         get_channel.assert_called_once_with(bot_module.RECOGNITION_ALERT_CHANNEL_ID)
         alert_channel.send.assert_awaited_once()
         alert = alert_channel.send.await_args.args[0]
+        self.assertIn(f"<@{bot_module.RECOGNITION_ALERT_USER_ID}>", alert)
         self.assertIn("Pikachu", alert)
         self.assertIn("49.99%", alert)
         self.assertIn("below 50%", alert)
         self.assertIn(message.jump_url, alert)
         allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
-        self.assertFalse(allowed_mentions.users)
+        self.assertEqual(
+            [user.id for user in allowed_mentions.users],
+            [bot_module.RECOGNITION_ALERT_USER_ID],
+        )
         self.assertFalse(allowed_mentions.roles)
         self.assertFalse(allowed_mentions.everyone)
         self.assertEqual(
@@ -1387,16 +1391,12 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         message.guild.id = SERVER_ID
         message.channel.id = 1210
         message.channel.name = "spawn-channel"
+        message.jump_url = "https://discord.com/channels/1/1210/710"
         message.attachments = [
             Mock(content_type="image/png", url="https://example.test/spawn.png")
         ]
         message.embeds = []
-        error_message = Mock(
-            id=711,
-            channel=message.channel,
-            jump_url="https://discord.com/channels/1/1210/711",
-        )
-        message.reply = AsyncMock(return_value=error_message)
+        message.reply = AsyncMock()
         alert_channel = Mock(spec=discord.TextChannel)
         alert_channel.send = AsyncMock()
 
@@ -1416,11 +1416,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_spawn(message)
 
         recognize.assert_awaited_once()
-        message.reply.assert_awaited_once_with(
-            "I couldn't confidently identify this spawn. Check the bot logs or add "
-            "recognition coverage for this Pokémon.",
-            mention_author=False,
-        )
+        message.reply.assert_not_awaited()
         get_channel.assert_called_once_with(
             bot_module.RECOGNITION_ALERT_CHANNEL_ID
         )
@@ -1428,7 +1424,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         alert = alert_channel.send.await_args.args[0]
         self.assertIn(f"<@{bot_module.RECOGNITION_ALERT_USER_ID}>", alert)
         self.assertIn("<#1210>", alert)
-        self.assertIn(error_message.jump_url, alert)
+        self.assertIn(message.jump_url, alert)
         self.assertNotIn("[#", alert)
         allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
         self.assertEqual(

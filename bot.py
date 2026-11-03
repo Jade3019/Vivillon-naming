@@ -8444,9 +8444,16 @@ class NamingBot(discord.Client):
             channel_ids.append(configured_channel_id)
 
         content = (
-            f"⚠️ Low accuracy: **{display_pokemon_name(name)}** at "
+            f"<@{RECOGNITION_ALERT_USER_ID}> ⚠️ Low accuracy: "
+            f"**{display_pokemon_name(name)}** at "
             f"{confidence:.2f}% (below {LOW_ACCURACY_THRESHOLD}%)\n"
             f"{message.jump_url}"
+        )
+        allowed_mentions = discord.AllowedMentions(
+            users=[discord.Object(id=RECOGNITION_ALERT_USER_ID)],
+            roles=False,
+            everyone=False,
+            replied_user=False,
         )
         for channel_id in channel_ids:
             channel = self.get_channel(channel_id)
@@ -8462,7 +8469,7 @@ class NamingBot(discord.Client):
             try:
                 await channel.send(
                     content,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=allowed_mentions,
                 )
             except discord.HTTPException:
                 logger.exception(
@@ -9924,7 +9931,7 @@ class NamingBot(discord.Client):
             )
 
     async def send_recognition_failure_alert(
-        self, error_message: discord.Message
+        self, source_message: discord.Message
     ) -> None:
         channel = self.get_channel(RECOGNITION_ALERT_CHANNEL_ID)
         if channel is None:
@@ -9939,8 +9946,8 @@ class NamingBot(discord.Client):
 
         content = (
             f"<@{RECOGNITION_ALERT_USER_ID}> Vivillon couldn't confidently identify "
-            f"the spawn in <#{error_message.channel.id}>.\n"
-            f"Jump to the error message: {error_message.jump_url}"
+            f"the spawn in <#{source_message.channel.id}>.\n"
+            f"Jump to the spawn: {source_message.jump_url}"
         )
         allowed_mentions = discord.AllowedMentions(
             users=[discord.Object(id=RECOGNITION_ALERT_USER_ID)],
@@ -9953,7 +9960,7 @@ class NamingBot(discord.Client):
         except discord.HTTPException:
             logger.exception(
                 "Could not send recognition alert for message %s to channel %s",
-                error_message.id,
+                source_message.id,
                 RECOGNITION_ALERT_CHANNEL_ID,
             )
 
@@ -10057,12 +10064,7 @@ class NamingBot(discord.Client):
                         mention_author=False,
                     )
                 else:
-                    error_message = await message.reply(
-                        "I couldn't confidently identify this spawn. Check the "
-                        "bot logs or add recognition coverage for this Pokémon.",
-                        mention_author=False,
-                    )
-                    await self.send_recognition_failure_alert(error_message)
+                    await self.send_recognition_failure_alert(message)
                 return
             except OpenAIError:
                 self.failed_recognition_count += 1

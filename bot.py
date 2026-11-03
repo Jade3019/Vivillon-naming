@@ -331,7 +331,7 @@ PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {
 PROFILE_VOICE_MESSAGE_FILE: Final[Path] = (
     Path(__file__).with_name("music") / "return_to_me.ogg"
 )
-PROFILE_VOICE_MESSAGE_SECONDS: Final[float] = 3604.28
+PROFILE_VOICE_MESSAGE_SECONDS: Final[float] = 289.22
 PROFILE_VOICE_MESSAGE_WAVEFORM: Final[str] = (
     "D+vnx1rm5LJr2NaF3t3UoejArfHO1If5b9E3AgCj5ONevejdTMjovoD01KTtwt2U9t5y/8F5kg4AM+jlsmvl46F158ty+srUt+XBmvvA1p/5cLsrAQC06txS0ePiOerYtJTp5Z3f1Mms7t9567WSdwoATubkooPs4YOG7cSB68bNxeu3q+bWt7X1cqohAADL5OE+3OHjR+zJrK3t25nV3MC98NeA6p6uWgcAb+rdiZ7n4mul29N93duw5NfKoN/eo87mdKAZAADZ4uRC6ObJXeDDpL/w1ZbrxLvW4dWE9IHCRgQAjubhbq/k4lu52dB+59Sd/MfYmO/OlevRdpgTAA=="
 )

@@ -1911,13 +1911,16 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         interaction.user.id = 456
         interaction.response.launch_activity = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
         await self._pick_music(select, interaction)
         interaction.response.launch_activity.assert_awaited_once()
 
         interaction.response.launch_activity = AsyncMock(
-            side_effect=discord.HTTPException(Mock(status=400), "no activity")
+            side_effect=discord.NotFound(Mock(status=404), "Unknown interaction")
         )
-        interaction.response.defer = AsyncMock()
+        interaction.response.defer = AsyncMock(
+            side_effect=discord.NotFound(Mock(status=404), "Unknown interaction")
+        )
         interaction.edit_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
         sent = AsyncMock(return_value=True)

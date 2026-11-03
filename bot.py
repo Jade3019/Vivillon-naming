@@ -6037,39 +6037,47 @@ class ProfileMusicSelect(discord.ui.Select):
             )
             return
         _label, _description, path = track
+        launched = False
         try:
             await interaction.response.launch_activity()
-        except discord.HTTPException:
-            logger.warning("Could not launch the music Activity", exc_info=True)
-        else:
-            await self._reset_selector(interaction)
-            return
-        await interaction.response.defer()
-        if not await send_profile_music_dm(interaction):
-            try:
-                await interaction.followup.send(
-                    "I couldn't DM you, so here is the song as a file. "
-                    "Open your DMs from server members to get the voice message.",
-                    file=discord.File(path, filename=path.name),
-                    ephemeral=True,
-                )
-            except (OSError, discord.HTTPException):
-                logger.exception("Could not send profile music %s", path)
-                return
+            launched = True
+        except discord.HTTPException as error:
+            logger.warning(
+                "Could not launch the music Activity (HTTP %s, code %s): %s",
+                error.status,
+                error.code,
+                error.text,
+            )
+        if not launched:
+            await self._send_fallback_music(interaction, path)
         try:
             await interaction.edit_original_response(
                 view=ProfileEditView(self.profile_view)
             )
         except discord.HTTPException:
-            logger.exception("Could not reset the profile music selector")
+            logger.warning("Could not reset the profile music selector", exc_info=True)
 
-    async def _reset_selector(self, interaction: discord.Interaction) -> None:
+    async def _send_fallback_music(
+        self,
+        interaction: discord.Interaction,
+        path: Path,
+    ) -> None:
+        # The DM uses the bot token, so it still works if the interaction expired.
         try:
-            await interaction.message.edit(
-                view=ProfileEditView(self.profile_view)
-            )
+            await interaction.response.defer()
         except discord.HTTPException:
-            logger.exception("Could not reset the profile music selector")
+            logger.warning("Music interaction already expired", exc_info=True)
+        if await send_profile_music_dm(interaction):
+            return
+        try:
+            await interaction.followup.send(
+                "I couldn't DM you, so here is the song as a file. "
+                "Open your DMs from server members to get the audio.",
+                file=discord.File(path, filename=path.name),
+                ephemeral=True,
+            )
+        except (OSError, discord.HTTPException):
+            logger.warning("Could not send profile music %s", path, exc_info=True)
 
 
 class ProfileEditView(discord.ui.View):

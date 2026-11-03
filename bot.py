@@ -22,7 +22,6 @@ from aiohttp import web
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 from image_match import (
     CUSTOM_FORM_SPECIES,
-    FEATURES_PER_IMAGE,
     FORM_DISPLAY_NAMES,
     ARCEUS_FORM_SET,
     canonicalize_regional_name,
@@ -1004,7 +1003,8 @@ def local_fallback_prediction(
     if guess is None:
         return None
     name, votes = guess
-    confidence = min(49.99, votes * 100 / FEATURES_PER_IMAGE)
+    needed = max(1, minimum_votes_for(name))
+    confidence = round(min(49.99, votes / needed * 49.99), 2)
     logger.warning(
         "Using low-confidence local guess %s (%d reference votes)",
         name,

@@ -449,7 +449,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
                 matcher=matcher,
             )
 
-        self.assertEqual(result, ("Pikachu", 1.2))
+        self.assertEqual(result, ("Pikachu", 25.0))
         matcher.best_guess.assert_called_once_with(b"spawn image")
         log_warning.assert_called_once_with(
             "Using low-confidence local guess %s (%d reference votes)",
@@ -507,7 +507,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
                 matcher=matcher,
             )
 
-        self.assertEqual(result, ("Pikachu", 1.2))
+        self.assertEqual(result, ("Pikachu", 25.0))
         matcher.best_guess.assert_called_once_with(b"spawn image")
 
 

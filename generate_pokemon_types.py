@@ -21,7 +21,7 @@ EXTRA = {
     "Smearguru": ["normal"],
     "Mosslax": ["normal"],
     "Prof Tangrowth": ["grass"],
-    "Chef Dente": ["electric", "fairy"],
+    "Chef Dente": ["normal"],
     "Cherrim Variant 1": ["grass"],
     "Cherrim Variant 2": ["grass"],
 }

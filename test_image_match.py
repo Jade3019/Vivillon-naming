@@ -994,13 +994,18 @@ class CustomFormRecognitionTests(unittest.TestCase):
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (
             ("Applin", "user-example.png"),
+            ("Ditto", "user-example.png"),
+            ("Dreepy", "user-example-2.png"),
             ("Gulpin", "user-example-8.png"),
             ("Dreepy", "user-example.png"),
+            ("Lotad", "user-example.png"),
             ("Snorunt", "user-example.png"),
             ("Snom", "user-example-5.png"),
             ("Toedscool", "user-example-2.png"),
             ("Wiglett", "user-example-4.png"),
+            ("Wiglett", "user-example-6.png"),
             ("White-Plumage Squawkabilly", "user-example.png"),
+            ("White-Plumage Squawkabilly", "user-example-2.png"),
             ("Wingull", "user-example.png"),
             ("Rotten Applin", "user-example-2.png"),
             ("Wiglett", "user-example-5.png"),

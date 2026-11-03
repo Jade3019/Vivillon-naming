@@ -526,3 +526,15 @@ adding flipped copies to the image bank.
 When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 
 `OPENAI_API_KEY` is optional. Without it the bot names spawns only from the reference images and stays silent (it logs `No reference image matched`) for any spawn that doesn't match, so add pictures for every Pokémon you want named.
+
+## Music Activity
+
+The profile **Music** picker launches a Discord Activity that loops
+`activity/return_to_me.mp3` and keeps playing while the member browses other
+channels. If the Activity can't launch, the member gets the song by DM instead.
+
+Set `MUSIC_ACTIVITY_PORT` to the port your host forwards to a public HTTPS
+address; the bot then serves the Activity page from `activity/` on that port.
+In the Discord Developer Portal, open the application, enable **Activities**,
+and add a URL mapping with root `/` pointing at that HTTPS address (without
+`https://`). Leave `MUSIC_ACTIVITY_PORT` unset to disable it.

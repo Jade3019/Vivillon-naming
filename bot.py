@@ -327,6 +327,7 @@ PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {
         Path(__file__).with_name("music") / "return_to_me.mp3",
     ),
 }
+ACTIVITY_DIR: Final[Path] = Path(__file__).with_name("activity")
 PROFILE_MUSIC_FILE: Final[Path] = (
     Path(__file__).with_name("music") / "return_to_me.ogg"
 )
@@ -4899,6 +4900,23 @@ def suggest_pokemon_name(name: str) -> str | None:
     return f"{original_prefix} {suggestion}".strip() if prefix else suggestion
 
 
+def create_activity_app(client_id: int) -> web.Application:
+    """Serve the Discord Activity that loops the profile song."""
+    index = (ACTIVITY_DIR / "index.html").read_text(encoding="utf-8").replace(
+        "__CLIENT_ID__", str(client_id)
+    )
+
+    async def serve_index(request: web.Request) -> web.Response:
+        del request
+        return web.Response(text=index, content_type="text/html")
+
+    app = web.Application()
+    app.router.add_get("/", serve_index)
+    app.router.add_get("/index.html", serve_index)
+    app.router.add_static("/", ACTIVITY_DIR, follow_symlinks=False)
+    return app
+
+
 def _org_api_port_from_environment() -> int:
     for variable in ("ORG_API_PORT", "SERVER_PORT", "PORT"):
         value = os.environ.get(variable)
@@ -6019,6 +6037,13 @@ class ProfileMusicSelect(discord.ui.Select):
             )
             return
         _label, _description, path = track
+        try:
+            await interaction.response.launch_activity()
+        except discord.HTTPException:
+            logger.warning("Could not launch the music Activity", exc_info=True)
+        else:
+            await self._reset_selector(interaction)
+            return
         await interaction.response.defer()
         if not await send_profile_music_dm(interaction):
             try:
@@ -6033,6 +6058,14 @@ class ProfileMusicSelect(discord.ui.Select):
                 return
         try:
             await interaction.edit_original_response(
+                view=ProfileEditView(self.profile_view)
+            )
+        except discord.HTTPException:
+            logger.exception("Could not reset the profile music selector")
+
+    async def _reset_selector(self, interaction: discord.Interaction) -> None:
+        try:
+            await interaction.message.edit(
                 view=ProfileEditView(self.profile_view)
             )
         except discord.HTTPException:
@@ -6189,6 +6222,7 @@ class NamingBot(discord.Client):
             maxlen=1000
         )
         self.org_runner: web.AppRunner | None = None
+        self.activity_runner: web.AppRunner | None = None
         self.org_reserves: OrgReserves | None = None
         self.org_rpc: org_rpc.OrgRpc | None = None
         self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
@@ -6936,8 +6970,33 @@ class NamingBot(discord.Client):
             raise
         logger.info("Org API listening on port %s", port)
 
+    async def start_music_activity(self) -> None:
+        raw_port = os.environ.get("MUSIC_ACTIVITY_PORT", "").strip()
+        if not raw_port:
+            logger.info("Music Activity is disabled because MUSIC_ACTIVITY_PORT is not set")
+            return
+        try:
+            port = int(raw_port)
+        except ValueError:
+            logger.error("MUSIC_ACTIVITY_PORT must be a valid port number")
+            return
+        if self.application_id is None:
+            logger.error("Music Activity needs the bot's application ID")
+            return
+        self.activity_runner = web.AppRunner(create_activity_app(self.application_id))
+        await self.activity_runner.setup()
+        try:
+            await web.TCPSite(self.activity_runner, "0.0.0.0", port).start()
+        except OSError:
+            logger.exception("Could not bind the Music Activity on port %s", port)
+            await self.activity_runner.cleanup()
+            self.activity_runner = None
+            return
+        logger.info("Music Activity listening on port %s", port)
+
     async def setup_hook(self) -> None:
         await self.start_org_api()
+        await self.start_music_activity()
         await self.start_org_rpc()
         self.image_http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=20),
@@ -6951,6 +7010,8 @@ class NamingBot(discord.Client):
         self.time_tasks.clear()
         if self.org_runner is not None:
             await self.org_runner.cleanup()
+        if self.activity_runner is not None:
+            await self.activity_runner.cleanup()
         if self.image_http is not None:
             await self.image_http.close()
         if self.openai is not None:

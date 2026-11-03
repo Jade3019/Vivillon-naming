@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Return to me</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1230; color: #fff;
+    font-family: system-ui, sans-serif; display: flex; align-items: center;
+    justify-content: center; text-align: center; }
+  button { font-size: 1.1rem; padding: .7rem 1.4rem; border: 0; border-radius: 999px;
+    background: #f6d860; color: #1a1f4d; cursor: pointer; margin-top: 1rem; }
+  small { opacity: .7; }
+</style>
+</head>
+<body>
+<main>
+  <h2 id="title">Return to me</h2>
+  <small id="status">Playing on loop. Keep this open and browse Discord.</small><br>
+  <button id="toggle" hidden>Play</button>
+  <audio id="song" src="return_to_me.mp3" loop preload="auto"></audio>
+</main>
+<script src="sdk.js"></script>
+<script>
+  const song = document.getElementById("song");
+  const toggle = document.getElementById("toggle");
+  const status = document.getElementById("status");
+
+  function showButton(text) {
+    toggle.textContent = text;
+    toggle.hidden = false;
+  }
+
+  toggle.addEventListener("click", async () => {
+    if (song.paused) {
+      try { await song.play(); } catch (error) { return; }
+      status.textContent = "Playing on loop. Keep this open and browse Discord.";
+      showButton("Pause");
+    } else {
+      song.pause();
+      status.textContent = "Paused.";
+      showButton("Play");
+    }
+  });
+
+  (async () => {
+    try {
+      const sdk = new window.DiscordSDK("__CLIENT_ID__");
+      await sdk.ready();
+    } catch (error) {
+      console.error("Discord SDK failed", error);
+    }
+    try {
+      await song.play();
+      showButton("Pause");
+    } catch (error) {
+      status.textContent = "Press play to start the song.";
+      showButton("Play");
+    }
+  })();
+</script>
+</body>
+</html>

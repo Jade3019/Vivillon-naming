@@ -1874,6 +1874,13 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "blue",
         )
 
+    async def _pick_music(self, select, interaction) -> None:
+        interaction.message.edit = AsyncMock()
+        with patch.object(
+            ProfileMusicSelect, "values", ["return_to_me"], create=True
+        ):
+            await select.callback(interaction)
+
     async def test_music_picker_is_only_for_its_owner_and_plays_privately(
         self,
     ) -> None:
@@ -1903,6 +1910,13 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
 
         interaction.user.id = 456
+        interaction.response.launch_activity = AsyncMock()
+        await self._pick_music(select, interaction)
+        interaction.response.launch_activity.assert_awaited_once()
+
+        interaction.response.launch_activity = AsyncMock(
+            side_effect=discord.HTTPException(Mock(status=400), "no activity")
+        )
         interaction.response.defer = AsyncMock()
         interaction.edit_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
@@ -8331,6 +8345,23 @@ class TypeEmojiTests(unittest.TestCase):
                 "Typeping: <@789>",
             ],
         )
+
+
+class MusicActivityAppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_activity_page_and_song_are_served(self) -> None:
+        from aiohttp.test_utils import TestClient, TestServer
+        from bot import create_activity_app
+
+        async with TestClient(TestServer(create_activity_app(123456))) as client:
+            page = await client.get("/")
+            self.assertEqual(page.status, 200)
+            text = await page.text()
+            self.assertIn('new window.DiscordSDK("123456")', text)
+            self.assertNotIn("__CLIENT_ID__", text)
+            self.assertEqual((await client.get("/sdk.js")).status, 200)
+            song = await client.get("/return_to_me.mp3")
+            self.assertEqual(song.status, 200)
+            self.assertEqual((await client.get("/../bot.py")).status, 404)
 
 
 if __name__ == "__main__":

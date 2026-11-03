@@ -1907,11 +1907,20 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         interaction.response.send_message = AsyncMock()
         with patch.object(
             ProfileMusicSelect, "values", ["return_to_me"], create=True
-        ):
+        ), patch("bot.send_profile_voice_message", AsyncMock(return_value=False)):
             await select.callback(interaction)
         kwargs = interaction.response.send_message.call_args.kwargs
         self.assertTrue(kwargs["ephemeral"])
         self.assertEqual(kwargs["file"].filename, "return_to_me.mp3")
+
+        interaction.response.send_message = AsyncMock()
+        voice = AsyncMock(return_value=True)
+        with patch.object(
+            ProfileMusicSelect, "values", ["return_to_me"], create=True
+        ), patch("bot.send_profile_voice_message", voice):
+            await select.callback(interaction)
+        voice.assert_awaited_once_with(interaction)
+        interaction.response.send_message.assert_not_awaited()
 
     async def test_only_preview_owner_can_edit_preview(self) -> None:
         self.bot.is_application_owner = AsyncMock(return_value=True)

@@ -320,6 +320,15 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
         "frame": frozenset({"jirachi"}),
     },
 }
+PROFILE_MUSIC: Final[dict[int, dict[str, tuple[str, str, Path]]]] = {
+    PROFILE_JIRACHI_USER_ID: {
+        "return_to_me": (
+            "Return to me",
+            "Plays a looping song only you can hear",
+            Path(__file__).with_name("music") / "return_to_me.mp3",
+        ),
+    },
+}
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",
     "background": "Background",
@@ -5948,11 +5957,68 @@ class ProfileEditSelect(discord.ui.Select):
             )
 
 
+class ProfileMusicSelect(discord.ui.Select):
+    def __init__(self, profile_view: "ProfileView", row: int) -> None:
+        self.profile_view = profile_view
+        super().__init__(
+            placeholder="Music",
+            options=[
+                discord.SelectOption(
+                    label=label,
+                    value=value,
+                    description=description,
+                )
+                for value, (label, description, _path) in PROFILE_MUSIC[
+                    profile_view.user_id
+                ].items()
+            ],
+            min_values=1,
+            max_values=1,
+            row=row,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        track = PROFILE_MUSIC.get(self.profile_view.user_id, {}).get(
+            self.values[0]
+        )
+        if interaction.user.id != self.profile_view.user_id or track is None:
+            await interaction.response.send_message(
+                "Only the owner of this profile can play its music.",
+                ephemeral=True,
+            )
+            return
+        label, _description, path = track
+        try:
+            await interaction.response.send_message(
+                f"{label} - press play. Only you can see and hear this.",
+                file=discord.File(path, filename=path.name),
+                ephemeral=True,
+            )
+        except (OSError, discord.HTTPException):
+            logger.exception("Could not send profile music %s", path)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "I couldn't load the music. Check the bot logs.",
+                    ephemeral=True,
+                )
+            return
+        try:
+            await interaction.message.edit(
+                view=ProfileEditView(self.profile_view)
+            )
+        except discord.HTTPException:
+            logger.exception("Could not reset the profile music selector")
+
+
 class ProfileEditView(discord.ui.View):
     def __init__(self, profile_view: "ProfileView") -> None:
         super().__init__(timeout=300)
         for row, setting in enumerate(PROFILE_SETTING_LABELS):
             self.add_item(ProfileEditSelect(profile_view, setting, row))
+        if profile_view.user_id in PROFILE_MUSIC:
+            self.add_item(
+                ProfileMusicSelect(profile_view, len(PROFILE_SETTING_LABELS))
+            )
 
 
 class ProfileEditButton(discord.ui.Button):

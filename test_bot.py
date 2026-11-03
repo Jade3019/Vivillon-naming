@@ -143,6 +143,8 @@ from bot import (
     PROFILE_FRAME_SCALES,
     PROFILE_CARD_SCALES,
     PROFILE_FLOWER_SPRING_USER_ID,
+    PROFILE_JIRACHI_USER_ID,
+    PROFILE_MUSIC,
     PROFILE_MARSHADOW_USER_ID,
     PROFILE_MOONLIT_USER_ID,
     PROFILE_DEFAULTS,
@@ -156,6 +158,7 @@ from bot import (
     profile_background_tint,
     ProfileView,
     ProfileEditView,
+    ProfileMusicSelect,
     count_qualifying_sentences,
     ChatEventSession,
     EventMenuView,
@@ -1870,6 +1873,41 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             load_profile_data(self.bot.profile_data_path)[0]["456"]["text_color"],
             "blue",
         )
+
+    async def test_music_picker_is_only_for_its_owner_and_plays_privately(
+        self,
+    ) -> None:
+        other_view = ProfileEditView(ProfileView(self.bot, 456, SERVER_ID))
+        self.assertEqual(len(other_view.children), 4)
+
+        profile_view = ProfileView(self.bot, PROFILE_JIRACHI_USER_ID, SERVER_ID)
+        editor = ProfileEditView(profile_view)
+        select = editor.children[4]
+        self.assertEqual(select.placeholder, "Music")
+        self.assertEqual(
+            [option.label for option in select.options], ["Return to me"]
+        )
+        self.assertTrue(PROFILE_MUSIC[PROFILE_JIRACHI_USER_ID]["return_to_me"][2].exists())
+
+        interaction = Mock()
+        interaction.user.id = 789
+        interaction.response.send_message = AsyncMock()
+        interaction.message.edit = AsyncMock()
+        with patch.object(
+            ProfileMusicSelect, "values", ["return_to_me"], create=True
+        ):
+            await select.callback(interaction)
+        self.assertNotIn("file", interaction.response.send_message.call_args.kwargs)
+
+        interaction.user.id = PROFILE_JIRACHI_USER_ID
+        interaction.response.send_message = AsyncMock()
+        with patch.object(
+            ProfileMusicSelect, "values", ["return_to_me"], create=True
+        ):
+            await select.callback(interaction)
+        kwargs = interaction.response.send_message.call_args.kwargs
+        self.assertTrue(kwargs["ephemeral"])
+        self.assertEqual(kwargs["file"].filename, "return_to_me.mp3")
 
     async def test_only_preview_owner_can_edit_preview(self) -> None:
         self.bot.is_application_owner = AsyncMock(return_value=True)

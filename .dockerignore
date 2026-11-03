@@ -6,3 +6,4 @@ __pycache__/
 .bank_cache/
 pokemon_images/archive/
 test/
+music/*.mp4

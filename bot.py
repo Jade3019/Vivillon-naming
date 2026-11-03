@@ -513,7 +513,7 @@ class Config:
     poketwo_bot_id: int
     max_concurrent_vision_requests: int
     openai_model: str
-    openai_image_detail: str = "low"
+    openai_image_detail: str = "high"
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -539,7 +539,7 @@ class Config:
         if not poketwo_bot_id:
             raise ValueError("POKETWO_BOT_ID is required")
 
-        image_detail = os.environ.get("OPENAI_IMAGE_DETAIL", "low").strip().lower()
+        image_detail = os.environ.get("OPENAI_IMAGE_DETAIL", "high").strip().lower()
         if image_detail not in {"low", "high", "auto"}:
             raise ValueError("OPENAI_IMAGE_DETAIL must be low, high, or auto")
         try:
@@ -1033,7 +1033,7 @@ async def recognize_pokemon(
     client: AsyncOpenAI | None,
     http: aiohttp.ClientSession,
     model: str,
-    detail: str = "low",
+    detail: str = "high",
     matcher: ImageMatcher | None = None,
 ) -> tuple[str, float]:
     downloaded: tuple[bytes, str] | None = None
@@ -1163,7 +1163,10 @@ async def request_prediction(
                 "image. The species may be any Pokémon in the National Pokédex "
                 "through #1026. Inspect the Pokémon itself and compare its overall "
                 "silhouette, body proportions, face, appendages, colors, markings, "
-                "and distinctive accessories. Use multiple visible traits to "
+                "and distinctive accessories. If this is a Discord screenshot, "
+                "focus on the largest embedded wild-spawn artwork; ignore "
+                "surrounding chat, UI text, other bot guesses, and smaller "
+                "catch-card thumbnails. Use multiple visible traits to "
                 "identify it; do not rely on a single color, type, pose, background, "
                 "or habitat. For Finizen versus Palafin, specifically check the "
                 "chest/underside: Palafin has a red, heart-shaped mark there, while "
@@ -1178,6 +1181,9 @@ async def request_prediction(
                 "exact listed form name; otherwise return the base species name. "
                 "Choose the closest match to the visible evidence, and lower the "
                 "confidence when important features are unclear or obscured. "
+                "When the Pokémon is clearly visible and its distinctive traits "
+                "support one identification, use high confidence; reserve low "
+                "confidence for genuinely ambiguous, obscured, or unreadable images. "
                 "Return only the single most likely Pokémon or custom form name. "
                 "Never return a description, reasoning, multiple candidates, "
                 "alternate names, aliases, or a list. Estimate "

@@ -118,7 +118,7 @@ the current server with an active incense. It checks the latest 100 messages in
 channels without a tracked incense, so the bot needs permission to read channel
 history to recover incense activity it missed.
 
-Image analysis uses `low` detail by default for faster naming; set `OPENAI_IMAGE_DETAIL` to `high` or `auto` for more accuracy on look-alike Pokémon. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
+Image analysis uses `high` detail by default for more reliable recognition, including screenshots with surrounding Discord UI; set `OPENAI_IMAGE_DETAIL` to `low` or `auto` to change it. For speed, OpenAI fetches the spawn image directly from its URL (the bot only downloads and uploads it itself if that fails), and model replies are capped at 60 tokens.
 
 When naming is enabled, the bot attempts to recognize every Pokétwo spawn with
 an image and replies with one predicted name and its estimated confidence

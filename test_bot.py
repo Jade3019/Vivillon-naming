@@ -276,6 +276,9 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("return its exact listed form name", prompt)
         self.assertIn("Palafin has a red, heart-shaped mark", prompt)
         self.assertIn("Finizen does not", prompt)
+        self.assertIn("focus on the largest embedded wild-spawn artwork", prompt)
+        self.assertIn("ignore surrounding chat, UI text, other bot", prompt)
+        self.assertIn("reserve low confidence for genuinely ambiguous", prompt)
         self.assertIn("Always provide your single best Pokémon guess", prompt)
 
     async def test_inconclusive_local_match_uses_vision_prediction(self) -> None:

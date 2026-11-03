@@ -530,7 +530,7 @@ When a spawn is clearly one of the known Pokémon (the Pokémon's own features a
 ## Music Activity
 
 The profile **Music** picker launches a Discord Activity that loops
-`activity/return_to_me.mp3` and keeps playing while the member browses other
+`activity/return_to_me.wav` and keeps playing while the member browses other
 channels. If the Activity can't launch, the member gets the song by DM instead.
 
 Set `MUSIC_ACTIVITY_PORT` to the port your host forwards to a public HTTPS

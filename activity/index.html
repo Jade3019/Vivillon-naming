@@ -18,28 +18,48 @@
   <h2 id="title">Return to me</h2>
   <small id="status">Playing on loop. Keep this open and browse Discord.</small><br>
   <button id="toggle" hidden>Play</button>
-  <audio id="song" src="return_to_me.mp3" loop preload="auto"></audio>
 </main>
 <script src="sdk.js"></script>
 <script>
-  const song = document.getElementById("song");
-  const toggle = document.getElementById("toggle");
   const status = document.getElementById("status");
+  const toggle = document.getElementById("toggle");
+  // Web Audio loops an uncompressed buffer, so there is no gap at the loop point.
+  const context = new (window.AudioContext || window.webkitAudioContext)();
+  let buffer = null;
+  let source = null;
+
+  const loaded = fetch("return_to_me.wav")
+    .then((response) => response.arrayBuffer())
+    .then((data) => context.decodeAudioData(data))
+    .then((decoded) => { buffer = decoded; });
 
   function showButton(text) {
     toggle.textContent = text;
     toggle.hidden = false;
   }
 
+  async function start() {
+    await loaded;
+    await context.resume();
+    if (context.state !== "running") throw new Error("blocked");
+    if (source) return;
+    source = context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(context.destination);
+    source.start();
+    status.textContent = "Playing on loop. Keep this open and browse Discord.";
+    showButton("Pause");
+  }
+
   toggle.addEventListener("click", async () => {
-    if (song.paused) {
-      try { await song.play(); } catch (error) { return; }
-      status.textContent = "Playing on loop. Keep this open and browse Discord.";
-      showButton("Pause");
-    } else {
-      song.pause();
+    if (source) {
+      source.stop();
+      source = null;
       status.textContent = "Paused.";
       showButton("Play");
+    } else {
+      try { await start(); } catch (error) { console.error(error); }
     }
   });
 
@@ -51,8 +71,7 @@
       console.error("Discord SDK failed", error);
     }
     try {
-      await song.play();
-      showButton("Pause");
+      await start();
     } catch (error) {
       status.textContent = "Press play to start the song.";
       showButton("Play");

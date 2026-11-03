@@ -8362,7 +8362,7 @@ class MusicActivityAppTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('new window.DiscordSDK("123456")', text)
             self.assertNotIn("__CLIENT_ID__", text)
             self.assertEqual((await client.get("/sdk.js")).status, 200)
-            song = await client.get("/return_to_me.mp3")
+            song = await client.get("/return_to_me.wav")
             self.assertEqual(song.status, 200)
             self.assertEqual((await client.get("/../bot.py")).status, 404)
 

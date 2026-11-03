@@ -135,14 +135,17 @@ similar species and forms. Image recognition can still make mistakes, so check
 guesses before relying on them. Guesses below 50% are still named, and a
 low-accuracy alert mentioning the configured alert recipient, with the
 confidence and source link, is sent to the recognition alert channel. An
-unverified Vivillon form prediction is still named at low confidence. It then
+agreeing local match with sufficient feature votes raises a low-confidence
+vision guess to the alert cutoff. An unverified Vivillon form prediction is
+still named at low confidence. It then
 posts the matching Pokétwo catch command as inline code for easier copying,
 preceded by a bold “Copy Here >” label, when Assisted mode is on. Maushold's
 Family-of-Three and Family-of-Four appearances are displayed simply as
 Maushold. A separate
 desktop copy card
 below it shows “Catch [Pokémon]”, “Copy Below”, and the Pokétwo catch command.
-The model's “Alola Graveler” alias is normalized to “Alolan Graveler”.
+Regional form names are displayed with their demonyms, such as Alolan,
+Galarian, and Hisuian, even when a model or form catalog uses the region name.
 Assisted mode can be turned off to show names and mentions without catch commands.
 Discord displays both copy formats on mobile and desktop. Discord's copy controls
 depend on the client; the bot cannot directly write to a user's clipboard. Pure

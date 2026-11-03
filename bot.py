@@ -25,6 +25,8 @@ from image_match import (
     FEATURES_PER_IMAGE,
     FORM_DISPLAY_NAMES,
     ARCEUS_FORM_SET,
+    canonicalize_regional_name,
+    minimum_votes_for,
     SILVALLY_FORMS,
     VIVILLON_FORM_SET,
     ImageMatcher,
@@ -387,7 +389,9 @@ def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
             validated_entries.append(
                 {
                     "identifier": entry["identifier"],
-                    "display_name": entry["display_name"],
+                    "display_name": canonicalize_regional_name(
+                        entry["display_name"]
+                    ),
                 }
             )
         forms[species_name] = validated_entries
@@ -1088,6 +1092,24 @@ async def recognize_pokemon(
             prediction = prediction[0], min(prediction[1], LOW_ACCURACY_THRESHOLD - 0.01)
         else:
             prediction = matched_form, prediction[1]
+    if (
+        prediction[1] < LOW_ACCURACY_THRESHOLD
+        and matcher is not None
+        and downloaded is not None
+    ):
+        local_guess = await asyncio.to_thread(matcher.best_guess, image_bytes)
+        if (
+            local_guess is not None
+            and normalize_pokemon_alias(local_guess[0])
+            == normalize_pokemon_alias(prediction[0])
+            and local_guess[1] >= minimum_votes_for(local_guess[0])
+        ):
+            logger.info(
+                "Local matcher corroborated low-confidence guess %s (%d votes)",
+                prediction[0],
+                local_guess[1],
+            )
+            prediction = prediction[0], float(LOW_ACCURACY_THRESHOLD)
     return prediction
 
 
@@ -1171,7 +1193,7 @@ async def request_prediction(
         or not 0 <= confidence <= 100
     ):
         raise ValueError("Vision model response included an invalid confidence percentage")
-    name = unicodedata.normalize("NFC", name.strip())
+    name = canonicalize_regional_name(unicodedata.normalize("NFC", name.strip()))
     if not name or len(name) > 60 or (
         not is_valid_pokemon_name(name) and not is_missingno_name(name)
     ):
@@ -1195,7 +1217,7 @@ def is_missingno_name(name: str) -> bool:
 def display_pokemon_name(name: str) -> str:
     if name.casefold() == "male meowstic":
         return "Meowstic"
-    return FORM_DISPLAY_NAMES.get(name, name)
+    return FORM_DISPLAY_NAMES.get(canonicalize_regional_name(name), canonicalize_regional_name(name))
 
 
 def format_guess(
@@ -4859,6 +4881,7 @@ NAME_SUGGESTION_TIMEOUT_SECONDS: Final[int] = 60
 
 
 def canonicalize_pokemon_name(name: str) -> str:
+    name = canonicalize_regional_name(name)
     words = normalize_pokemon_alias(name.replace("’", "'")).split()
     prefix_count = 0
     while (

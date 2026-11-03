@@ -331,6 +331,66 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, ("Vivillon", 49.99))
 
+    async def test_local_matcher_agreement_raises_low_confidence_prediction_to_alert_cutoff(
+        self,
+    ) -> None:
+        import bot
+
+        matcher = Mock(entries=["Wiglett"])
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
+            patch(
+                "bot.asyncio.to_thread",
+                new=AsyncMock(side_effect=[None, ("Wiglett", 6)]),
+            ),
+            patch(
+                "bot.request_prediction",
+                new=AsyncMock(return_value=("Wiglett", 2.0)),
+            ),
+        ):
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=Mock(),
+                http=Mock(),
+                model="test-model",
+                matcher=matcher,
+            )
+
+        self.assertEqual(result, ("Wiglett", 50.0))
+
+    async def test_weak_local_agreement_does_not_raise_low_confidence_prediction(
+        self,
+    ) -> None:
+        import bot
+
+        matcher = Mock(entries=["Wiglett"])
+        with (
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
+            patch(
+                "bot.asyncio.to_thread",
+                new=AsyncMock(side_effect=[None, ("Wiglett", 5)]),
+            ),
+            patch(
+                "bot.request_prediction",
+                new=AsyncMock(return_value=("Wiglett", 2.0)),
+            ),
+        ):
+            result = await bot.recognize_pokemon(
+                "https://example.test/spawn.png",
+                client=Mock(),
+                http=Mock(),
+                model="test-model",
+                matcher=matcher,
+            )
+
+        self.assertEqual(result, ("Wiglett", 2.0))
+
     async def test_reference_match_log_includes_split_timings(self) -> None:
         import bot
 
@@ -7478,14 +7538,28 @@ class ReservationPersistenceTests(unittest.TestCase):
         forms = load_pokemon_forms(Path(__file__).with_name("pokemon_forms.json"))
 
         self.assertEqual(forms["pichu"][1]["display_name"], "spiky-eared pichu")
-        self.assertFalse(
-            any("alola" in form["identifier"] for form in forms["raichu"])
-        )
+        self.assertEqual(forms["raichu"][1]["display_name"], "Alolan Raichu")
+        self.assertEqual(forms["meowth"][3]["display_name"], "Galarian Meowth")
+        self.assertEqual(forms["raichu"][1]["identifier"], "raichu-alola")
         self.assertEqual(forms["arceus"][0]["identifier"], "arceus-normal")
         self.assertEqual(forms["arceus"][0]["display_name"], "normal arceus")
         self.assertFalse(
             any(form["identifier"] == "arceus-unknown" for form in forms["arceus"])
         )
+
+    def test_regional_name_variants_use_demonyms(self) -> None:
+        from image_match import canonicalize_regional_name
+
+        for alias, expected in (
+            ("Alola Sandslash", "Alolan Sandslash"),
+            ("Raichu-Alola", "Alolan Raichu"),
+            ("Galar Slowbro", "Galarian Slowbro"),
+            ("Darmanitan-Galar-Zen", "Galarian Zen Darmanitan"),
+            ("Hisui Sneasel", "Hisuian Sneasel"),
+        ):
+            with self.subTest(alias=alias):
+                self.assertEqual(canonicalize_regional_name(alias), expected)
+                self.assertEqual(bot_module.display_pokemon_name(alias), expected)
 
     def test_formats_reserve_search_when_pokemon_is_not_reserved(self) -> None:
         embeds = format_pokemon_reserver_embeds({}, 1, "scatterbug")

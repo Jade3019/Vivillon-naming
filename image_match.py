@@ -50,6 +50,34 @@ FORM_NAME_ALIASES = {
     "hisui sneasel": "Hisuian Sneasel",
     "noice eiscue": "Eiscue",
 }
+REGIONAL_NAME_PREFIXES = {
+    "alola": "Alolan",
+    "alolan": "Alolan",
+    "galar": "Galarian",
+    "galarian": "Galarian",
+    "hisui": "Hisuian",
+    "hisuian": "Hisuian",
+}
+
+
+def canonicalize_regional_name(name: str) -> str:
+    parts = re.split(r"[\s_-]+", name.strip())
+    for index, part in enumerate(parts):
+        prefix = REGIONAL_NAME_PREFIXES.get(part.casefold())
+        if prefix is None:
+            continue
+        if index == 0:
+            name_parts = parts[1:]
+        elif index == len(parts) - 1:
+            name_parts = parts[:index]
+        else:
+            name_parts = [*parts[index + 1 :], *parts[:index]]
+        return " ".join(
+            (prefix, *(part[:1].upper() + part[1:] for part in name_parts))
+        )
+    return name
+
+
 # Bank entries that are kept separate for recognition but reported under another name.
 DISPLAY_NAMES = {
     "Busted Mimikyu": "Mimikyu",
@@ -79,6 +107,7 @@ CUSTOM_FORM_SPECIES = {
     "Ride Cyclizar": "Cyclizar",
     "Battle Cyclizar": "Cyclizar",
     "Gliding Build Koraidon": "Koraidon",
+    "Green-Plumage Squawkabilly": "Squawkabilly",
     "White-Plumage Squawkabilly": "Squawkabilly",
     "Yellow-Plumage Squawkabilly": "Squawkabilly",
     "Zenith Marshadow": "Marshadow",
@@ -88,6 +117,12 @@ CUSTOM_FORM_SPECIES = {
     "Blaze Breed Tauros": "Tauros",
     "Aqua Breed Tauros": "Tauros",
 }
+SQUAWKABILLY_PLUMAGE_FORMS = (
+    "Blue-Plumage Squawkabilly",
+    "Green-Plumage Squawkabilly",
+    "White-Plumage Squawkabilly",
+    "Yellow-Plumage Squawkabilly",
+)
 # Folders like "Unown Variant 3" are learned separately (so each can have its own
 # thumbnail) but the Pokémon is still named after the base species.
 VARIANT_PATTERN = re.compile(r"^(?P<base>.+?)\s+variant\s+(?P<number>\d+)$", re.IGNORECASE)
@@ -204,14 +239,22 @@ INDISTINGUISHABLE_FAMILIES = {"Palafin", "Silvally", "Vivillon", "Arceus"}
 def family_name(name: str) -> str:
     normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
     name = FORM_NAME_ALIASES.get(normalized, name)
+    name = canonicalize_regional_name(name)
     if normalized in MAUSHOLD_FORM_ALIASES:
         return "Maushold"
     return FAMILY_OVERRIDES.get(name, base_pokemon_name(name))
 
 
+def minimum_votes_for(name: str) -> int:
+    if VARIANT_PATTERN.match(name) is not None:
+        return 2
+    return SPECIES_MIN_VOTES.get(name, MIN_VOTES)
+
+
 def species_display_name(name: str) -> str:
     normalized = re.sub(r"[\s_-]+", " ", name.casefold()).strip()
     name = FORM_NAME_ALIASES.get(normalized, name)
+    name = canonicalize_regional_name(name)
     if normalized in MAUSHOLD_FORM_ALIASES:
         return "Maushold"
     return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))
@@ -311,7 +354,7 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
             else None
         )
         for form in forms:
-            display = form["display_name"].title()
+            display = canonicalize_regional_name(form["display_name"].title())
             canonical = canonical_species or display
             forms_by_key[key(form["identifier"])] = canonical
             forms_by_key[key(form["display_name"])] = canonical
@@ -335,6 +378,12 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
         normalized_key = key(raw)
         if normalized_key in gendered_aliases:
             return gendered_aliases[normalized_key]
+        squawkabilly_form = next(
+            (form for form in SQUAWKABILLY_PLUMAGE_FORMS if key(form) == normalized_key),
+            None,
+        )
+        if squawkabilly_form is not None:
+            return squawkabilly_form
         if normalized_key in custom_forms_by_key:
             return custom_forms_by_key[normalized_key]
         if normalized_key in forms_by_key:
@@ -793,10 +842,10 @@ class ImageMatcher:
             second = outside[0] if outside else 0
         # Variant pictures (e.g. Unown letters) are plain shapes with few features.
         is_variant = VARIANT_PATTERN.match(name) is not None
-        min_votes = SPECIES_MIN_VOTES.get(name, MIN_VOTES)
+        min_votes = minimum_votes_for(name)
         min_margin = SPECIES_MIN_MARGIN.get(name, MIN_MARGIN)
         if is_variant:
-            min_votes, min_margin = 2, 2
+            min_margin = 2
         elif relaxed:
             if name == "Pumpkaboo":
                 min_votes, min_margin = 99, 99

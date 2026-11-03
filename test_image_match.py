@@ -652,6 +652,7 @@ class VivillonTests(unittest.TestCase):
             "Debutante Trim Furfrou": "Furfrou",
             "Trash Burmy": "Burmy",
             "High-speed Flight Configuration Genesect": "Genesect",
+            "Green-Plumage Squawkabilly": "Squawkabilly",
             "White-Plumage Squawkabilly": "Squawkabilly",
             "Yellow-Plumage Squawkabilly": "Squawkabilly",
         }
@@ -660,7 +661,8 @@ class VivillonTests(unittest.TestCase):
                 self.assertIn(form, groups)
                 self.assertEqual(image_match.species_display_name(form), species)
                 self.assertEqual(image_match.family_name(form), species)
-                self.assertIsNotNone(bot.custom_thumbnail_path(form), form)
+                if form != "Green-Plumage Squawkabilly":
+                    self.assertIsNotNone(bot.custom_thumbnail_path(form), form)
 
     def test_pattern_is_chosen_by_appearance_even_mirrored(self) -> None:
         import cv2
@@ -813,7 +815,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         image_path = (
             Path(__file__).with_name("pokemon_images")
-            / "Squawkabilly"
+            / "Green-Plumage Squawkabilly"
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
@@ -827,7 +829,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
                 self.assertIsNotNone(result)
-                self.assertEqual(result[0], "Squawkabilly")
+                self.assertEqual(result[0], "Green-Plumage Squawkabilly")
 
     def test_yellow_squawkabilly_spawn_is_recognized_when_mirrored(self) -> None:
         import cv2
@@ -1008,7 +1010,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 "user-example-5.png",
             ),
             ("Trash Burmy", "user-example.png"),
-            ("Squawkabilly", "user-example-6.png"),
+            ("Green-Plumage Squawkabilly", "user-example-6.png"),
             ("Smoliv", "user-example-1.png"),
             ("Bellsprout", "user-example-2.png"),
             ("Matron Trim Furfrou", "user-example-3.png"),

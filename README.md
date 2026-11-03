@@ -397,10 +397,10 @@ Moonlit frame are limited to a different designated profile. The Marshadow
 background and middle background, plus the Moonveil frame, are limited to a
 third designated profile. Moonveil enlarges the profile card to fit its frame.
 The Jirachi background, middle background, and frame are limited to a
-fourth designated profile. That profile, and one other designated profile, also get a **Music** picker in the
-edit menu; choosing **Return to me** sends a one-hour voice message
-(`music/return_to_me.ogg`, with `music/return_to_me.mp3` as a fallback) as a
-private reply, so only the profile's owner can see and hear it. Each
+fourth designated profile. Every profile also gets a **Music** picker in the
+edit menu; choosing **Return to me** DMs the owner a one-hour voice message
+(`music/return_to_me.ogg`); if DMs are closed, the owner gets
+`music/return_to_me.mp3` as a private reply instead. Each
 set is hidden from other members and reset to defaults if found in their
 saved settings.
 Profile choices and per-server totals are saved in `profile_data.json` by

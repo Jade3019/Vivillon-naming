@@ -320,7 +320,6 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
         "frame": frozenset({"jirachi"}),
     },
 }
-PROFILE_MUSIC_USER_ID: Final[int] = 729509574486523907
 PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {
     "return_to_me": (
         "Return to me",
@@ -335,10 +334,6 @@ PROFILE_VOICE_MESSAGE_SECONDS: Final[float] = 3604.28
 PROFILE_VOICE_MESSAGE_WAVEFORM: Final[str] = (
     "D+vnx1rm5LJr2NaF3t3UoejArfHO1If5b9E3AgCj5ONevejdTMjovoD01KTtwt2U9t5y/8F5kg4AM+jlsmvl46F158ty+srUt+XBmvvA1p/5cLsrAQC06txS0ePiOerYtJTp5Z3f1Mms7t9567WSdwoATubkooPs4YOG7cSB68bNxeu3q+bWt7X1cqohAADL5OE+3OHjR+zJrK3t25nV3MC98NeA6p6uWgcAb+rdiZ7n4mul29N93duw5NfKoN/eo87mdKAZAADZ4uRC6ObJXeDDpL/w1ZbrxLvW4dWE9IHCRgQAjubhbq/k4lu52dB+59Sd/MfYmO/OlevRdpgTAA=="
 )
-PROFILE_MUSIC: Final[dict[int, dict[str, tuple[str, str, Path]]]] = {
-    PROFILE_JIRACHI_USER_ID: PROFILE_RETURN_TO_ME,
-    PROFILE_MUSIC_USER_ID: PROFILE_RETURN_TO_ME,
-}
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",
     "background": "Background",
@@ -5967,26 +5962,24 @@ class ProfileEditSelect(discord.ui.Select):
             )
 
 
-async def send_profile_voice_message(interaction: discord.Interaction) -> bool:
-    """Reply privately with a Discord voice message, which plays inline."""
+async def send_profile_voice_dm(interaction: discord.Interaction) -> bool:
+    """DM the user a voice message, which plays inline and persists."""
     try:
         audio = await asyncio.to_thread(PROFILE_VOICE_MESSAGE_FILE.read_bytes)
-    except OSError:
-        logger.exception("Could not read %s", PROFILE_VOICE_MESSAGE_FILE)
+        dm_channel = await interaction.user.create_dm()
+    except (OSError, discord.HTTPException):
+        logger.exception("Could not prepare the profile voice DM")
         return False
     payload = {
-        "type": 4,
-        "data": {
-            "flags": (1 << 13) | (1 << 6),
-            "attachments": [
-                {
-                    "id": "0",
-                    "filename": "voice-message.ogg",
-                    "duration_secs": PROFILE_VOICE_MESSAGE_SECONDS,
-                    "waveform": PROFILE_VOICE_MESSAGE_WAVEFORM,
-                }
-            ],
-        },
+        "flags": 1 << 13,
+        "attachments": [
+            {
+                "id": "0",
+                "filename": "voice-message.ogg",
+                "duration_secs": PROFILE_VOICE_MESSAGE_SECONDS,
+                "waveform": PROFILE_VOICE_MESSAGE_WAVEFORM,
+            }
+        ],
     }
     form = aiohttp.FormData()
     form.add_field(
@@ -5998,22 +5991,20 @@ async def send_profile_voice_message(interaction: discord.Interaction) -> bool:
         filename="voice-message.ogg",
         content_type="audio/ogg",
     )
-    url = (
-        "https://discord.com/api/v10/interactions/"
-        f"{interaction.id}/{interaction.token}/callback"
-    )
+    url = f"https://discord.com/api/v10/channels/{dm_channel.id}/messages"
+    headers = {"Authorization": f"Bot {interaction.client.http.token}"}
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=form) as response:
+            async with session.post(url, data=form, headers=headers) as response:
                 if response.status < 300:
                     return True
                 logger.warning(
-                    "Discord rejected the profile voice message (%s): %s",
+                    "Discord rejected the profile voice DM (%s): %s",
                     response.status,
                     (await response.text())[:300],
                 )
     except aiohttp.ClientError:
-        logger.exception("Could not send the profile voice message")
+        logger.exception("Could not send the profile voice DM")
     return False
 
 
@@ -6028,9 +6019,9 @@ class ProfileMusicSelect(discord.ui.Select):
                     value=value,
                     description=description,
                 )
-                for value, (label, description, _path) in PROFILE_MUSIC[
-                    profile_view.user_id
-                ].items()
+                for value, (label, description, _path) in (
+                    PROFILE_RETURN_TO_ME.items()
+                )
             ],
             min_values=1,
             max_values=1,
@@ -6038,9 +6029,7 @@ class ProfileMusicSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        track = PROFILE_MUSIC.get(self.profile_view.user_id, {}).get(
-            self.values[0]
-        )
+        track = PROFILE_RETURN_TO_ME.get(self.values[0])
         if interaction.user.id != self.profile_view.user_id or track is None:
             await interaction.response.send_message(
                 "Only the owner of this profile can play its music.",
@@ -6048,22 +6037,20 @@ class ProfileMusicSelect(discord.ui.Select):
             )
             return
         _label, _description, path = track
-        try:
-            if not await send_profile_voice_message(interaction):
-                await interaction.response.send_message(
+        await interaction.response.defer()
+        if not await send_profile_voice_dm(interaction):
+            try:
+                await interaction.followup.send(
+                    "I couldn't DM you, so here is the song as a file. "
+                    "Open your DMs from server members to get the voice message.",
                     file=discord.File(path, filename=path.name),
                     ephemeral=True,
                 )
-        except (OSError, discord.HTTPException):
-            logger.exception("Could not send profile music %s", path)
-            if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "I couldn't load the music. Check the bot logs.",
-                    ephemeral=True,
-                )
-            return
+            except (OSError, discord.HTTPException):
+                logger.exception("Could not send profile music %s", path)
+                return
         try:
-            await interaction.message.edit(
+            await interaction.edit_original_response(
                 view=ProfileEditView(self.profile_view)
             )
         except discord.HTTPException:
@@ -6075,7 +6062,7 @@ class ProfileEditView(discord.ui.View):
         super().__init__(timeout=300)
         for row, setting in enumerate(PROFILE_SETTING_LABELS):
             self.add_item(ProfileEditSelect(profile_view, setting, row))
-        if profile_view.user_id in PROFILE_MUSIC:
+        if profile_view.preview_settings is None:
             self.add_item(
                 ProfileMusicSelect(profile_view, len(PROFILE_SETTING_LABELS))
             )

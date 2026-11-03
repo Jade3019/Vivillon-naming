@@ -144,7 +144,7 @@ from bot import (
     PROFILE_CARD_SCALES,
     PROFILE_FLOWER_SPRING_USER_ID,
     PROFILE_JIRACHI_USER_ID,
-    PROFILE_MUSIC,
+    PROFILE_RETURN_TO_ME,
     PROFILE_MARSHADOW_USER_ID,
     PROFILE_MOONLIT_USER_ID,
     PROFILE_DEFAULTS,
@@ -1877,50 +1877,51 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
     async def test_music_picker_is_only_for_its_owner_and_plays_privately(
         self,
     ) -> None:
-        other_view = ProfileEditView(ProfileView(self.bot, 456, SERVER_ID))
-        self.assertEqual(len(other_view.children), 4)
-        self.assertEqual(
-            len(ProfileEditView(ProfileView(self.bot, 729509574486523907, SERVER_ID)).children),
-            5,
-        )
-
-        profile_view = ProfileView(self.bot, PROFILE_JIRACHI_USER_ID, SERVER_ID)
+        profile_view = ProfileView(self.bot, 456, SERVER_ID)
         editor = ProfileEditView(profile_view)
+        self.assertEqual(len(editor.children), 5)
         select = editor.children[4]
         self.assertEqual(select.placeholder, "Music")
         self.assertEqual(
             [option.label for option in select.options], ["Return to me"]
         )
-        self.assertTrue(PROFILE_MUSIC[PROFILE_JIRACHI_USER_ID]["return_to_me"][2].exists())
+        self.assertTrue(PROFILE_RETURN_TO_ME["return_to_me"][2].exists())
+        preview_view = ProfileView(
+            self.bot, 456, SERVER_ID, preview_owner_id=123
+        )
+        self.assertEqual(len(ProfileEditView(preview_view).children), 4)
 
         interaction = Mock()
         interaction.user.id = 789
         interaction.response.send_message = AsyncMock()
-        interaction.message.edit = AsyncMock()
         with patch.object(
             ProfileMusicSelect, "values", ["return_to_me"], create=True
         ):
             await select.callback(interaction)
-        self.assertNotIn("file", interaction.response.send_message.call_args.kwargs)
+        self.assertEqual(
+            interaction.response.send_message.call_args.kwargs["ephemeral"], True
+        )
 
-        interaction.user.id = PROFILE_JIRACHI_USER_ID
-        interaction.response.send_message = AsyncMock()
+        interaction.user.id = 456
+        interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        sent = AsyncMock(return_value=True)
         with patch.object(
             ProfileMusicSelect, "values", ["return_to_me"], create=True
-        ), patch("bot.send_profile_voice_message", AsyncMock(return_value=False)):
+        ), patch("bot.send_profile_voice_dm", sent):
             await select.callback(interaction)
-        kwargs = interaction.response.send_message.call_args.kwargs
+        sent.assert_awaited_once_with(interaction)
+        interaction.followup.send.assert_not_awaited()
+
+        sent = AsyncMock(return_value=False)
+        with patch.object(
+            ProfileMusicSelect, "values", ["return_to_me"], create=True
+        ), patch("bot.send_profile_voice_dm", sent):
+            await select.callback(interaction)
+        kwargs = interaction.followup.send.call_args.kwargs
         self.assertTrue(kwargs["ephemeral"])
         self.assertEqual(kwargs["file"].filename, "return_to_me.mp3")
-
-        interaction.response.send_message = AsyncMock()
-        voice = AsyncMock(return_value=True)
-        with patch.object(
-            ProfileMusicSelect, "values", ["return_to_me"], create=True
-        ), patch("bot.send_profile_voice_message", voice):
-            await select.callback(interaction)
-        voice.assert_awaited_once_with(interaction)
-        interaction.response.send_message.assert_not_awaited()
 
     async def test_only_preview_owner_can_edit_preview(self) -> None:
         self.bot.is_application_owner = AsyncMock(return_value=True)
@@ -1942,7 +1943,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         )
         self.bot.is_application_owner.assert_not_called()
 
-    async def test_edit_button_opens_four_personalized_dropdowns(self) -> None:
+    async def test_edit_button_opens_five_personalized_dropdowns(self) -> None:
         profile_view = ProfileView(self.bot, 123, SERVER_ID)
         interaction = Mock()
         interaction.user.id = 123
@@ -1956,7 +1957,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(editor, ProfileEditView)
         self.assertEqual(
             [select.placeholder for select in editor.children],
-            ["Text color", "Background", "Middle background", "Frame"],
+            ["Text color", "Background", "Middle background", "Frame", "Music"],
         )
         self.assertEqual(
             [option.label for option in editor.children[1].options],

@@ -6055,9 +6055,12 @@ class ProfileMusicSelect(discord.ui.Select):
         if not launched:
             await self._send_fallback_music(interaction, path)
         try:
-            await interaction.edit_original_response(
-                view=ProfileEditView(self.profile_view)
-            )
+            view = ProfileEditView(self.profile_view)
+            if launched and interaction.message is not None:
+                # Launching an Activity creates no interaction response to edit.
+                await interaction.message.edit(view=view)
+            else:
+                await interaction.edit_original_response(view=view)
         except discord.HTTPException:
             logger.warning("Could not reset the profile music selector", exc_info=True)
 

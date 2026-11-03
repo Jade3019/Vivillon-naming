@@ -398,7 +398,7 @@ background and middle background, plus the Moonveil frame, are limited to a
 third designated profile. Moonveil enlarges the profile card to fit its frame.
 The Jirachi background, middle background, and frame are limited to a
 fourth designated profile. Every profile also gets a **Music** picker in the
-edit menu; choosing **Return to me** DMs the owner a one-hour voice message
+edit menu; choosing **Return to me** DMs the owner a one-hour audio file
 (`music/return_to_me.ogg`); if DMs are closed, the owner gets
 `music/return_to_me.mp3` as a private reply instead. Each
 set is hidden from other members and reset to defaults if found in their

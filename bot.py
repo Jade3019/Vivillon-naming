@@ -327,12 +327,8 @@ PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {
         Path(__file__).with_name("music") / "return_to_me.mp3",
     ),
 }
-PROFILE_VOICE_MESSAGE_FILE: Final[Path] = (
+PROFILE_MUSIC_FILE: Final[Path] = (
     Path(__file__).with_name("music") / "return_to_me.ogg"
-)
-PROFILE_VOICE_MESSAGE_SECONDS: Final[float] = 3604.28
-PROFILE_VOICE_MESSAGE_WAVEFORM: Final[str] = (
-    "D+vnx1rm5LJr2NaF3t3UoejArfHO1If5b9E3AgCj5ONevejdTMjovoD01KTtwt2U9t5y/8F5kg4AM+jlsmvl46F158ty+srUt+XBmvvA1p/5cLsrAQC06txS0ePiOerYtJTp5Z3f1Mms7t9567WSdwoATubkooPs4YOG7cSB68bNxeu3q+bWt7X1cqohAADL5OE+3OHjR+zJrK3t25nV3MC98NeA6p6uWgcAb+rdiZ7n4mul29N93duw5NfKoN/eo87mdKAZAADZ4uRC6ObJXeDDpL/w1ZbrxLvW4dWE9IHCRgQAjubhbq/k4lu52dB+59Sd/MfYmO/OlevRdpgTAA=="
 )
 PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "text_color": "Text color",
@@ -5962,33 +5958,19 @@ class ProfileEditSelect(discord.ui.Select):
             )
 
 
-async def send_profile_voice_dm(interaction: discord.Interaction) -> bool:
-    """DM the user a voice message, which plays inline and persists."""
+async def send_profile_music_dm(interaction: discord.Interaction) -> bool:
+    """DM the user the song as an audio file, which persists."""
     try:
-        audio = await asyncio.to_thread(PROFILE_VOICE_MESSAGE_FILE.read_bytes)
+        audio = await asyncio.to_thread(PROFILE_MUSIC_FILE.read_bytes)
         dm_channel = await interaction.user.create_dm()
     except (OSError, discord.HTTPException):
-        logger.exception("Could not prepare the profile voice DM")
+        logger.exception("Could not prepare the profile music DM")
         return False
-    payload = {
-        "flags": 1 << 13,
-        "attachments": [
-            {
-                "id": "0",
-                "filename": "voice-message.ogg",
-                "duration_secs": PROFILE_VOICE_MESSAGE_SECONDS,
-                "waveform": PROFILE_VOICE_MESSAGE_WAVEFORM,
-            }
-        ],
-    }
     form = aiohttp.FormData()
-    form.add_field(
-        "payload_json", json.dumps(payload), content_type="application/json"
-    )
     form.add_field(
         "files[0]",
         audio,
-        filename="voice-message.ogg",
+        filename="return_to_me.ogg",
         content_type="audio/ogg",
     )
     url = f"https://discord.com/api/v10/channels/{dm_channel.id}/messages"
@@ -5999,12 +5981,12 @@ async def send_profile_voice_dm(interaction: discord.Interaction) -> bool:
                 if response.status < 300:
                     return True
                 logger.warning(
-                    "Discord rejected the profile voice DM (%s): %s",
+                    "Discord rejected the profile music DM (%s): %s",
                     response.status,
                     (await response.text())[:300],
                 )
     except aiohttp.ClientError:
-        logger.exception("Could not send the profile voice DM")
+        logger.exception("Could not send the profile music DM")
     return False
 
 
@@ -6038,7 +6020,7 @@ class ProfileMusicSelect(discord.ui.Select):
             return
         _label, _description, path = track
         await interaction.response.defer()
-        if not await send_profile_voice_dm(interaction):
+        if not await send_profile_music_dm(interaction):
             try:
                 await interaction.followup.send(
                     "I couldn't DM you, so here is the song as a file. "

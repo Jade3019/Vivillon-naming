@@ -1909,7 +1909,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         sent = AsyncMock(return_value=True)
         with patch.object(
             ProfileMusicSelect, "values", ["return_to_me"], create=True
-        ), patch("bot.send_profile_voice_dm", sent):
+        ), patch("bot.send_profile_music_dm", sent):
             await select.callback(interaction)
         sent.assert_awaited_once_with(interaction)
         interaction.followup.send.assert_not_awaited()
@@ -1917,7 +1917,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         sent = AsyncMock(return_value=False)
         with patch.object(
             ProfileMusicSelect, "values", ["return_to_me"], create=True
-        ), patch("bot.send_profile_voice_dm", sent):
+        ), patch("bot.send_profile_music_dm", sent):
             await select.callback(interaction)
         kwargs = interaction.followup.send.call_args.kwargs
         self.assertTrue(kwargs["ephemeral"])

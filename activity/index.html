@@ -39,8 +39,10 @@
   }
 
   async function start() {
+    // Mobile browsers only allow resume() synchronously inside the tap, so call it before awaiting.
+    const resumed = context.resume();
     await loaded;
-    await context.resume();
+    await resumed;
     if (context.state !== "running") throw new Error("blocked");
     if (source) return;
     source = context.createBufferSource();
@@ -59,7 +61,10 @@
       status.textContent = "Paused.";
       showButton("Play");
     } else {
-      try { await start(); } catch (error) { console.error(error); }
+      try { await start(); } catch (error) {
+        console.error(error);
+        status.textContent = "Could not play audio: " + error.message;
+      }
     }
   });
 

@@ -274,6 +274,8 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertIn("Enchanted Applin (base species: Applin)", prompt)
         self.assertIn("return its exact listed form name", prompt)
+        self.assertIn("Palafin has a red, heart-shaped mark", prompt)
+        self.assertIn("Finizen does not", prompt)
         self.assertIn("Always provide your single best Pokémon guess", prompt)
 
     async def test_inconclusive_local_match_uses_vision_prediction(self) -> None:
@@ -359,7 +361,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
                 matcher=matcher,
             )
 
-        self.assertEqual(result, ("Wiglett", 50.0))
+        self.assertEqual(result, ("Wiglett", 85.0))
 
     async def test_weak_local_agreement_does_not_raise_low_confidence_prediction(
         self,
@@ -5181,7 +5183,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             message.channel.id = 304
             message.created_at = discord.utils.utcnow()
             message.content = (
-                "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "
+                "Congratulations <@123>! You caught a Level 50 Cauldron Reuniclus! "
                 "These colors seem unusual... ✨"
             )
             message.embeds = []
@@ -5191,6 +5193,17 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             vivillon_channel.send.assert_awaited_once()
             shiny_channel.send.assert_awaited_once()
             normal_pokemon_channel.send.assert_not_awaited()
+            for channel in (vivillon_channel, shiny_channel):
+                send_kwargs = channel.send.await_args.kwargs
+                self.assertEqual(
+                    send_kwargs["embed"].thumbnail.url,
+                    "attachment://cauldronreuniclus.png",
+                )
+                self.assertEqual(
+                    send_kwargs["file"].filename,
+                    "cauldronreuniclus.png",
+                )
+                send_kwargs["file"].close()
 
     async def test_normal_starboard_posts_catch_detection_embeds_from_other_bots(
         self,

@@ -131,12 +131,14 @@ If the vision model is unavailable, the bot names the best local reference
 candidate when possible and reports it as a low-confidence guess. The vision
 model compares visible traits such as silhouette, proportions, face, colors,
 and markings to identify Pokémon across the National Pokédex and distinguish
-similar species and forms. Image recognition can still make mistakes, so check
-guesses before relying on them. Guesses below 50% are still named, and a
+similar species and forms. It distinguishes Finizen from Palafin by checking
+for Palafin's red, heart-shaped chest/underside mark when visible. Image
+recognition can still make mistakes, so check guesses before relying on them.
+Guesses below 50% are still named, and a
 low-accuracy alert mentioning the configured alert recipient, with the
 confidence and source link, is sent to the recognition alert channel. An
 agreeing local match with sufficient feature votes raises a low-confidence
-vision guess to the alert cutoff. An unverified Vivillon form prediction is
+vision guess to at least 85%. An unverified Vivillon form prediction is
 still named at low confidence. It then
 posts the matching Pokétwo catch command as inline code for easier copying,
 preceded by a bold “Copy Here >” label, when Assisted mode is on. Maushold's

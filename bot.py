@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal, TypeGuard, TypedDict
 
 import aiohttp
 import discord
@@ -39,6 +39,12 @@ import org_rpc
 from daycare import DaycareFeature
 from help_menu import HELP_COMMAND_PATTERN, build_help_menu_embed
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
+from openai.types.chat import (
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+    ChatCompletionContentPartImageParam,
+)
 
 
 logging.basicConfig(
@@ -570,6 +576,18 @@ def message_text(message: discord.Message) -> str:
     )
 
 
+def is_messageable_channel(
+    channel: object,
+) -> TypeGuard[discord.abc.Messageable]:
+    return callable(getattr(channel, "send", None))
+
+
+def is_renamable_channel(
+    channel: object,
+) -> TypeGuard[discord.TextChannel | discord.Thread]:
+    return callable(getattr(channel, "edit", None))
+
+
 def poketwo_incense_action(content: str, poketwo_bot_id: int) -> str | None:
     mention = rf"<@!?{poketwo_bot_id}>"
     match = re.search(
@@ -624,6 +642,7 @@ def image_url(message: discord.Message) -> str | None:
 
 
 LOW_ACCURACY_THRESHOLD = 50
+CORROBORATED_CONFIDENCE_FLOOR = 85.0
 
 
 def load_low_accuracy_channels(path: Path) -> dict[str, int]:
@@ -898,6 +917,11 @@ def member_guild_permissions(member: object) -> discord.Permissions | None:
     return getattr(member, "guild_permissions", None)
 
 
+def member_is_administrator(member: object) -> bool:
+    permissions = member_guild_permissions(member)
+    return permissions is not None and permissions.administrator
+
+
 def member_has_role_id(member: object, role_id: int) -> bool:
     return any(
         getattr(role, "id", None) == role_id
@@ -1109,7 +1133,7 @@ async def recognize_pokemon(
                 prediction[0],
                 local_guess[1],
             )
-            prediction = prediction[0], float(LOW_ACCURACY_THRESHOLD)
+            prediction = prediction[0], CORROBORATED_CONFIDENCE_FLOOR
     return prediction
 
 
@@ -1124,57 +1148,68 @@ async def request_prediction(
         f"{form} (base species: {species})"
         for form, species in sorted(CUSTOM_FORM_SPECIES.items())
     )
+    if detail == "auto":
+        image_detail: Literal["auto", "low", "high"] = "auto"
+    elif detail == "low":
+        image_detail = "low"
+    elif detail == "high":
+        image_detail = "high"
+    else:
+        raise ValueError(f"Unsupported image detail setting: {detail}")
+    system_message: ChatCompletionSystemMessageParam = {
+            "role": "system",
+            "content": (
+                "Identify the Pokémon species shown in this Pokétwo wild-spawn "
+                "image. The species may be any Pokémon in the National Pokédex "
+                "through #1026. Inspect the Pokémon itself and compare its overall "
+                "silhouette, body proportions, face, appendages, colors, markings, "
+                "and distinctive accessories. Use multiple visible traits to "
+                "identify it; do not rely on a single color, type, pose, background, "
+                "or habitat. For Finizen versus Palafin, specifically check the "
+                "chest/underside: Palafin has a red, heart-shaped mark there, while "
+                "Finizen does not. Use that mark when it is visible; do not guess "
+                "Palafin if it is obscured. Pay particular attention to features "
+                "that separate similar species and neighboring evolutions. "
+                "Identify a regional "
+                "variant or alternate forme only when its visible features support "
+                "that specific form; do not infer details hidden by the image. "
+                "This server also recognizes these custom forms: "
+                f"{custom_forms}. When the image clearly matches one, return its "
+                "exact listed form name; otherwise return the base species name. "
+                "Choose the closest match to the visible evidence, and lower the "
+                "confidence when important features are unclear or obscured. "
+                "Return only the single most likely Pokémon or custom form name. "
+                "Never return a description, reasoning, multiple candidates, "
+                "alternate names, aliases, or a list. Estimate "
+                "confidence in that exact identification as a percentage from 0 "
+                "to 100 with up to two decimal places; confidence should reflect "
+                "how clearly the visible traits support the chosen species and "
+                "form. Return JSON only, "
+                "in the form "
+                '{"name":"one Pokémon or custom form name","confidence":85.34}. '
+                "Include a form or regional name when needed to identify the "
+                "shown Pokémon. Always provide your single best Pokémon guess, "
+                "even when the image is unclear or you are uncertain; lower the "
+                "confidence instead of returning an empty name."
+            ),
+        }
+    image_content: ChatCompletionContentPartImageParam = {
+        "type": "image_url",
+        "image_url": {
+            "url": image_ref,
+            "detail": image_detail,
+        },
+    }
+    user_message: ChatCompletionUserMessageParam = {
+        "role": "user",
+        "content": [image_content],
+    }
+    messages: list[ChatCompletionMessageParam] = [system_message, user_message]
     result = await client.chat.completions.create(
         model=model,
         response_format={"type": "json_object"},
         max_completion_tokens=60,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Identify the Pokémon species shown in this Pokétwo wild-spawn "
-                    "image. The species may be any Pokémon in the National Pokédex "
-                    "through #1026. Inspect the Pokémon itself and compare its overall "
-                    "silhouette, body proportions, face, appendages, colors, markings, "
-                    "and distinctive accessories. Use multiple visible traits to "
-                    "identify it; do not rely on a single color, type, pose, background, "
-                    "or habitat. Pay particular attention to features that separate "
-                    "similar species and neighboring evolutions. Identify a regional "
-                    "variant or alternate forme only when its visible features support "
-                    "that specific form; do not infer details hidden by the image. "
-                    "This server also recognizes these custom forms: "
-                    f"{custom_forms}. When the image clearly matches one, return its "
-                    "exact listed form name; otherwise return the base species name. "
-                    "Choose the closest match to the visible evidence, and lower the "
-                    "confidence when important features are unclear or obscured. "
-                    "Return only the single most likely Pokémon or custom form name. "
-                    "Never return a description, reasoning, multiple candidates, "
-                    "alternate names, aliases, or a list. Estimate "
-                    "confidence in that exact identification as a percentage from 0 "
-                    "to 100 with up to two decimal places; confidence should reflect "
-                    "how clearly the visible traits support the chosen species and "
-                    "form. Return JSON only, "
-                    "in the form "
-                    '{"name":"one Pokémon or custom form name","confidence":85.34}. '
-                    "Include a form or regional name when needed to identify the "
-                    "shown Pokémon. Always provide your single best Pokémon guess, "
-                    "even when the image is unclear or you are uncertain; lower the "
-                    "confidence instead of returning an empty name."
-                ),
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": image_ref,
-                            "detail": detail,
-                        },
-                    }
-                ],
-            },
-        ],
+        messages=messages,
     )
     content = result.choices[0].message.content
     if not content:
@@ -1684,6 +1719,7 @@ def format_type_spawn_embed(
     assisted: bool = True,
     guess_name: str | None = None,
 ) -> discord.Embed:
+    del confidence, guess_name
     embed = discord.Embed(
         description=(
             f"`{format_catch_command(poketwo_bot_id, name)}`" if assisted else None
@@ -1781,10 +1817,10 @@ def custom_thumbnail_path(name: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def custom_normal_starboard_thumbnail_path(
+def custom_starboard_thumbnail_path(
     details: "CatchDetails", category: str
 ) -> Path | None:
-    if category != "normal_pokemon":
+    if category != "normal_pokemon" and not (category == "shiny" and details.shiny):
         return None
     return custom_thumbnail_path(details.pokemon)
 
@@ -2001,10 +2037,12 @@ def parse_catch_detection_details(message: discord.Message) -> CatchDetails | No
     for embed in message.embeds:
         if not is_catch_detection_embed(embed):
             continue
-        fields = {
-            field.name.strip().rstrip(":").strip().casefold(): field.value.strip()
-            for field in embed.fields
-        }
+        fields = {}
+        for field in embed.fields:
+            if isinstance(field.name, str) and isinstance(field.value, str):
+                fields[field.name.strip().rstrip(":").strip().casefold()] = (
+                    field.value.strip()
+                )
         for line in (embed.description or "").splitlines():
             description_field = re.fullmatch(
                 r"\s*`{0,3}\s*(trainer|pokemon|level|ivs?)\s*:\s*(.*?)\s*`{0,3}\s*",
@@ -2316,7 +2354,7 @@ def is_normal_starboard_pokemon(pokemon_name: str) -> bool:
 
 def catch_starboard_destinations(
     details: CatchDetails,
-    settings: dict[str, int | str | None],
+    settings: StarboardSettings,
 ) -> dict[int, str]:
     channel_ids: dict[str, int | None] = {}
     for key in ("normal_channel", "shiny_channel", "normal_pokemon_channel"):
@@ -2512,7 +2550,7 @@ def format_starboard_embed(
     ):
         footer_text += " · Animated sprite via Pokémon Showdown"
     embed.set_footer(text=footer_text)
-    custom_thumbnail = custom_normal_starboard_thumbnail_path(details, category)
+    custom_thumbnail = custom_starboard_thumbnail_path(details, category)
     if custom_thumbnail:
         embed.set_thumbnail(url=f"attachment://{custom_thumbnail.name}")
     elif image_url:
@@ -3933,6 +3971,7 @@ class TypePingView(discord.ui.View):
 class ChatEventSession:
     host_id: int
     channel: discord.abc.Messageable
+    channel_id: int | None = None
     message: discord.Message | None = None
     participant_ids: set[int] = field(default_factory=set)
     sentence_counts: dict[int, int] = field(default_factory=dict)
@@ -4665,8 +4704,16 @@ class AppearanceTextModal(discord.ui.Modal):
                 return
             self.bot.update_appearance(self.guild_id, color=color)
         else:
+            guild = interaction.guild
+            member = guild.me if guild is not None else None
+            if member is None:
+                await interaction.response.send_message(
+                    "I couldn't find my server member to change the bot name.",
+                    ephemeral=True,
+                )
+                return
             try:
-                await interaction.guild.me.edit(nick=text or None)
+                await member.edit(nick=text or None)
             except discord.HTTPException as error:
                 await interaction.response.send_message(
                     f"I couldn't change my name: {error}", ephemeral=True
@@ -4913,16 +4960,6 @@ def strip_name_prefixes(name: str) -> tuple[list[str], list[str]]:
     return words[:prefix_count], words[prefix_count:]
 
 
-def is_known_pokemon_name(name: str) -> bool:
-    name = canonicalize_pokemon_name(name)
-    lookup = known_name_lookup()
-    if normalize_pokemon_alias(name.replace("’", "'")) in lookup:
-        return True
-    _, base = strip_name_prefixes(name)
-    base_name = " ".join(base)
-    return base_name in lookup or is_missingno_name(base_name)
-
-
 @lru_cache(maxsize=1)
 def known_name_word_sets() -> frozenset[tuple[str, ...]]:
     return frozenset(tuple(sorted(name.split(" "))) for name in known_name_lookup())
@@ -5047,11 +5084,11 @@ def build_grab_lines(
     all_forms: bool,
     emojis: list[str],
 ) -> list[str]:
-    rows = [(grab_entry_name(name, all_forms), ids) for name, ids in entries]
+    names = [grab_entry_name(name, all_forms) for name, _ in entries]
     if ordered:
-        rows.sort(key=lambda row: row[0].casefold().removeprefix("all "))
+        names.sort(key=lambda name: name.casefold().removeprefix("all "))
     lines: list[str] = []
-    for index, (name, user_ids) in enumerate(rows):
+    for index, name in enumerate(names):
         line = name[0].upper() + name[1:]
         if emojis:
             line = f"{emojis[index % len(emojis)]} {line}"
@@ -5115,15 +5152,51 @@ async def reply_with_reservation_embeds(
         if len(embeds) > 1 and message.guild is not None
         else None
     )
-    response = await message.reply(
-        embed=embeds[0],
-        view=view,
-        mention_author=False,
-        allowed_mentions=discord.AllowedMentions.none(),
-    )
+    if view is None:
+        response = await message.reply(
+            embed=embeds[0],
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+    else:
+        response = await message.reply(
+            embed=embeds[0],
+            view=view,
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
     if view is not None:
         view.message = response
     remember_reserve_list(response.id, embeds)
+
+
+async def reply_with_spawn_media(
+    message: discord.Message,
+    content: str,
+    *,
+    embed: discord.Embed | None,
+    files: list[discord.File],
+) -> discord.Message:
+    if embed is None:
+        if files:
+            return await message.reply(
+                content,
+                files=files,
+                mention_author=False,
+            )
+        return await message.reply(content, mention_author=False)
+    if files:
+        return await message.reply(
+            content,
+            embed=embed,
+            files=files,
+            mention_author=False,
+        )
+    return await message.reply(
+        content,
+        embed=embed,
+        mention_author=False,
+    )
 
 
 def load_reservations(path: Path) -> dict[str, list[int]]:
@@ -5291,6 +5364,23 @@ STARBOARD_DEFAULTS: Final[dict[str, int | str | None]] = {
     "shiny_base_name": None,
     "shiny_count": 0,
 }
+
+
+class StarboardSettings(TypedDict):
+    normal_channel: int | None
+    shiny_channel: int | None
+    normal_pokemon_channel: int | None
+    shiny_base_name: str | None
+    shiny_count: int
+
+
+class ActiveIncense(TypedDict):
+    guild: str
+    channel: str
+    guild_id: int
+    expires_at: int
+
+
 STARBOARD_SETTING_KEYS: Final[frozenset[str]] = frozenset(STARBOARD_DEFAULTS)
 STARBOARD_CHANNEL_SETTING_KEYS: Final[dict[str, str]] = {
     "normal": "normal_channel",
@@ -5922,13 +6012,11 @@ def render_profile_image(
                     round(left * scale_x),
                     round(top * scale_y),
                 )
-        frame.putalpha(
-            frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
-            )
-        )
+        alpha_lut = [
+            round(255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA)
+            for alpha in range(256)
+        ]
+        frame.putalpha(frame.getchannel("A").point(alpha_lut))
         framed_image = Image.new("RGBA", frame.size, (0, 0, 0, 0))
         profile_scale = PROFILE_CARD_SCALES[frame_key]
         profile_card = image.convert("RGBA").resize(
@@ -6027,6 +6115,17 @@ class ProfileEditSelect(discord.ui.Select):
         await interaction.response.defer()
         try:
             await self.profile_view.refresh()
+            if interaction.message is None:
+                logger.warning(
+                    "Could not update profile display for user %s: "
+                    "interaction message is unavailable",
+                    self.profile_view.user_id,
+                )
+                await interaction.followup.send(
+                    "Your setting was saved, but I couldn't refresh the profile display.",
+                    ephemeral=True,
+                )
+                return
             await interaction.message.edit(
                 view=ProfileEditView(self.profile_view)
             )
@@ -6088,7 +6187,7 @@ class ProfileMusicSelect(discord.ui.Select):
                     value=value,
                     description=description,
                 )
-                for value, (label, description, _path) in (
+                for value, (label, description, _) in (
                     PROFILE_RETURN_TO_ME.items()
                 )
             ],
@@ -6105,7 +6204,7 @@ class ProfileMusicSelect(discord.ui.Select):
                 ephemeral=True,
             )
             return
-        _label, _description, path = track
+        _, _, path = track
         launched = False
         try:
             await interaction.response.launch_activity()
@@ -6590,14 +6689,16 @@ class NamingBot(discord.Client):
         if referenced_message is None:
             reference_id = getattr(reference, "message_id", None)
             channel = getattr(message, "channel", None)
-            fetch_message = getattr(channel, "fetch_message", None)
             if (
                 isinstance(reference_id, int)
                 and not isinstance(reference_id, bool)
-                and callable(fetch_message)
+                and isinstance(
+                    channel,
+                    (discord.TextChannel, discord.Thread, discord.DMChannel),
+                )
             ):
                 try:
-                    referenced_message = await fetch_message(reference_id)
+                    referenced_message = await channel.fetch_message(reference_id)
                 except discord.HTTPException as error:
                     logger.warning(
                         "Could not read the chest command for message %s: %s",
@@ -6660,14 +6761,22 @@ class NamingBot(discord.Client):
     async def reset_appearance(
         self, interaction: discord.Interaction, guild_id: int, action: str
     ) -> None:
+        guild = interaction.guild
+        member = guild.me if guild is not None else None
+        if member is None:
+            await interaction.response.send_message(
+                "I couldn't find my server member to reset that setting.",
+                ephemeral=True,
+            )
+            return
         field = action.removesuffix("_reset")
         try:
             if field == "avatar":
-                await interaction.guild.me.edit(avatar=None)
+                await member.edit(avatar=None)
             elif field == "banner":
-                await interaction.guild.me.edit(banner=None)
+                await member.edit(banner=None)
             elif field == "name":
-                await interaction.guild.me.edit(nick=None)
+                await member.edit(nick=None)
             self.update_appearance(guild_id, **{field: None})
         except (discord.HTTPException, ValueError) as error:
             await interaction.response.send_message(
@@ -6695,10 +6804,23 @@ class NamingBot(discord.Client):
                 ephemeral=True,
             )
             return
+        guild = interaction.guild
+        member = guild.me if guild is not None else None
+        if member is None:
+            await interaction.response.send_message(
+                "I couldn't find my server member to update the appearance.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.defer(ephemeral=True)
         try:
             image = await attachment.read()
-            member = await interaction.guild.me.edit(**{field: image})
+            if field == "avatar":
+                member = await member.edit(avatar=image)
+            elif field == "banner":
+                member = await member.edit(banner=image)
+            else:
+                raise ValueError(f"Unknown appearance image field: {field}")
         except (discord.HTTPException, ValueError) as error:
             if "too fast" in str(error):
                 message = (
@@ -6794,10 +6916,46 @@ class NamingBot(discord.Client):
 
     def starboard_settings_for_guild(
         self, guild_id: int
-    ) -> dict[str, int | str | None]:
-        return {
+    ) -> StarboardSettings:
+        settings = {
             **STARBOARD_DEFAULTS,
             **self.starboard_settings.get(str(guild_id), {}),
+        }
+        def channel_setting(key: str) -> int | None:
+            channel_id = settings[key]
+            if channel_id is None:
+                return None
+            if (
+                isinstance(channel_id, bool)
+                or not isinstance(channel_id, int)
+                or channel_id <= 0
+            ):
+                raise ValueError(
+                    f"Invalid starboard channel settings for guild {guild_id}"
+                )
+            return channel_id
+
+        normal_channel = channel_setting("normal_channel")
+        shiny_channel = channel_setting("shiny_channel")
+        normal_pokemon_channel = channel_setting("normal_pokemon_channel")
+        base_name = settings["shiny_base_name"]
+        if base_name is not None and (
+            not isinstance(base_name, str) or not base_name.strip()
+        ):
+            raise ValueError(f"Invalid shinyboard name for guild {guild_id}")
+        shiny_count = settings["shiny_count"]
+        if (
+            isinstance(shiny_count, bool)
+            or not isinstance(shiny_count, int)
+            or shiny_count < 0
+        ):
+            raise ValueError(f"Invalid shinyboard count for guild {guild_id}")
+        return {
+            "normal_channel": normal_channel,
+            "shiny_channel": shiny_channel,
+            "normal_pokemon_channel": normal_pokemon_channel,
+            "shiny_base_name": base_name,
+            "shiny_count": shiny_count,
         }
 
     def set_starboard_channel(
@@ -6806,7 +6964,7 @@ class NamingBot(discord.Client):
         board: str,
         channel_id: int | None,
         channel_name: str | None = None,
-    ) -> dict[str, int | str | None]:
+    ) -> StarboardSettings:
         setting_key = STARBOARD_CHANNEL_SETTING_KEYS.get(board)
         if setting_key is None:
             raise ValueError(f"Unknown starboard: {board}")
@@ -6846,7 +7004,14 @@ class NamingBot(discord.Client):
                         int(guild_settings["shiny_count"]),
                         current_name_count,
                     )
-        updated_settings[guild_key] = guild_settings
+        settings_to_save: dict[str, int | str | None] = {
+            "normal_channel": guild_settings["normal_channel"],
+            "shiny_channel": guild_settings["shiny_channel"],
+            "normal_pokemon_channel": guild_settings["normal_pokemon_channel"],
+            "shiny_base_name": guild_settings["shiny_base_name"],
+            "shiny_count": guild_settings["shiny_count"],
+        }
+        updated_settings[guild_key] = settings_to_save
         save_starboard_settings(self.starboard_settings_path, updated_settings)
         self.starboard_settings = updated_settings
         return guild_settings
@@ -6874,7 +7039,14 @@ class NamingBot(discord.Client):
         count += 1
         guild_settings["shiny_base_name"] = base_name
         guild_settings["shiny_count"] = count
-        updated_settings[guild_key] = guild_settings
+        settings_to_save: dict[str, int | str | None] = {
+            "normal_channel": guild_settings["normal_channel"],
+            "shiny_channel": guild_settings["shiny_channel"],
+            "normal_pokemon_channel": guild_settings["normal_pokemon_channel"],
+            "shiny_base_name": guild_settings["shiny_base_name"],
+            "shiny_count": guild_settings["shiny_count"],
+        }
+        updated_settings[guild_key] = settings_to_save
         save_starboard_settings(self.starboard_settings_path, updated_settings)
         self.starboard_settings = updated_settings
         if base_name is None:
@@ -7532,7 +7704,10 @@ class NamingBot(discord.Client):
             owner_ids: set[int] = set()
             if application.owner is not None:
                 owner_ids.add(application.owner.id)
-            if application.team is not None:
+            if (
+                application.team is not None
+                and application.team.owner_id is not None
+            ):
                 owner_ids.add(application.team.owner_id)
             self.application_owner_ids = owner_ids
         return user_id in self.application_owner_ids
@@ -7628,6 +7803,8 @@ class NamingBot(discord.Client):
 
     def premium_limit_for_guild(self, guild_id: int) -> int:
         tier = self.premium_tier_for_guild(guild_id)
+        if tier is None:
+            return 0
         return PREMIUM_TIER_LIMITS.get(tier, 0)
 
     async def acquire_vision_capacity(self, guild_id: int) -> None:
@@ -7663,7 +7840,7 @@ class NamingBot(discord.Client):
     def is_allowed_channel(self, channel: discord.abc.Messageable) -> bool:
         return getattr(channel, "guild", None) is not None
 
-    def load_active_incenses(self) -> dict[str, dict[str, int | str]]:
+    def load_active_incenses(self) -> dict[str, ActiveIncense]:
         if not self.incense_path.is_file():
             return {}
         try:
@@ -7681,7 +7858,7 @@ class NamingBot(discord.Client):
             )
             return {}
         now = int(time.time())
-        records: dict[str, dict[str, int | str]] = {}
+        records: dict[str, ActiveIncense] = {}
         for channel_id, record in data.items():
             if (
                 not isinstance(channel_id, str)
@@ -7773,7 +7950,7 @@ class NamingBot(discord.Client):
                 mention_author=False,
             )
 
-    def current_active_incenses(self) -> list[dict[str, int | str]]:
+    def current_active_incenses(self) -> list[ActiveIncense]:
         now = int(time.time())
         expired = [
             channel_id
@@ -7807,7 +7984,7 @@ class NamingBot(discord.Client):
             )
             return
         if (
-            not member_guild_permissions(message.author).administrator
+            not member_is_administrator(message.author)
             and not member_has_command_role(self, guild.id, message.author)
         ):
             await message.reply(
@@ -8199,13 +8376,13 @@ class NamingBot(discord.Client):
         self, interaction: discord.Interaction, host_id: int
     ) -> None:
         channel = interaction.channel
-        if channel is None:
+        channel_id = getattr(channel, "id", None)
+        if not is_messageable_channel(channel) or not isinstance(channel_id, int):
             await interaction.response.send_message(
                 "This event needs to be started in a server channel.",
                 ephemeral=True,
             )
             return
-        channel_id = channel.id
         if channel_id in self.chat_events:
             await interaction.response.send_message(
                 "A chat event is already running in this channel.",
@@ -8214,7 +8391,11 @@ class NamingBot(discord.Client):
             return
 
         await interaction.response.defer(ephemeral=True)
-        session = ChatEventSession(host_id=host_id, channel=channel)
+        session = ChatEventSession(
+            host_id=host_id,
+            channel=channel,
+            channel_id=channel_id,
+        )
         self.chat_events[channel_id] = session
         embed = discord.Embed(
             title="Chat event — sign up now!",
@@ -8275,7 +8456,11 @@ class NamingBot(discord.Client):
         )
 
     async def run_chat_event(self, session: ChatEventSession) -> None:
-        channel_id = session.channel.id
+        channel_id = session.channel_id
+        if channel_id is None:
+            channel_id = getattr(session.channel, "id", None)
+        if isinstance(channel_id, bool) or not isinstance(channel_id, int):
+            raise RuntimeError("Chat event channel has no valid channel ID")
         try:
             await asyncio.sleep(CHAT_EVENT_SIGNUP_SECONDS)
             if session.message is None:
@@ -8363,6 +8548,12 @@ class NamingBot(discord.Client):
                 del self.chat_events[channel_id]
 
     async def handle_settings_command(self, message: discord.Message) -> None:
+        if message.guild is None:
+            await message.reply(
+                "Server settings can only be changed in a server.",
+                mention_author=False,
+            )
+            return
         await message.reply(
             view=ServerSettingsView(self, message.guild.id),
             mention_author=False,
@@ -8531,6 +8722,12 @@ class NamingBot(discord.Client):
                         channel_id,
                     )
                     continue
+            if not is_messageable_channel(channel):
+                logger.warning(
+                    "Configured low-accuracy channel %s cannot receive messages",
+                    channel_id,
+                )
+                continue
             try:
                 await channel.send(
                     content,
@@ -8674,8 +8871,9 @@ class NamingBot(discord.Client):
         await self.daycare.handle_raw_edit(payload)
 
     async def on_message_edit(
-        self, before: discord.Message, after: discord.Message
+        self, _before: discord.Message, after: discord.Message
     ) -> None:
+        del _before
         # Pokétwo sometimes adds the spawn image or text by editing the message.
         poketwo_catch = after.author.id == self.config.poketwo_bot_id
         catch_detection_report = has_catch_detection_embed(after)
@@ -8705,10 +8903,15 @@ class NamingBot(discord.Client):
             return
         referenced = message.reference.resolved
         if not isinstance(referenced, discord.Message):
-            try:
-                referenced = await message.channel.fetch_message(
-                    message.reference.message_id
+            reference_id = message.reference.message_id
+            if reference_id is None:
+                await message.reply(
+                    "I couldn't read the message you replied to.",
+                    mention_author=False,
                 )
+                return
+            try:
+                referenced = await message.channel.fetch_message(reference_id)
             except discord.HTTPException:
                 await message.reply(
                     "I couldn't read the message you replied to.",
@@ -8793,7 +8996,7 @@ class NamingBot(discord.Client):
             return
 
         if re.fullmatch(r"v!sh\s+clear\s+all\s*", message.content, re.IGNORECASE):
-            if not member_guild_permissions(message.author).administrator:
+            if not member_is_administrator(message.author):
                 await message.reply(
                     "Only server administrators can clear everyone's shinyhunts.",
                     mention_author=False,
@@ -8918,7 +9121,7 @@ class NamingBot(discord.Client):
             )
             return
         if TYPE_PING_CLEAR_ALL_PATTERN.fullmatch(message.content) is not None:
-            if not member_guild_permissions(message.author).administrator:
+            if not member_is_administrator(message.author):
                 await message.reply(
                     "Only server administrators can clear everyone's type pings.",
                     mention_author=False,
@@ -8973,7 +9176,7 @@ class NamingBot(discord.Client):
             return
 
         if re.fullmatch(r"v!cl\s+clear\s+all\s*", message.content, re.IGNORECASE):
-            if not member_guild_permissions(message.author).administrator:
+            if not member_is_administrator(message.author):
                 await message.reply(
                     "Only server administrators can clear everyone's collection.",
                     mention_author=False,
@@ -9262,19 +9465,7 @@ class NamingBot(discord.Client):
                 self.reserve_categories,
                 message.guild.id,
             )
-            view = (
-                ReservationPagesView(embeds, message.guild.id)
-                if len(embeds) > 1
-                else None
-            )
-            response = await message.reply(
-                embed=embeds[0],
-                view=view,
-                mention_author=False,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-            if view is not None:
-                view.message = response
+            await reply_with_reservation_embeds(message, embeds)
             return
         if re.match(r"^v!categorylist(?:\s|$)", message.content, re.IGNORECASE):
             await message.reply(
@@ -9561,10 +9752,15 @@ class NamingBot(discord.Client):
 
         referenced = message.reference.resolved
         if not isinstance(referenced, discord.Message):
-            try:
-                referenced = await message.channel.fetch_message(
-                    message.reference.message_id
+            reference_id = message.reference.message_id
+            if reference_id is None:
+                await message.reply(
+                    "I couldn't read the message you replied to.",
+                    mention_author=False,
                 )
+                return
+            try:
+                referenced = await message.channel.fetch_message(reference_id)
             except discord.HTTPException:
                 await message.reply(
                     "I couldn't read the message you replied to.",
@@ -9794,6 +9990,12 @@ class NamingBot(discord.Client):
                         message.guild.id,
                     )
                     continue
+            if not is_messageable_channel(channel):
+                logger.warning(
+                    "Configured starboard channel %s cannot receive messages",
+                    channel_id,
+                )
+                continue
             jump_url = (
                 f"https://discord.com/channels/{message.guild.id}/"
                 f"{message.channel.id}/{message.id}"
@@ -9808,7 +10010,7 @@ class NamingBot(discord.Client):
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
-                custom_thumbnail = custom_normal_starboard_thumbnail_path(
+                custom_thumbnail = custom_starboard_thumbnail_path(
                     details, post_category
                 )
                 if custom_thumbnail:
@@ -9852,6 +10054,14 @@ class NamingBot(discord.Client):
                         shiny_channel_id,
                         message.guild.id,
                     )
+            if shiny_channel is not None and not is_renamable_channel(
+                shiny_channel
+            ):
+                logger.warning(
+                    "Configured shinyboard channel %s cannot be renamed",
+                    shiny_channel_id,
+                )
+                shiny_channel = None
             channel_name = getattr(shiny_channel, "name", None)
             if not isinstance(channel_name, str):
                 channel_name = None
@@ -9940,6 +10150,13 @@ class NamingBot(discord.Client):
                     )
                     failed_channels.append(channel_id)
                     continue
+            if not is_messageable_channel(channel):
+                logger.warning(
+                    "Configured starboard channel %s cannot receive messages",
+                    channel_id,
+                )
+                failed_channels.append(channel_id)
+                continue
             jump_url = (
                 f"https://discord.com/channels/{message.guild.id}/"
                 f"{message.channel.id}/{message.id}"
@@ -9955,7 +10172,7 @@ class NamingBot(discord.Client):
             )
             self.tint_embeds(message.guild, {"embed": embed})
             try:
-                custom_thumbnail = custom_normal_starboard_thumbnail_path(
+                custom_thumbnail = custom_starboard_thumbnail_path(
                     details, post_category
                 )
                 if custom_thumbnail:
@@ -10008,6 +10225,12 @@ class NamingBot(discord.Client):
                     RECOGNITION_ALERT_CHANNEL_ID,
                 )
                 return
+        if not is_messageable_channel(channel):
+            logger.error(
+                "Recognition alert channel %s cannot receive messages",
+                RECOGNITION_ALERT_CHANNEL_ID,
+            )
+            return
 
         content = (
             f"<@{RECOGNITION_ALERT_USER_ID}> Vivillon couldn't confidently identify "
@@ -10080,6 +10303,9 @@ class NamingBot(discord.Client):
         started = time.monotonic()
         self.pending_vision_requests += 1
         waiting_for_vision_slot = True
+        name: str | None = None
+        confidence = 0.0
+        inference_seconds = 0.0
         try:
             try:
                 await self.acquire_vision_capacity(guild_id)
@@ -10282,7 +10508,8 @@ class NamingBot(discord.Client):
         type_emojis = type_emoji_text(thumbnail_name, name)
         if type_emojis:
             card_files = catch_card_files(name, thumbnail_name) if assisted else []
-            await message.reply(
+            await reply_with_spawn_media(
+                message,
                 format_typed_spawn_reply(
                     name,
                     confidence,
@@ -10296,8 +10523,7 @@ class NamingBot(discord.Client):
                     guess_name=guess_name,
                 ),
                 embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
-                **({"files": card_files} if card_files else {}),
-                mention_author=False,
+                files=card_files,
             )
             return
 
@@ -10350,11 +10576,11 @@ class NamingBot(discord.Client):
                 )
             else:
                 card_files = catch_card_files(name, thumbnail_name) if assisted else []
-                await message.reply(
+                await reply_with_spawn_media(
+                    message,
                     reply,
                     embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
-                    **({"files": card_files} if card_files else {}),
-                    mention_author=False,
+                    files=card_files,
                 )
             return
 
@@ -10395,7 +10621,8 @@ class NamingBot(discord.Client):
             )
         else:
             card_files = catch_card_files(name, thumbnail_name) if assisted else []
-            await message.reply(
+            await reply_with_spawn_media(
+                message,
                 format_spawn_reply(
                     name,
                     confidence,
@@ -10408,8 +10635,7 @@ class NamingBot(discord.Client):
                     guess_name=guess_name,
                 ),
                 embed=format_pc_catch_embed(name, thumbnail_name) if assisted else None,
-                **({"files": card_files} if card_files else {}),
-                mention_author=False,
+                files=card_files,
             )
 
 
@@ -10562,7 +10788,14 @@ class GrabAddReservesView(discord.ui.View):
         await interaction.response.edit_message(content="Adding reserves...", view=None)
 
         channel = interaction.channel
-        if channel is None:
+        if not is_messageable_channel(channel):
+            logger.warning(
+                "Could not post grabbed reserve confirmations: "
+                "interaction channel is not messageable"
+            )
+            await interaction.edit_original_response(
+                content="I couldn't post the reserve confirmations in this channel."
+            )
             return
         no_pings = discord.AllowedMentions.none()
         try:
@@ -10984,7 +11217,7 @@ class ClearCollectionView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not member_guild_permissions(interaction.user).administrator
+            or not member_is_administrator(interaction.user)
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",
@@ -11050,7 +11283,7 @@ class ClearShinyhuntsView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not member_guild_permissions(interaction.user).administrator
+            or not member_is_administrator(interaction.user)
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",
@@ -11116,7 +11349,7 @@ class ClearTypePingsView(discord.ui.View):
             interaction.user.id != self.requester_id
             or interaction.guild_id != self.guild_id
             or not isinstance(interaction.user, discord.Member)
-            or not member_guild_permissions(interaction.user).administrator
+            or not member_is_administrator(interaction.user)
         ):
             await interaction.response.send_message(
                 "Only the administrator who ran this command can confirm it.",

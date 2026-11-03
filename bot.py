@@ -5968,7 +5968,7 @@ class ProfileEditSelect(discord.ui.Select):
 
 
 async def send_profile_voice_message(interaction: discord.Interaction) -> bool:
-    """Reply with a Discord voice message, which plays inline."""
+    """Reply privately with a Discord voice message, which plays inline."""
     try:
         audio = await asyncio.to_thread(PROFILE_VOICE_MESSAGE_FILE.read_bytes)
     except OSError:
@@ -5977,7 +5977,7 @@ async def send_profile_voice_message(interaction: discord.Interaction) -> bool:
     payload = {
         "type": 4,
         "data": {
-            "flags": 1 << 13,
+            "flags": (1 << 13) | (1 << 6),
             "attachments": [
                 {
                     "id": "0",

@@ -47,6 +47,7 @@ from typing import Any, Callable
 
 import discord
 
+from data_paths import data_path
 from org_api import OrgError, OrgReserves
 
 logger = logging.getLogger("vivillon_naming.org_rpc")
@@ -55,7 +56,7 @@ CHANNEL_ENV = "ORG_DISCORD_RPC_CHANNEL_ID"
 GUILD_ENV = "ORG_DISCORD_RPC_GUILD_ID"
 USER_ENV = "ORG_BOT_USER_ID"
 DEDUPE_FILE_ENV = "ORG_RPC_DEDUPE_FILE"
-DEFAULT_DEDUPE_FILE = "org_rpc_dedupe.json"
+DEFAULT_DEDUPE_FILE = str(data_path("org_rpc_dedupe.json"))
 
 REQUEST_TYPES = frozenset({"add", "remove", "list", "validate"})
 DEFAULT_HANDLE_TIMEOUT = 20.0

@@ -58,7 +58,7 @@ approval for privileged intents on larger bots.
    server (`1530949341013868635`), can grant access with
    `v!premium add bronze <server id>`, `v!premium add silver <server id>`, or
    `v!premium add gold <server id>`. Tier assignments persist in
-   `premium_servers.json` (or the path set by `PREMIUM_SERVERS_FILE`).
+   `data/premium_servers.json` (or the path set by `PREMIUM_SERVERS_FILE`).
 
 4. Start the bot:
 
@@ -548,3 +548,32 @@ address; the bot then serves the Activity page from `activity/` on that port.
 In the Discord Developer Portal, open the application, enable **Activities**,
 and add a URL mapping with root `/` pointing at that HTTPS address (without
 `https://`). Leave `MUSIC_ACTIVITY_PORT` unset to disable it.
+
+## PostgreSQL storage (shiny hunts and collections)
+
+Set `DATABASE_URL` to store shiny hunts and user collections in PostgreSQL
+(tables `shiny_hunts` and `collections`, created automatically). Without it the
+bot keeps using `shinyhunts.json` / `collections.json`. Existing JSON data is
+imported once on first start.
+
+```bash
+export DATABASE_URL="postgresql://vivillon:vivillon_dev@localhost:5432/vivillon"
+```
+
+On hosts like bot-hosting.net or heavencloud.in you cannot run your own
+PostgreSQL server, so use a free hosted one (Neon, Supabase, Aiven) and set its
+connection string as `DATABASE_URL` in the host's environment/`.env`.
+
+Back up / restore (works from JSON files or from Postgres):
+
+```bash
+python pg_backup.py backup backups/today
+DATABASE_URL=... python pg_backup.py restore backups/today
+```
+
+## Data folder
+
+All JSON files (static catalogs and saved settings) live in `data/`. Set
+`DATA_DIR` to use a different folder; the per-file environment variables such as
+`SHINYHUNTS_FILE` still override individual paths. Any file name in this README
+without a folder (e.g. `reserves.json`) means `data/<name>`.

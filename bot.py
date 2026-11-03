@@ -35,6 +35,8 @@ from image_match import (
 )
 from org_api import OrgReserves, create_app
 import org_rpc
+import pg_store
+from data_paths import data_path
 from daycare import DaycareFeature
 from help_menu import HELP_COMMAND_PATTERN, build_help_menu_embed
 from openai import AsyncOpenAI, BadRequestError, OpenAIError
@@ -423,86 +425,86 @@ def load_single_type_aliases(path: Path, key: str) -> frozenset[str]:
 
 
 POKEMON_FORMS: Final[dict[str, list[dict[str, str]]]] = load_pokemon_forms(
-    Path(__file__).with_name("pokemon_forms.json")
+    data_path("pokemon_forms.json")
 )
 SINGLE_TYPE_FIRE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_fire_aliases",
 )
 SINGLE_TYPE_NORMAL_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_normal_aliases",
 )
 SINGLE_TYPE_WATER_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_water_aliases",
 )
 SINGLE_TYPE_ELECTRIC_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_electric_aliases",
 )
 SINGLE_TYPE_GRASS_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_grass_aliases",
 )
 SINGLE_TYPE_ICE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "single_type_ice_aliases",
 )
 ICE_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "ice_and_fire_type_aliases",
 )
 ICE_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "ice_and_water_type_aliases",
 )
 ICE_AND_ELECTRIC_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "ice_and_electric_type_aliases",
 )
 NORMAL_AND_ICE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "normal_and_ice_type_aliases",
 )
 GRASS_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "grass_and_fire_type_aliases",
 )
 GRASS_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "grass_and_water_type_aliases",
 )
 GRASS_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "grass_and_normal_type_aliases",
 )
 GRASS_AND_ELECTRIC_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "grass_and_electric_type_aliases",
 )
 NORMAL_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "normal_and_water_type_aliases",
 )
 WATER_AND_FIRE_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "water_and_fire_type_aliases",
 )
 FIRE_AND_ELECTRIC_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "fire_and_electric_type_aliases",
 )
 ELECTRIC_AND_WATER_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "electric_and_water_type_aliases",
 )
 ELECTRIC_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "electric_and_normal_type_aliases",
 )
 FIRE_AND_NORMAL_TYPE_ALIASES: Final[frozenset[str]] = load_single_type_aliases(
-    Path(__file__).with_name("pokemon_forms.json"),
+    data_path("pokemon_forms.json"),
     "fire_and_normal_type_aliases",
 )
 
@@ -1608,7 +1610,7 @@ def load_pokemon_types(path: Path) -> dict[str, list[str]]:
 
 
 POKEMON_TYPES: Final[dict[str, list[str]]] = load_pokemon_types(
-    Path(__file__).with_name("pokemon_types.json")
+    data_path("pokemon_types.json")
 )
 
 
@@ -1766,7 +1768,7 @@ SWSH_FORM_MODEL_SLUGS: Final[dict[str, str]] = {
 
 @lru_cache(maxsize=1)
 def load_sprite_ids() -> dict[str, int]:
-    path = Path(__file__).with_name("pokemon_sprites.json")
+    path = data_path("pokemon_sprites.json")
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -4904,7 +4906,7 @@ def load_known_pokemon_names() -> list[str]:
     names: set[str] = {"Missingno"}
     try:
         data = json.loads(
-            Path(__file__).with_name("pokemon_names.json").read_text(encoding="utf-8")
+            data_path("pokemon_names.json").read_text(encoding="utf-8")
         )
         names.update(name for name in data if isinstance(name, str))
     except (OSError, json.JSONDecodeError):
@@ -5206,6 +5208,9 @@ async def reply_with_spawn_media(
 
 
 def load_reservations(path: Path) -> dict[str, list[int]]:
+    table = pg_store.table_for(path)
+    if table:
+        return pg_store.load(table)
     if not path.exists():
         return {}
     try:
@@ -5226,6 +5231,10 @@ def load_reservations(path: Path) -> dict[str, list[int]]:
 
 
 def save_reservations(path: Path, reservations: dict[str, list[int]]) -> None:
+    table = pg_store.table_for(path)
+    if table:
+        pg_store.save(table, reservations)
+        return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = path.with_name(f"{path.name}.tmp")
@@ -6372,7 +6381,7 @@ class NamingBot(discord.Client):
         self.vision_capacity_condition = asyncio.Condition()
         self.active_vision_requests_by_guild: dict[int, int] = {}
         self.premium_servers_path = Path(
-            os.environ.get("PREMIUM_SERVERS_FILE", "premium_servers.json")
+            os.environ.get("PREMIUM_SERVERS_FILE", str(data_path("premium_servers.json")))
         )
         self.premium_servers = load_premium_servers(self.premium_servers_path)
         self.application_owner_ids: set[int] | None = None
@@ -6387,13 +6396,13 @@ class NamingBot(discord.Client):
         self.handled_catch_ids: dict[int, None] = {}
         self.muted_poketwo_channels: set[int] = set()
         self.incense_path = Path(
-            os.environ.get("INCENSE_TRACKING_FILE", "incenses.json")
+            os.environ.get("INCENSE_TRACKING_FILE", str(data_path("incenses.json")))
         )
         self.active_incenses = self.load_active_incenses()
         self.auto_pause_incense_settings_path = Path(
             os.environ.get(
                 "AUTO_PAUSE_INCENSE_SETTINGS_FILE",
-                "auto_pause_incense_settings.json",
+                str(data_path("auto_pause_incense_settings.json")),
             )
         )
         self.auto_pause_incense_settings = load_auto_pause_incense_settings(
@@ -6410,57 +6419,59 @@ class NamingBot(discord.Client):
         self.activity_runner: web.AppRunner | None = None
         self.org_reserves: OrgReserves | None = None
         self.org_rpc: org_rpc.OrgRpc | None = None
-        self.reserve_path = Path(os.environ.get("RESERVES_FILE", "reserves.json"))
+        self.reserve_path = Path(os.environ.get("RESERVES_FILE", str(data_path("reserves.json"))))
         self.reservations = load_reservations(self.reserve_path)
         self.reserve_categories_path = Path(
             os.environ.get(
                 "RESERVE_CATEGORIES_FILE",
-                "reserve_categories.json",
+                str(data_path("reserve_categories.json")),
             )
         )
         self.reserve_categories = load_reserve_categories(
             self.reserve_categories_path
         )
         self.shinyhunt_path = Path(
-            os.environ.get("SHINYHUNTS_FILE", "shinyhunts.json")
+            os.environ.get("SHINYHUNTS_FILE", str(data_path("shinyhunts.json")))
         )
+        pg_store.register(self.shinyhunt_path, "shiny_hunts")
         self.shinyhunters = load_reservations(self.shinyhunt_path)
         self.collection_path = Path(
-            os.environ.get("COLLECTIONS_FILE", "collections.json")
+            os.environ.get("COLLECTIONS_FILE", str(data_path("collections.json")))
         )
+        pg_store.register(self.collection_path, "collections")
         self.collections = migrate_legacy_all_keys(
             load_reservations(self.collection_path)
         )
         self.type_ping_path = Path(
-            os.environ.get("TYPE_PINGS_FILE", "type_pings.json")
+            os.environ.get("TYPE_PINGS_FILE", str(data_path("type_pings.json")))
         )
         self.type_pings = load_type_pings(self.type_ping_path)
         self.server_settings_path = Path(
-            os.environ.get("SERVER_SETTINGS_FILE", "server_settings.json")
+            os.environ.get("SERVER_SETTINGS_FILE", str(data_path("server_settings.json")))
         )
         self.server_settings = load_server_settings(self.server_settings_path)
         self.command_permissions_path = Path(
-            os.environ.get("COMMAND_PERMISSIONS_FILE", "command_permissions.json")
+            os.environ.get("COMMAND_PERMISSIONS_FILE", str(data_path("command_permissions.json")))
         )
         self.command_permissions = load_command_permissions(
             self.command_permissions_path
         )
         self.command_locks_path = Path(
-            os.environ.get("COMMAND_LOCKS_FILE", "command_locks.json")
+            os.environ.get("COMMAND_LOCKS_FILE", str(data_path("command_locks.json")))
         )
         self.command_locks = load_command_locks(self.command_locks_path)
         self.starboard_settings_path = Path(
-            os.environ.get("STARBOARD_SETTINGS_FILE", "starboard_settings.json")
+            os.environ.get("STARBOARD_SETTINGS_FILE", str(data_path("starboard_settings.json")))
         )
         self.starboard_settings = load_starboard_settings(
             self.starboard_settings_path
         )
         self.afk_settings_path = Path(
-            os.environ.get("AFK_SETTINGS_FILE", "afk_settings.json")
+            os.environ.get("AFK_SETTINGS_FILE", str(data_path("afk_settings.json")))
         )
         self.afk_settings = load_afk_settings(self.afk_settings_path)
         self.profile_data_path = Path(
-            os.environ.get("PROFILE_DATA_FILE", "profile_data.json")
+            os.environ.get("PROFILE_DATA_FILE", str(data_path("profile_data.json")))
         )
         (
             self.profiles,
@@ -6474,18 +6485,18 @@ class NamingBot(discord.Client):
         self.profile_backfill_stop_requests: set[int] = set()
         self.profile_emoji_cache: dict[str, bytes] | None = None
         self.appearance_path = Path(
-            os.environ.get("APPEARANCE_FILE", "appearance.json")
+            os.environ.get("APPEARANCE_FILE", str(data_path("appearance.json")))
         )
         self.appearance = load_appearance(self.appearance_path)
         self.low_accuracy_path = Path(
-            os.environ.get("LOW_ACCURACY_FILE", "low_accuracy.json")
+            os.environ.get("LOW_ACCURACY_FILE", str(data_path("low_accuracy.json")))
         )
         self.low_accuracy_channels = load_low_accuracy_channels(
             self.low_accuracy_path
         )
         self.chat_events: dict[int, ChatEventSession] = {}
         self.daycare = DaycareFeature(
-            Path(os.environ.get("BOXES_FILE", "boxes.json")),
+            Path(os.environ.get("BOXES_FILE", str(data_path("boxes.json")))),
             config.poketwo_bot_id,
         )
 
@@ -7154,11 +7165,11 @@ class NamingBot(discord.Client):
                 restrictions_path = Path(
                     os.environ.get(
                         "ORG_RESTRICTIONS_FILE",
-                        str(Path(__file__).with_name("org_restrictions.json")),
+                        str(data_path("org_restrictions.json")),
                     )
                 )
             self.org_reserves = OrgReserves(
-                Path(os.environ.get("ORG_RESERVES_FILE", "org_reserves.json")),
+                Path(os.environ.get("ORG_RESERVES_FILE", str(data_path("org_reserves.json")))),
                 restrictions_path,
                 load_known_pokemon_names(),
             )
@@ -7190,7 +7201,7 @@ class NamingBot(discord.Client):
         restrictions_path = Path(
             os.environ.get(
                 "ORG_RESTRICTIONS_FILE",
-                str(Path(__file__).with_name("org_restrictions.json")),
+                str(data_path("org_restrictions.json")),
             )
         )
         if not restrictions_path.is_file():

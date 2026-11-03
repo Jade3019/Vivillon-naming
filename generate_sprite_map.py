@@ -64,7 +64,7 @@ def main() -> None:
     pokemon = fetch_ids("pokemon")
     species = fetch_ids("pokemon-species")
     names = [str(n) for n in np.load(root / "image_bank.npz")["names"]]
-    names += json.loads((root / "pokemon_names.json").read_text(encoding="utf-8"))
+    names += json.loads((root / "data" / "pokemon_names.json").read_text(encoding="utf-8"))
     mapping: dict[str, int] = {}
     for name in sorted(set(names)):
         sprite_id = SPRITE_OVERRIDES.get(name)
@@ -74,7 +74,7 @@ def main() -> None:
             print(f"No sprite for {name}")
         else:
             mapping[name] = sprite_id
-    (root / "pokemon_sprites.json").write_text(
+    (root / "data" / "pokemon_sprites.json").write_text(
         json.dumps(mapping, ensure_ascii=False, indent=0) + "\n", encoding="utf-8"
     )
     print(f"Wrote {len(mapping)} entries")

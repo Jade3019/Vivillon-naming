@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
 import bot as bot_module
+from data_paths import data_path
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from bot import (
@@ -8458,8 +8459,8 @@ class OrgReservesTests(unittest.TestCase):
             "boostie",
         )
         org = OrgReserves(
-            Path(__file__).with_name("org_reserves.json"),
-            Path(__file__).with_name("org_restrictions.json"),
+            data_path("org_reserves.json"),
+            data_path("org_restrictions.json"),
             ["Abomasnow", "Orbeetle", "Gmax Orbeetle"],
         )
 
@@ -8494,8 +8495,8 @@ class OrgApiValidationTests(unittest.IsolatedAsyncioTestCase):
             "boostie",
         )
         org = OrgReserves(
-            Path(__file__).with_name("org_reserves.json"),
-            Path(__file__).with_name("org_restrictions.json"),
+            data_path("org_reserves.json"),
+            data_path("org_restrictions.json"),
             ["Abomasnow", "Orbeetle"],
         )
         app = create_app("test-api-key", org, 1, lambda *_: None, lambda *_: False)

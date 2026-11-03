@@ -126,8 +126,8 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(__file__).with_name("pokemon_forms.json"),
-        help="Output JSON path (default: pokemon_forms.json beside this script)",
+        default=Path(__file__).parent / "data" / "pokemon_forms.json",
+        help="Output JSON path (default: data/pokemon_forms.json)",
     )
     args = parser.parse_args()
 

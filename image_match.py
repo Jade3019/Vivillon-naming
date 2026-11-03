@@ -9,6 +9,8 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from data_paths import data_path
+
 try:
     import cv2
     cv2.setNumThreads(1)
@@ -327,10 +329,10 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
 
     try:
         species = json.loads(
-            Path(__file__).with_name("pokemon_names.json").read_text(encoding="utf-8")
+            data_path("pokemon_names.json").read_text(encoding="utf-8")
         )
         form_data = json.loads(
-            Path(__file__).with_name("pokemon_forms.json").read_text(encoding="utf-8")
+            data_path("pokemon_forms.json").read_text(encoding="utf-8")
         )["forms"]
     except (OSError, ValueError, KeyError, TypeError):
         species, form_data = [], {}

@@ -28,7 +28,7 @@ def main() -> None:
         description="Build egg_groups.json from PokeAPI CSV files."
     )
     parser.add_argument("data_directory", type=Path)
-    parser.add_argument("--output", type=Path, default=Path("egg_groups.json"))
+    parser.add_argument("--output", type=Path, default=Path("data/egg_groups.json"))
     args = parser.parse_args()
 
     with (args.data_directory / "pokemon_species.csv").open(

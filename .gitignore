@@ -24,3 +24,6 @@ low_accuracy.json
 low_accuracy.json.tmp
 profile_data.json
 profile_data.json.tmp
+backups/
+shinyhunts.json
+collections.json

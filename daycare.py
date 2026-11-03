@@ -10,6 +10,8 @@ from collections import Counter, deque
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from data_paths import data_path
 from typing import Any, Final, NamedTuple
 
 import discord
@@ -60,7 +62,7 @@ IV_PATTERN: Final[re.Pattern[str]] = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 
 @lru_cache(maxsize=1)
 def _egg_data() -> tuple[dict[str, str], dict[str, tuple[int, ...]]]:
-    path = Path(__file__).with_name("egg_groups.json")
+    path = data_path("egg_groups.json")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):

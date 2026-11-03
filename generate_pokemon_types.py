@@ -44,14 +44,14 @@ def main() -> None:
             )
     with args.pokemon_csv.open(encoding="utf-8", newline="") as source:
         ids = {row["identifier"]: int(row["id"]) for row in csv.DictReader(source)}
-    forms = json.loads(Path("pokemon_forms.json").read_text(encoding="utf-8"))["forms"]
+    forms = json.loads(Path("data/pokemon_forms.json").read_text(encoding="utf-8"))["forms"]
     form_ids = {
         simplify(form["display_name"]): ids[form["identifier"]]
         for entries in forms.values()
         for form in entries
         if form["identifier"] in ids
     }
-    sprites = json.loads(Path("pokemon_sprites.json").read_text(encoding="utf-8"))
+    sprites = json.loads(Path("data/pokemon_sprites.json").read_text(encoding="utf-8"))
     result = {}
     for name, dex in sprites.items():
         # The form's own id carries its types (e.g. Heat Rotom), the sprite id may be the base species.
@@ -59,7 +59,7 @@ def main() -> None:
         if dex in by_id:
             result[name] = [TYPE_NAMES[type_id] for _, type_id in sorted(by_id[dex])]
     result.update(EXTRA)
-    Path("pokemon_types.json").write_text(
+    Path("data/pokemon_types.json").write_text(
         json.dumps(dict(sorted(result.items())), ensure_ascii=False, indent=0) + "\n",
         encoding="utf-8",
     )

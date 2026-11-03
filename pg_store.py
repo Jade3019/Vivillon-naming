@@ -164,11 +164,12 @@ def _import_json_once(table: str, path: Path) -> None:
                     rows,
                 )
             count = len(rows)
-        conn.execute(
-            "INSERT INTO storage_meta (key, value) VALUES (%s, 'true') "
-            "ON CONFLICT DO NOTHING",
-            (flag,),
-        )
+        if path.exists():
+            conn.execute(
+                "INSERT INTO storage_meta (key, value) VALUES (%s, 'true') "
+                "ON CONFLICT DO NOTHING",
+                (flag,),
+            )
         return count
 
     try:

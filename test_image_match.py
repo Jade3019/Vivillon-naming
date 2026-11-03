@@ -9,6 +9,17 @@ from image_match import ImageMatcher, compute_descriptors, reference_images
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
 class ImageMatcherTests(unittest.TestCase):
+    def test_shared_screenshot_species_use_lower_vote_floor(self) -> None:
+        for name in (
+            "White-Plumage Squawkabilly",
+            "Wiglett",
+            "Lotad",
+            "Dreepy",
+            "Ditto",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(image_match.minimum_votes_for(name), 4)
+
     def test_normal_deoxys_reference_uses_species_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "deoxys-normal" / "1.png"

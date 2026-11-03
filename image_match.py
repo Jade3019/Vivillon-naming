@@ -29,11 +29,16 @@ MIN_VOTES = 6
 MIN_MARGIN = 3
 SPECIES_MIN_VOTES = {
     "Boldore": 8,
+    "Ditto": 4,
+    "Dreepy": 4,
     "East Shellos": 8,
     "Enchanted Applin": 4,
+    "Lotad": 4,
     "Milcery": 6,
     "Shellos": 8,
     "Oddish": 4,
+    "White-Plumage Squawkabilly": 4,
+    "Wiglett": 4,
 }
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Enchanted Applin": 2, "Milcery": 3}
 SHARED_DISTANCE = 150.0

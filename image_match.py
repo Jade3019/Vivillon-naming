@@ -731,24 +731,30 @@ class ImageMatcher:
         if not self.names or self.matcher is None:
             return None
         mask = self._transparency_mask(data)
-        results = [
-            result
-            for result in (
-                self._match(data, False, mask=mask),
-                self._match(data, True, mask=mask),
+        # SIFT is the expensive half, so each orientation is described once and
+        # the relaxed retry reuses those descriptors instead of recomputing them.
+        descriptors = {
+            mirror: compute_descriptors(data, mirror, mask) for mirror in (False, True)
+        }
+        results = []
+        for mirror in (False, True):
+            result = self._match(
+                data, mirror, mask=mask, descriptors=descriptors[mirror]
             )
-            if result is not None
-        ]
+            if result is not None:
+                results.append(result)
         if not results:
             # Busy scenery can hide features; accept a slightly weaker clear winner.
-            results = [
-                result
-                for result in (
-                    self._match(data, False, mask=mask, relaxed=True),
-                    self._match(data, True, mask=mask, relaxed=True),
+            for mirror in (False, True):
+                result = self._match(
+                    data,
+                    mirror,
+                    mask=mask,
+                    relaxed=True,
+                    descriptors=descriptors[mirror],
                 )
-                if result is not None
-            ]
+                if result is not None:
+                    results.append(result)
         if not results:
             return None
         vivillon_form: str | None = None
@@ -774,14 +780,20 @@ class ImageMatcher:
         if not self.names or self.matcher is None:
             return None
         mask = self._transparency_mask(data)
-        results = [
-            result
-            for result in (
-                self._match(data, False, mask=mask, allow_weak=True),
-                self._match(data, True, mask=mask, allow_weak=True),
+        descriptors = {
+            mirror: compute_descriptors(data, mirror, mask) for mirror in (False, True)
+        }
+        results = []
+        for mirror in (False, True):
+            result = self._match(
+                data,
+                mirror,
+                mask=mask,
+                allow_weak=True,
+                descriptors=descriptors[mirror],
             )
-            if result is not None
-        ]
+            if result is not None:
+                results.append(result)
         if not results:
             return None
         name, votes = max(results, key=lambda result: result[1])
@@ -817,8 +829,10 @@ class ImageMatcher:
         mask=None,
         relaxed: bool = False,
         allow_weak: bool = False,
+        descriptors=None,
     ) -> tuple[str, int] | None:
-        descriptors = compute_descriptors(data, mirror, mask)
+        if descriptors is None:
+            descriptors = compute_descriptors(data, mirror, mask)
         if descriptors is None or len(descriptors) < 2:
             return None
         votes = np.zeros(len(self.names), int)

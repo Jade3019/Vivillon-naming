@@ -221,6 +221,7 @@ PROFILE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "slakoth": ("Slakoth", "Slakoth blurred profile background"),
     "marshadow": ("Marshadow", "Marshadow blurred profile background"),
     "jirachi": ("Jirachi", "Jirachi blurred profile background"),
+    "gardevoir": ("Gardevoir", "Gardevoir blurred profile background"),
 }
 PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("background") / "cosmog.png",
@@ -232,6 +233,7 @@ PROFILE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "slakoth": Path(__file__).with_name("background") / "slakoth.png",
     "marshadow": Path(__file__).with_name("background") / "marshadow.png",
     "jirachi": Path(__file__).with_name("background") / "jirachi.png",
+    "gardevoir": Path(__file__).with_name("background") / "gardevoir.png",
 }
 PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "white": ("Default middle background", "#FFFFFF"),
@@ -242,6 +244,7 @@ PROFILE_MIDDLE_BACKGROUNDS: Final[dict[str, tuple[str, str]]] = {
     "slakoth": ("Slakoth", "Slakoth middle background"),
     "marshadow": ("Marshadow", "Marshadow middle background"),
     "jirachi": ("Jirachi", "Jirachi middle background"),
+    "gardevoir": ("Gardevoir", "Gardevoir middle background"),
 }
 PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "cosmog": Path(__file__).with_name("middle background") / "Cosmog.png",
@@ -251,6 +254,7 @@ PROFILE_MIDDLE_BACKGROUND_IMAGES: Final[dict[str, Path]] = {
     "slakoth": Path(__file__).with_name("middle background") / "Slakoth.png",
     "marshadow": Path(__file__).with_name("middle background") / "Marshadow.png",
     "jirachi": Path(__file__).with_name("middle background") / "Jirachi.png",
+    "gardevoir": Path(__file__).with_name("middle background") / "Gardevoir.png",
 }
 PROFILE_LEGACY_CHOICES: Final[dict[str, frozenset[str]]] = {
     "background": frozenset({"rose", "blue", "purple", "mint"}),
@@ -265,6 +269,7 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "moonlit": ("Moonlit", "Moonlit profile frame"),
     "moonveil": ("Moonveil", "Moonveil profile frame"),
     "jirachi": ("Jirachi", "Jirachi profile frame"),
+    "gardevoir": ("Gardevoir", "Gardevoir profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
@@ -274,6 +279,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "moonlit": Path(__file__).with_name("Frames") / "moonlit.png",
     "moonveil": Path(__file__).with_name("Frames") / "moonveil.png",
     "jirachi": Path(__file__).with_name("Frames") / "jirachi.png",
+    "gardevoir": Path(__file__).with_name("Frames") / "gardevoir.png",
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
@@ -281,6 +287,7 @@ PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "moonlit": (45, 62, 963, 624),
     "moonveil": (118, 130, 1418, 894),
     "jirachi": (65, 64, 1086, 699),
+    "gardevoir": (84, 109, 1450, 904),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -294,6 +301,7 @@ PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "moonlit": 1.08,
     "moonveil": 1.1,
     "jirachi": 1.0,
+    "gardevoir": 1.0,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
@@ -308,6 +316,7 @@ PROFILE_FLOWER_SPRING_USER_ID: Final[int] = 1286779672549392527
 PROFILE_MOONLIT_USER_ID: Final[int] = 883224024161873940
 PROFILE_MARSHADOW_USER_ID: Final[int] = 1398882668401135657
 PROFILE_JIRACHI_USER_ID: Final[int] = 616386709659189268
+PROFILE_GARDEVOIR_USER_ID: Final[int] = 729509574486523907
 PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
     PROFILE_FLOWER_SPRING_USER_ID: {
         "background": frozenset({"buneary"}),
@@ -328,6 +337,11 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
         "background": frozenset({"jirachi"}),
         "middle_background": frozenset({"jirachi"}),
         "frame": frozenset({"jirachi"}),
+    },
+    PROFILE_GARDEVOIR_USER_ID: {
+        "background": frozenset({"gardevoir"}),
+        "middle_background": frozenset({"gardevoir"}),
+        "frame": frozenset({"gardevoir"}),
     },
 }
 PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {

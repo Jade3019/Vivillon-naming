@@ -269,7 +269,7 @@ PROFILE_FRAMES: Final[dict[str, tuple[str, str]]] = {
     "moonlit": ("Moonlit", "Moonlit profile frame"),
     "moonveil": ("Moonveil", "Moonveil profile frame"),
     "jirachi": ("Jirachi", "Jirachi profile frame"),
-    "gardevoir": ("Gardevoir", "Gardevoir profile frame"),
+    "magic": ("Magic", "Magic profile frame"),
 }
 PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "mystic": Path(__file__).with_name("Frames") / "mystic.png",
@@ -279,7 +279,7 @@ PROFILE_FRAME_IMAGES: Final[dict[str, Path]] = {
     "moonlit": Path(__file__).with_name("Frames") / "moonlit.png",
     "moonveil": Path(__file__).with_name("Frames") / "moonveil.png",
     "jirachi": Path(__file__).with_name("Frames") / "jirachi.png",
-    "gardevoir": Path(__file__).with_name("Frames") / "gardevoir.png",
+    "magic": Path(__file__).with_name("Frames") / "magic.png",
 }
 PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "nightflower": (74, 84, 1595, 845),
@@ -287,7 +287,7 @@ PROFILE_FRAME_OPENINGS: Final[dict[str, tuple[int, int, int, int]]] = {
     "moonlit": (45, 62, 963, 624),
     "moonveil": (118, 130, 1418, 894),
     "jirachi": (65, 64, 1086, 699),
-    "gardevoir": (84, 109, 1450, 904),
+    "magic": (50, 71, 1416, 866),
 }
 PROFILE_FRAME_SCALES: Final[dict[str, float]] = {
     "mystic": 1.0,
@@ -301,7 +301,7 @@ PROFILE_CARD_SCALES: Final[dict[str, float]] = {
     "moonlit": 1.08,
     "moonveil": 1.1,
     "jirachi": 1.0,
-    "gardevoir": 1.0,
+    "magic": 1.0,
 }
 PROFILE_FRAME_CANVAS_SIZE: Final[tuple[int, int]] = (1467, 868)
 PROFILE_FRAME_ALPHA_GAMMA: Final[float] = 0.6
@@ -341,7 +341,7 @@ PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
     PROFILE_GARDEVOIR_USER_ID: {
         "background": frozenset({"gardevoir"}),
         "middle_background": frozenset({"gardevoir"}),
-        "frame": frozenset({"gardevoir"}),
+        "frame": frozenset({"magic"}),
     },
 }
 PROFILE_RETURN_TO_ME: Final[dict[str, tuple[str, str, Path]]] = {

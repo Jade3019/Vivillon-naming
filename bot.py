@@ -5636,6 +5636,8 @@ def load_profile_data(
 
     profiles: dict[str, dict[str, int | str]] = {}
     for user_id, stored_settings in data["users"].items():
+        if isinstance(stored_settings, dict) and stored_settings.get("frame") == "gardevoir":
+            stored_settings["frame"] = "magic"
         if (
             not isinstance(user_id, str)
             or not user_id.isdecimal()

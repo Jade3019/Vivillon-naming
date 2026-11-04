@@ -174,6 +174,8 @@ FORM_DISPLAY_NAMES = {
     },
     "Unown Variant 2": "Unown B",
     "Unown Variant 26": "Unown Z",
+    "Unown Variant 27": "Unown !",
+    "Unown Variant 28": "Unown ?",
 }
 THUMBNAIL_DIR = Path(__file__).with_name("assets") / "thumbnails"
 
@@ -317,6 +319,13 @@ def pokemon_name_from_file(path: Path) -> str:
     return re.sub(r"(?:[\s_-]+\(?\d+\)?|\s*\(\d+\))$", "", path.stem).strip()
 
 
+def archive_unown_number(number: int) -> int:
+    """Archive Unown art skips G and ends with "!" and "?", so it runs a letter behind."""
+    if number < 7:
+        return number
+    return number + 1 if number <= 24 else number + 2
+
+
 def reference_images(folder: Path) -> dict[str, list[Path]]:
     """Group images by canonical Pokémon/form name, anywhere below folder."""
     import json
@@ -432,7 +441,10 @@ def reference_images(folder: Path) -> dict[str, list[Path]]:
         variant = VARIANT_PATTERN.match(raw_name)
         if variant:
             base = canonical_name(variant.group("base"))
-            name = f"{base} Variant {int(variant.group('number'))}" if base else None
+            number = int(variant.group("number"))
+            if base == "Unown" and "archive" in path.relative_to(folder).parts:
+                number = archive_unown_number(number)
+            name = f"{base} Variant {number}" if base else None
         else:
             name = canonical_name(raw_name)
         if name is None:
@@ -584,6 +596,28 @@ def silvally_form_by_color(data: bytes) -> str | None:
         if best is None or int(inliers.sum()) > best[0]:
             best = (int(inliers.sum()), form)
     return best[1] if best else None
+
+
+def squawkabilly_form_by_color(data: bytes) -> str | None:
+    """Tell the plumage colours apart; the forms share one shape, so votes can't."""
+    mask = foreground_mask(data)
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if cv2 else None
+    if mask is None or image is None or mask.shape != image.shape[:2]:
+        return None
+    pixels = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[mask > 0]
+    if len(pixels) < 200:
+        return None
+    if np.median(pixels[:, 1]) < 40:
+        return "White-Plumage Squawkabilly"
+    coloured = pixels[pixels[:, 1] > 70][:, 0]
+    share = lambda low, high: float(np.count_nonzero((coloured >= low) & (coloured < high))) / len(pixels)
+    scores = {
+        "Yellow-Plumage Squawkabilly": share(20, 35),
+        "Green-Plumage Squawkabilly": share(50, 75),
+        "Blue-Plumage Squawkabilly": share(95, 130),
+    }
+    form = max(scores, key=scores.get)
+    return form if scores[form] >= 0.12 else None
 
 
 def form_thumbnail_path(form: str) -> Path:
@@ -820,6 +854,8 @@ class ImageMatcher:
             name = silvally_form_by_color(data) or name
         if name in ARCEUS_FORM_SET:
             name = arceus_form_by_color(data) or name
+        if name in SQUAWKABILLY_PLUMAGE_FORMS or name == "Squawkabilly":
+            name = squawkabilly_form_by_color(data) or name
         return name, votes
 
     def _match(

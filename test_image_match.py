@@ -508,7 +508,10 @@ class ImageMatcherTests(unittest.TestCase):
                         "_match",
                         side_effect=[(name, 20), (name, 18)],
                     ),
-                    patch("image_match.has_belly_patch", return_value=False),
+                    patch(
+                        "image_match.has_belly_patch",
+                        return_value=name == "Palafin",
+                    ),
                 ):
                     result = matcher.match(b"spawn image")
                 self.assertEqual(result, (name, 20))
@@ -520,7 +523,7 @@ class ImageMatcherTests(unittest.TestCase):
         path = (
             Path(__file__).with_name("pokemon_images")
             / "Finizen"
-            / "spawn-reference.png"
+            / "bulbasaur-example-1.png"
         )
         image = cv2.imread(str(path))
         self.assertIsNotNone(image)

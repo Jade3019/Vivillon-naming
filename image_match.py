@@ -494,7 +494,7 @@ def drop_duplicates(descriptors):
 
 
 def has_belly_patch(data: bytes) -> bool | None:
-    """Palafin has a red patch on its belly that Finizen lacks."""
+    """Palafin has a small pink heart on its belly that Finizen lacks."""
     image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         return None
@@ -502,18 +502,19 @@ def has_belly_patch(data: bytes) -> bool | None:
     if scale > 1:
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    red = ((hsv[..., 0] < 10) | (hsv[..., 0] > 165)) & (hsv[..., 1] > 60) & (hsv[..., 2] > 120)
+    # The heart is a faint pink outline, so the saturation floor is low.
+    red = ((hsv[..., 0] < 10) | (hsv[..., 0] >= 140)) & (hsv[..., 1] >= 28) & (hsv[..., 2] >= 110)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(red.astype(np.uint8))
     grey = (hsv[..., 1] < 50) & (hsv[..., 2] > 90) & (hsv[..., 2] < 220)
     kernel = np.ones((5, 5), np.uint8)
     for i in range(1, count):
         x, y, w, h, area = stats[i]
-        if area < 40 or area > 400 or w < 1.5 * h:
+        if area < 40 or area > 400 or w < 1.4 * h:
             continue
         blob = (labels == i).astype(np.uint8)
-        ring = (cv2.dilate(blob, kernel, iterations=2) > 0) & (blob == 0)
-        # The patch sits on the grey belly, unlike reddish background details.
-        if grey[ring].mean() >= 0.5:
+        ring = (cv2.dilate(blob, kernel, iterations=3) > 0) & (blob == 0)
+        # The heart sits wholly on the grey belly; the eye is ringed by white and blue.
+        if grey[ring].mean() >= 0.8:
             return True
     return False
 
@@ -848,8 +849,9 @@ class ImageMatcher:
     @staticmethod
     def _postprocess_match(data: bytes, name: str, votes: int) -> tuple[str, int]:
         if name in ("Palafin", "Finizen"):
-            if has_belly_patch(data) is True:
-                name = "Palafin"
+            heart = has_belly_patch(data)
+            if heart is not None:
+                name = "Palafin" if heart else "Finizen"
         if name in SILVALLY_FORMS:
             name = silvally_form_by_color(data) or name
         if name in ARCEUS_FORM_SET:

@@ -695,7 +695,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
         image_path = (
             Path(__file__).with_name("pokemon_images")
             / "Sealeo"
-            / "spawn-reference.png"
+            / "bulbasaur-example-big-1.png"
         )
         image = cv2.imread(str(image_path))
         self.assertIsNotNone(image)

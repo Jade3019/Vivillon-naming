@@ -42,7 +42,7 @@ BACKGROUND_SAMPLE = 120
 
 # Scraped pictures whose scenery is shared between pictures and would be learned
 # as part of the Pokémon (Swinub's snow forest made it name every snowy spawn).
-EXCLUDED_REFERENCES = {"Swinub": {"7.png", "13.png"}}
+EXCLUDED_REFERENCES = {"Swinub": {"7.png", "13.png"}, "Snom": {"7.png"}}
 
 
 def background_pool(folder: Path, exclude: set[str]):

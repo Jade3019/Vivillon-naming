@@ -1277,6 +1277,10 @@ def is_missingno_name(name: str) -> bool:
 def display_pokemon_name(name: str) -> str:
     if name.casefold() == "male meowstic":
         return "Meowstic"
+    if name.casefold() == "plant wormadam":
+        return "Wormadam"
+    if name.casefold() == "male basculegion":
+        return "Basculegion"
     return FORM_DISPLAY_NAMES.get(canonicalize_regional_name(name), canonicalize_regional_name(name))
 
 

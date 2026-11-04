@@ -317,6 +317,9 @@ PROFILE_MOONLIT_USER_ID: Final[int] = 883224024161873940
 PROFILE_MARSHADOW_USER_ID: Final[int] = 1398882668401135657
 PROFILE_JIRACHI_USER_ID: Final[int] = 616386709659189268
 PROFILE_GARDEVOIR_USER_ID: Final[int] = 729509574486523907
+PROFILE_ALL_ACCESS_USER_IDS: Final[frozenset[int]] = frozenset(
+    {PROFILE_GARDEVOIR_USER_ID}
+)
 PROFILE_USER_ONLY_CHOICES: Final[dict[int, dict[str, frozenset[str]]]] = {
     PROFILE_FLOWER_SPRING_USER_ID: {
         "background": frozenset({"buneary"}),
@@ -377,7 +380,7 @@ def profile_setting_choices_for_user(
     choices = PROFILE_SETTING_CHOICES.get(setting, {})
     restricted_choices = set()
     for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
-        if owner_id != user_id:
+        if owner_id != user_id and user_id not in PROFILE_ALL_ACCESS_USER_IDS:
             restricted_choices.update(owner_choices.get(setting, frozenset()))
     return {
         value: choice
@@ -5661,7 +5664,7 @@ def load_profile_data(
             if profile[setting] in legacy_choices:
                 profile[setting] = PROFILE_DEFAULTS[setting]
         for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
-            if user_id != str(owner_id):
+            if user_id != str(owner_id) and int(user_id) not in PROFILE_ALL_ACCESS_USER_IDS:
                 for setting, restricted_choices in owner_choices.items():
                     if profile[setting] in restricted_choices:
                         profile[setting] = PROFILE_DEFAULTS[setting]
@@ -6522,7 +6525,7 @@ class NamingBot(discord.Client):
             **self.profiles.get(str(user_id), {}),
         }
         for owner_id, owner_choices in PROFILE_USER_ONLY_CHOICES.items():
-            if user_id != owner_id:
+            if user_id != owner_id and user_id not in PROFILE_ALL_ACCESS_USER_IDS:
                 for setting, restricted_choices in owner_choices.items():
                     if settings[setting] in restricted_choices:
                         settings[setting] = PROFILE_DEFAULTS[setting]

@@ -1,2 +1,8 @@
 {
+    "chat.tools.terminal.autoApprove": {
+        "/^\\(sudo -n true && echo sudo ok\\); \\(sudo apt-get update -qq && sudo apt-get install -y -qq postgresql postgresql-client\\) 2>&1 \\| tail -5; ls /usr/lib/postgresql$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

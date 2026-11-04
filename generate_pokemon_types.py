@@ -19,7 +19,7 @@ EXTRA = {
     "Spiky-Eared Pichu": ["electric"],
     "Peakychu": ["electric"],
     "Smearguru": ["normal"],
-    "Mosslax": ["normal"],
+    "Mosslax": ["grass", "normal"],
     "Prof Tangrowth": ["grass"],
     "Chef Dente": ["normal"],
     "Cherrim Variant 1": ["grass"],

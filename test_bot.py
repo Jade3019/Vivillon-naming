@@ -380,7 +380,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "bot.asyncio.to_thread",
-                new=AsyncMock(side_effect=[None, ("Wiglett", 5)]),
+                new=AsyncMock(side_effect=[None, ("Wiglett", 3)]),
             ),
             patch(
                 "bot.request_prediction",

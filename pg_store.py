@@ -108,7 +108,16 @@ def load(table: str) -> dict[str, list[int]]:
         return data
 
     try:
-        return _run(work)
+        result = _run(work)
+        if not isinstance(result, dict):
+            return {}
+        data: dict[str, list[int]] = {}
+        for key, user_ids in result.items():
+            if isinstance(key, str) and isinstance(user_ids, list) and all(
+                isinstance(user_id, int) for user_id in user_ids
+            ):
+                data[key] = user_ids
+        return data
     except Exception as error:
         raise ValueError(f"Could not read {table} from PostgreSQL") from error
 

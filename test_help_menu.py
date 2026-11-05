@@ -10,8 +10,8 @@ class HelpMenuTests(unittest.TestCase):
         self.assertLessEqual(len(embed.fields), 25)
         self.assertLessEqual(len(embed), 6000)
         for field in embed.fields:
-            self.assertLessEqual(len(field.name), 256)
-            self.assertLessEqual(len(field.value), 1024)
+            self.assertLessEqual(len(field.name or ""), 256)
+            self.assertLessEqual(len(field.value or ""), 1024)
 
 
 if __name__ == "__main__":

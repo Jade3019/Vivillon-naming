@@ -3,8 +3,11 @@ import image_match
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, TypeVar, cast
+from unittest import mock
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import discord
@@ -127,6 +130,7 @@ from bot import (
     SERVER_ID,
     SERVER_IDS,
     RESERVE_ROLE_ID,
+    ActiveIncense,
     reservation_key,
     Config,
     NamingBot,
@@ -165,6 +169,57 @@ from bot import (
     EventMenuView,
     parse_chat_event_duration,
 )
+
+
+T = TypeVar("T")
+
+
+def require_not_none(value: T | None) -> T:
+    if value is None:
+        raise AssertionError("Expected a non-None value")
+    return value
+
+
+def awaited_kwargs(mock: Any) -> dict[str, Any]:
+    call_args = mock.await_args
+    if call_args is None:
+        raise AssertionError("Expected the mock to be awaited")
+    return call_args.kwargs
+
+
+def awaited_args(mock: Any) -> tuple[Any, ...]:
+    call_args = mock.await_args
+    if call_args is None:
+        raise AssertionError("Expected the mock to be awaited")
+    return call_args.args
+
+
+def runtime_attribute(value: object, name: str) -> Any:
+    try:
+        return getattr(value, name)
+    except AttributeError as error:
+        raise AssertionError(f"Expected runtime attribute {name!r}") from error
+
+
+def set_runtime_attribute(value: object, name: str, new_value: Any) -> None:
+    if not hasattr(value, name):
+        raise AssertionError(f"Expected runtime attribute {name!r}")
+    setattr(value, name, new_value)
+
+
+def embed_description(embed: discord.Embed) -> str:
+    return require_not_none(embed.description)
+
+
+def rgba_pixel(image: Image.Image, position: tuple[int, int]) -> tuple[int, int, int, int]:
+    pixel = image.getpixel(position)
+    if not isinstance(pixel, tuple) or len(pixel) != 4:
+        raise AssertionError("Expected an RGBA pixel")
+    return cast(tuple[int, int, int, int], pixel)
+
+
+def profile_frame_alpha(alpha: int) -> int:
+    return round(255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA)
 
 
 class ConfigTests(unittest.TestCase):
@@ -270,7 +325,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result, ("Enchanted Applin", 98.0))
-        prompt = client.chat.completions.create.await_args.kwargs["messages"][0][
+        prompt = awaited_kwargs(client.chat.completions.create)["messages"][0][
             "content"
         ]
         self.assertIn("Enchanted Applin (base species: Applin)", prompt)
@@ -615,7 +670,7 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.handle_premium_command(message)
 
-        embeds = message.reply.await_args.kwargs["embeds"]
+        embeds = awaited_kwargs(message.reply)["embeds"]
         self.assertEqual(
             [embed.title for embed in embeds],
             ["Bronze Premium", "Silver Premium", "Gold Premium"],
@@ -632,16 +687,16 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("200 simultaneous", embeds[1].description)
         self.assertIn("300 simultaneous", embeds[2].description)
         self.assertTrue(
-            all("Not active" in embed.description for embed in embeds)
+            all("Not active" in embed_description(embed) for embed in embeds)
         )
 
         self.bot.premium_servers[str(message.guild.id)] = "silver"
         await self.bot.handle_premium_command(message)
-        embeds = message.reply.await_args.kwargs["embeds"]
+        embeds = awaited_kwargs(message.reply)["embeds"]
         self.assertEqual([embed.title for embed in embeds], ["Silver Premium"])
         self.assertIn("Active for this server", embeds[0].description)
         self.assertEqual(
-            [file.filename for file in message.reply.await_args.kwargs["files"]],
+            [file.filename for file in awaited_kwargs(message.reply)["files"]],
             ["butterfly-silver.png"],
         )
 
@@ -678,7 +733,10 @@ class PremiumAccessTests(unittest.IsolatedAsyncioTestCase):
         self.bot.handle_ping_command.assert_awaited_once_with(command)
 
     async def test_global_concurrency_ceiling_is_shared_across_servers(self) -> None:
-        self.bot.config = SimpleNamespace(max_concurrent_vision_requests=2)
+        self.bot.config = replace(
+            self.bot.config,
+            max_concurrent_vision_requests=2,
+        )
         self.bot.premium_servers = {
             "100": "gold",
             "200": "gold",
@@ -825,7 +883,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("49.99%", alert)
         self.assertIn("below 50%", alert)
         self.assertIn(message.jump_url, alert)
-        allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
+        allowed_mentions = awaited_kwargs(alert_channel.send)["allowed_mentions"]
         self.assertEqual(
             [user.id for user in allowed_mentions.users],
             [bot_module.RECOGNITION_ALERT_USER_ID],
@@ -833,7 +891,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(allowed_mentions.roles)
         self.assertFalse(allowed_mentions.everyone)
         self.assertEqual(
-            message.reply.await_args.kwargs["mention_author"],
+            awaited_kwargs(message.reply)["mention_author"],
             False,
         )
 
@@ -1158,7 +1216,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             now = int(time.time())
             self.bot.incense_path = Path(directory) / "incenses.json"
-            self.bot.active_incenses = {
+            self.bot.active_incenses = cast(dict[str, ActiveIncense], {
                 "210": {
                     "guild": "Current server",
                     "channel": "incense-room",
@@ -1177,7 +1235,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                     "guild_id": SERVER_ID,
                     "expires_at": now - 1,
                 },
-            }
+            })
             guild = Mock()
             guild.id = SERVER_ID
             guild.name = "Current server"
@@ -1221,14 +1279,14 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             now = int(time.time())
             self.bot.incense_path = Path(directory) / "incenses.json"
-            self.bot.active_incenses = {
+            self.bot.active_incenses = cast(dict[str, ActiveIncense], {
                 "210": {
                     "guild": "Current server",
                     "channel": "tracked-room",
                     "guild_id": SERVER_ID,
                     "expires_at": now + 3600,
                 },
-            }
+            })
             guild = Mock()
             guild.id = SERVER_ID
             guild.name = "Current server"
@@ -1341,7 +1399,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_api_status_counts_incenses_across_all_servers(self) -> None:
         now = int(time.time())
-        self.bot.active_incenses = {
+        self.bot.active_incenses = cast(dict[str, ActiveIncense], {
             "200": {
                 "guild": "First server",
                 "channel": "incense-room",
@@ -1354,13 +1412,13 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 "guild_id": SERVER_ID + 1,
                 "expires_at": now + 3600,
             },
-        }
+        })
         message = Mock()
         message.reply = AsyncMock()
 
         await self.bot.handle_api_status(message)
 
-        embed = message.reply.await_args.kwargs["embed"]
+        embed = awaited_kwargs(message.reply)["embed"]
         fields = {field.name: field.value for field in embed.fields}
         self.assertEqual(fields["Active Incense"], "2")
 
@@ -1388,7 +1446,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             status_message = Mock()
             status_message.reply = AsyncMock()
             await self.bot.handle_api_status(status_message)
-            embed = status_message.reply.await_args.kwargs["embed"]
+            embed = awaited_kwargs(status_message.reply)["embed"]
             fields = {field.name: field.value for field in embed.fields}
             self.assertEqual(fields["Active Incense"], "1")
 
@@ -1398,7 +1456,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message_edit(Mock(), message)
             status_message.reply.reset_mock()
             await self.bot.handle_api_status(status_message)
-            embed = status_message.reply.await_args.kwargs["embed"]
+            embed = awaited_kwargs(status_message.reply)["embed"]
             fields = {field.name: field.value for field in embed.fields}
             self.assertEqual(fields["Active Incense"], "0")
 
@@ -1439,7 +1497,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             view = NamingSettingsView(self.bot, SERVER_ID)
             sections = [
                 child
-                for child in view.children[0].children
+                for child in runtime_attribute(view.children[0], "children")
                 if isinstance(child, discord.ui.Section)
             ]
             enabled_button = sections[0].accessory
@@ -1464,26 +1522,26 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 self.bot.naming_settings_for_guild(SERVER_ID)["enabled"]
             )
             interaction.response.edit_message.assert_awaited_once()
-            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_view = awaited_kwargs(interaction.response.edit_message)["view"]
             updated_sections = [
                 child
-                for child in updated_view.children[0].children
+                for child in runtime_attribute(updated_view.children[0], "children")
                 if isinstance(child, discord.ui.Section)
             ]
-            self.assertEqual(updated_sections[0].accessory.label, "Off")
+            self.assertEqual(runtime_attribute(runtime_attribute(updated_sections[0], "accessory"), "label"), "Off")
 
             mode_button = updated_sections[1].accessory
             await mode_button.callback(interaction)
             self.assertFalse(
                 self.bot.naming_settings_for_guild(SERVER_ID)["assisted"]
             )
-            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_view = awaited_kwargs(interaction.response.edit_message)["view"]
             updated_sections = [
                 child
-                for child in updated_view.children[0].children
+                for child in runtime_attribute(updated_view.children[0], "children")
                 if isinstance(child, discord.ui.Section)
             ]
-            self.assertEqual(updated_sections[1].accessory.label, "Name only")
+            self.assertEqual(runtime_attribute(runtime_attribute(updated_sections[1], "accessory"), "label"), "Name only")
 
     async def test_naming_settings_button_accepts_configured_role(self) -> None:
         role_id = 900
@@ -1491,7 +1549,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         view = NamingSettingsView(self.bot, SERVER_ID)
         sections = [
             child
-            for child in view.children[0].children
+            for child in runtime_attribute(view.children[0], "children")
             if isinstance(child, discord.ui.Section)
         ]
         enabled_button = sections[0].accessory
@@ -1570,7 +1628,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<@123>", content)
         self.assertIn("Pikachu", content)
         self.assertNotIn("c pikachu", content)
-        self.assertIsNone(pinged_message.reply.await_args.kwargs["embed"])
+        self.assertIsNone(awaited_kwargs(pinged_message.reply)["embed"])
 
         self.bot.server_settings[str(SERVER_ID)]["pings"] = False
         name_only_message = spawn_message(704)
@@ -1584,7 +1642,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Charizard", name_only_content)
         self.assertNotIn("Copy Here", name_only_content)
         self.assertNotIn("c charizard", name_only_content)
-        self.assertIsNone(name_only_message.reply.await_args.kwargs["embed"])
+        self.assertIsNone(awaited_kwargs(name_only_message.reply)["embed"])
 
     async def test_unmatched_spawn_reports_failure_instead_of_silently_skipping(
         self,
@@ -1634,7 +1692,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<#1210>", alert)
         self.assertIn(message.jump_url, alert)
         self.assertNotIn("[#", alert)
-        allowed_mentions = alert_channel.send.await_args.kwargs["allowed_mentions"]
+        allowed_mentions = awaited_kwargs(alert_channel.send)["allowed_mentions"]
         self.assertEqual(
             [user.id for user in allowed_mentions.users],
             [bot_module.RECOGNITION_ALERT_USER_ID],
@@ -1750,7 +1808,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.handle_api_status(message)
 
-        embed = message.reply.await_args.kwargs["embed"]
+        embed = awaited_kwargs(message.reply)["embed"]
         fields = {field.name: field.value for field in embed.fields}
         self.assertEqual(len(embed.fields), 15)
         self.assertEqual(
@@ -1805,7 +1863,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         message.reply.assert_awaited_once()
         self.assertIsInstance(
-            message.reply.await_args.kwargs["view"],
+            awaited_kwargs(message.reply)["view"],
             EventMenuView,
         )
 
@@ -1935,23 +1993,23 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(message)
 
         message.reply.assert_awaited_once()
-        reply_kwargs = message.reply.await_args.kwargs
+        reply_kwargs = awaited_kwargs(message.reply)
         self.assertFalse(reply_kwargs["mention_author"])
         view = reply_kwargs["view"]
         self.assertIsInstance(view, ServerSettingsView)
         self.assertTrue(view.has_components_v2())
         sections = [
             child
-            for child in view.children[0].children
+            for child in runtime_attribute(view.children[0], "children")
             if isinstance(child, discord.ui.Section)
         ]
         self.assertEqual(len(sections), 4)
         self.assertEqual(
-            [section.accessory.label for section in sections],
+            [runtime_attribute(runtime_attribute(section, "accessory"), "label") for section in sections],
             ["Open"] * 4,
         )
         self.assertEqual(
-            [section.accessory.custom_id for section in sections],
+            [runtime_attribute(runtime_attribute(section, "accessory"), "custom_id") for section in sections],
             [
                 "server_settings:open:naming",
                 "server_settings:open:roles",
@@ -1966,7 +2024,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         await sections[0].accessory.callback(interaction)
 
-        naming_view = interaction.response.edit_message.await_args.kwargs["view"]
+        naming_view = awaited_kwargs(interaction.response.edit_message)["view"]
         self.assertIsInstance(naming_view, NamingSettingsView)
 
     async def test_afk_command_sends_personal_toggle_layout(self) -> None:
@@ -1983,20 +2041,20 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(message)
 
         message.reply.assert_awaited_once()
-        view = message.reply.await_args.kwargs["view"]
+        view = awaited_kwargs(message.reply)["view"]
         self.assertIsInstance(view, AFKSettingsView)
         self.assertTrue(view.has_components_v2())
         sections = [
             child
-            for child in view.children[0].children
+            for child in runtime_attribute(view.children[0], "children")
             if isinstance(child, discord.ui.Section)
         ]
         self.assertEqual(
-            [section.accessory.label for section in sections],
+            [runtime_attribute(runtime_attribute(section, "accessory"), "label") for section in sections],
             ["On", "On"],
         )
         self.assertEqual(
-            [section.accessory.custom_id for section in sections],
+            [runtime_attribute(runtime_attribute(section, "accessory"), "custom_id") for section in sections],
             ["afk_settings:shinyhunt", "afk_settings:collection"],
         )
 
@@ -2007,7 +2065,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             view = AFKSettingsView(self.bot, SERVER_ID, 123)
             sections = [
                 child
-                for child in view.children[0].children
+                for child in runtime_attribute(view.children[0], "children")
                 if isinstance(child, discord.ui.Section)
             ]
             collection_button = sections[1].accessory
@@ -2038,13 +2096,13 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 load_afk_settings(self.bot.afk_settings_path),
                 {f"{SERVER_ID}:123": {"shinyhunt": True, "collection": False}},
             )
-            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_view = awaited_kwargs(interaction.response.edit_message)["view"]
             updated_sections = [
                 child
-                for child in updated_view.children[0].children
+                for child in runtime_attribute(updated_view.children[0], "children")
                 if isinstance(child, discord.ui.Section)
             ]
-            self.assertEqual(updated_sections[1].accessory.label, "Off")
+            self.assertEqual(runtime_attribute(runtime_attribute(updated_sections[1], "accessory"), "label"), "Off")
 
 
 class ProfileTests(unittest.IsolatedAsyncioTestCase):
@@ -2078,7 +2136,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_message(message)
 
         message.reply.assert_awaited_once()
-        kwargs = message.reply.await_args.kwargs
+        kwargs = awaited_kwargs(message.reply)
         self.assertFalse(kwargs["mention_author"])
         self.assertNotIn("embed", kwargs)
         self.assertEqual(kwargs["file"].filename, "profile.png")
@@ -2107,7 +2165,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.on_message(message)
 
-        view = message.reply.await_args.kwargs["view"]
+        view = awaited_kwargs(message.reply)["view"]
         self.assertEqual(view.user_id, 456)
         self.assertEqual(view.guild_id, SERVER_ID)
         self.assertIsNone(view.preview_settings)
@@ -2126,7 +2184,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.on_message(message)
 
-        kwargs = message.reply.await_args.kwargs
+        kwargs = awaited_kwargs(message.reply)
         view = kwargs["view"]
         self.assertEqual(view.user_id, 456)
         self.assertEqual(view.preview_owner_id, 123)
@@ -2143,7 +2201,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             preview_owner_id=123,
         )
         select = ProfileEditView(profile_view).children[0]
-        select._values = ["pink"]
+        set_runtime_attribute(select, "_values", ["pink"])
         interaction = Mock()
         interaction.user.id = 123
         interaction.response.defer = AsyncMock()
@@ -2152,7 +2210,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         await select.callback(interaction)
 
-        self.assertEqual(profile_view.preview_settings["text_color"], "pink")
+        preview_settings = require_not_none(profile_view.preview_settings)
+        self.assertEqual(preview_settings["text_color"], "pink")
         self.assertEqual(self.bot.profile_settings_for_user(456)["text_color"], "blue")
         self.assertEqual(
             load_profile_data(self.bot.profile_data_path)[0]["456"]["text_color"],
@@ -2173,9 +2232,9 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         editor = ProfileEditView(profile_view)
         self.assertEqual(len(editor.children), 5)
         select = editor.children[4]
-        self.assertEqual(select.placeholder, "Music")
+        self.assertEqual(runtime_attribute(select, "placeholder"), "Music")
         self.assertEqual(
-            [option.label for option in select.options], ["Return to me"]
+            [option.label for option in runtime_attribute(select, "options")], ["Return to me"]
         )
         self.assertTrue(PROFILE_RETURN_TO_ME["return_to_me"][2].exists())
         preview_view = ProfileView(
@@ -2241,7 +2300,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         interaction.response.send_message.assert_awaited_once()
         self.assertTrue(
-            interaction.response.send_message.await_args.kwargs["ephemeral"]
+            awaited_kwargs(interaction.response.send_message)["ephemeral"]
         )
         self.bot.is_application_owner.assert_not_called()
 
@@ -2253,16 +2312,16 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         await profile_view.children[0].callback(interaction)
 
-        kwargs = interaction.response.send_message.await_args.kwargs
+        kwargs = awaited_kwargs(interaction.response.send_message)
         self.assertFalse(kwargs["ephemeral"])
         editor = kwargs["view"]
         self.assertIsInstance(editor, ProfileEditView)
         self.assertEqual(
-            [select.placeholder for select in editor.children],
+            [runtime_attribute(select, "placeholder") for select in editor.children],
             ["Text color", "Background", "Middle background", "Frame", "Music"],
         )
         self.assertEqual(
-            [option.label for option in editor.children[1].options],
+            [option.label for option in runtime_attribute(editor.children[1], "options")],
             [
                 "Default background",
                 "Cosmog",
@@ -2273,15 +2332,15 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         self.assertEqual(
-            [option.label for option in editor.children[2].options],
+            [option.label for option in runtime_attribute(editor.children[2], "options")],
             ["Default middle background", "Cosmog", "Hisuian Zorua", "Eevee"],
         )
         self.assertEqual(
-            [option.label for option in editor.children[3].options],
+            [option.label for option in runtime_attribute(editor.children[3], "options")],
             ["No frame", "Mystic", "Gem", "Nightflower"],
         )
         self.assertEqual(
-            editor.children[0].options[0].label,
+            runtime_attribute(editor.children[0], "options")[0].label,
             "Default text color",
         )
 
@@ -2296,84 +2355,84 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             ProfileView(self.bot, PROFILE_MARSHADOW_USER_ID, SERVER_ID)
         )
 
-        self.assertIn("Buneary", [option.label for option in flower_editor.children[1].options])
+        self.assertIn("Buneary", [option.label for option in runtime_attribute(flower_editor.children[1], "options")])
         self.assertIn(
             "Buneary",
-            [option.label for option in flower_editor.children[2].options],
+            [option.label for option in runtime_attribute(flower_editor.children[2], "options")],
         )
         self.assertIn(
             "Flower Spring",
-            [option.label for option in flower_editor.children[3].options],
+            [option.label for option in runtime_attribute(flower_editor.children[3], "options")],
         )
         self.assertNotIn(
             "Slakoth",
-            [option.label for option in flower_editor.children[1].options],
+            [option.label for option in runtime_attribute(flower_editor.children[1], "options")],
         )
         self.assertNotIn(
             "Moonlit",
-            [option.label for option in flower_editor.children[3].options],
+            [option.label for option in runtime_attribute(flower_editor.children[3], "options")],
         )
 
         self.assertIn(
             "Slakoth",
-            [option.label for option in moonlit_editor.children[1].options],
+            [option.label for option in runtime_attribute(moonlit_editor.children[1], "options")],
         )
         self.assertIn(
             "Slakoth",
-            [option.label for option in moonlit_editor.children[2].options],
+            [option.label for option in runtime_attribute(moonlit_editor.children[2], "options")],
         )
         self.assertIn(
             "Moonlit",
-            [option.label for option in moonlit_editor.children[3].options],
+            [option.label for option in runtime_attribute(moonlit_editor.children[3], "options")],
         )
         self.assertNotIn(
             "Buneary",
-            [option.label for option in moonlit_editor.children[1].options],
+            [option.label for option in runtime_attribute(moonlit_editor.children[1], "options")],
         )
         self.assertNotIn(
             "Flower Spring",
-            [option.label for option in moonlit_editor.children[3].options],
+            [option.label for option in runtime_attribute(moonlit_editor.children[3], "options")],
         )
         self.assertIn(
             "Marshadow",
-            [option.label for option in marshadow_editor.children[1].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[1], "options")],
         )
         self.assertIn(
             "Marshadow",
-            [option.label for option in marshadow_editor.children[2].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[2], "options")],
         )
         self.assertNotIn(
             "Buneary",
-            [option.label for option in marshadow_editor.children[1].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[1], "options")],
         )
         self.assertNotIn(
             "Slakoth",
-            [option.label for option in marshadow_editor.children[1].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[1], "options")],
         )
         self.assertNotIn(
             "Flower Spring",
-            [option.label for option in marshadow_editor.children[3].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[3], "options")],
         )
         self.assertNotIn(
             "Moonlit",
-            [option.label for option in marshadow_editor.children[3].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[3], "options")],
         )
         self.assertIn(
             "Moonveil",
-            [option.label for option in marshadow_editor.children[3].options],
+            [option.label for option in runtime_attribute(marshadow_editor.children[3], "options")],
         )
         ordinary_editor = ProfileEditView(ProfileView(self.bot, 123, SERVER_ID))
         self.assertNotIn(
             "Moonveil",
-            [option.label for option in ordinary_editor.children[3].options],
+            [option.label for option in runtime_attribute(ordinary_editor.children[3], "options")],
         )
         self.assertNotIn(
             "Marshadow",
-            [option.label for option in ordinary_editor.children[1].options],
+            [option.label for option in runtime_attribute(ordinary_editor.children[1], "options")],
         )
         self.assertNotIn(
             "Marshadow",
-            [option.label for option in ordinary_editor.children[2].options],
+            [option.label for option in runtime_attribute(ordinary_editor.children[2], "options")],
         )
 
     async def test_dropdown_change_persists_and_refreshes_the_profile(self) -> None:
@@ -2382,7 +2441,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         profile_view.message.edit = AsyncMock()
         editor = ProfileEditView(profile_view)
         text_color_select = editor.children[0]
-        text_color_select._values = ["pink"]
+        set_runtime_attribute(text_color_select, "_values", ["pink"])
         interaction = Mock()
         interaction.user.id = 123
         interaction.response.defer = AsyncMock()
@@ -2736,7 +2795,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("stop requested", stop_command.reply.await_args.args[0])
         self.assertIn(
             "Backfill stopped: scanned 1 messages",
-            progress.edit.await_args.kwargs["content"],
+            awaited_kwargs(progress.edit)["content"],
         )
         progress_messages = [
             call.kwargs["content"]
@@ -3457,9 +3516,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         frame.putalpha(
             frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
+                profile_frame_alpha
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
@@ -3483,8 +3540,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             fill=255,
         )
         profile_card.putalpha(card_mask)
-        self.assertEqual(profile_card.getpixel((0, 0))[3], 0)
-        self.assertEqual(profile_card.getpixel((0, 412))[3], 255)
+        self.assertEqual(rgba_pixel(profile_card, (0, 0))[3], 0)
+        self.assertEqual(rgba_pixel(profile_card, (0, 412))[3], 255)
         expected.alpha_composite(profile_card, dest=profile_position)
         expected.alpha_composite(frame)
         with Image.open(render_profile_image(settings, stats)) as actual:
@@ -3513,9 +3570,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         frame.putalpha(
             frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
+                profile_frame_alpha
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
@@ -3569,9 +3624,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         frame.putalpha(
             frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
+                profile_frame_alpha
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
@@ -3626,9 +3679,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         frame.putalpha(
             frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
+                profile_frame_alpha
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
@@ -3673,9 +3724,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             )
         frame.putalpha(
             frame.getchannel("A").point(
-                lambda alpha: round(
-                    255 * (alpha / 255) ** PROFILE_FRAME_ALPHA_GAMMA
-                )
+                profile_frame_alpha
             )
         )
         expected = Image.new("RGBA", frame.size, (0, 0, 0, 0))
@@ -3739,7 +3788,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
                 round(base.width * card_scale),
                 round(base.height * card_scale),
             )
-            self.assertEqual(source.getpixel((768, 512))[3], 0)
+            self.assertEqual(rgba_pixel(source, (768, 512))[3], 0)
             self.assertEqual(expected_card_size, (1540, 908))
 
         with Image.open(render_profile_image(settings, stats)) as actual:
@@ -4129,7 +4178,7 @@ class ShinyhuntCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_shinyhunt_command(message)
 
             message.reply.assert_awaited_once()
-            view = message.reply.await_args.kwargs["view"]
+            view = awaited_kwargs(message.reply)["view"]
             interaction = Mock()
             interaction.user.id = 123
             interaction.user.guild_permissions.administrator = True
@@ -4199,7 +4248,7 @@ class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_collection_command(message)
 
             message.reply.assert_awaited_once()
-            self.assertIn("view", message.reply.await_args.kwargs)
+            self.assertIn("view", awaited_kwargs(message.reply))
             self.assertEqual(
                 self.bot.collections,
                 {
@@ -4209,7 +4258,7 @@ class CollectionCommandTests(unittest.IsolatedAsyncioTestCase):
                 },
             )
 
-            view = message.reply.await_args.kwargs["view"]
+            view = awaited_kwargs(message.reply)["view"]
             interaction = Mock()
             interaction.user.id = 123
             interaction.user.guild_permissions.administrator = True
@@ -4295,7 +4344,7 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.handle_type_ping_command(message)
 
             message.reply.assert_awaited_once()
-            view = message.reply.await_args.kwargs["view"]
+            view = awaited_kwargs(message.reply)["view"]
             self.assertIsInstance(view, ClearTypePingsView)
 
             interaction = Mock()
@@ -4351,10 +4400,10 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
                 await self.bot.on_message(message)
 
                 message.reply.assert_awaited_once()
-                view = message.reply.await_args.kwargs["view"]
+                view = awaited_kwargs(message.reply)["view"]
                 self.assertIsInstance(view, TypePingView)
                 self.assertEqual(
-                    message.reply.await_args.kwargs["embed"].title,
+                    awaited_kwargs(message.reply)["embed"].title,
                     "Type Pings",
                 )
                 type_select = next(
@@ -4362,10 +4411,10 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
                     for child in view.children
                     if isinstance(child, discord.ui.Select)
                 )
-                self.assertEqual(len(type_select.options), len(TYPE_PING_TYPES))
+                self.assertEqual(len(runtime_attribute(type_select, "options")), len(TYPE_PING_TYPES))
                 self.assertEqual(type_select.max_values, len(TYPE_PING_TYPES))
                 self.assertEqual(type_select.min_values, 0)
-                self.assertFalse(any(option.default for option in type_select.options))
+                self.assertFalse(any(option.default for option in runtime_attribute(type_select, "options")))
 
             interaction = Mock()
             interaction.guild_id = SERVER_ID
@@ -4373,13 +4422,13 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
             interaction.response.edit_message = AsyncMock()
             interaction.response.send_message = AsyncMock()
             interaction.followup.send = AsyncMock()
-            view = message.reply.await_args.kwargs["view"]
+            view = awaited_kwargs(message.reply)["view"]
             type_select = next(
                 child
                 for child in view.children
                 if isinstance(child, discord.ui.Select)
             )
-            type_select._values = ["normal", "fire"]
+            set_runtime_attribute(type_select, "_values", ["normal", "fire"])
 
             await type_select.callback(interaction)
 
@@ -4391,14 +4440,14 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
                 load_type_pings(self.bot.type_ping_path),
                 {f"{SERVER_ID}:123": ["fire", "normal"]},
             )
-            updated_view = interaction.response.edit_message.await_args.kwargs["view"]
+            updated_view = awaited_kwargs(interaction.response.edit_message)["view"]
             updated_select = next(
                 child
                 for child in updated_view.children
                 if isinstance(child, discord.ui.Select)
             )
             self.assertEqual(
-                {option.value for option in updated_select.options if option.default},
+                {option.value for option in runtime_attribute(updated_select, "options") if option.default},
                 {"normal", "fire"},
             )
             interaction.followup.send.assert_awaited_with(
@@ -4416,13 +4465,13 @@ class TypePingTests(unittest.IsolatedAsyncioTestCase):
                 self.bot.type_pings[f"{SERVER_ID}:123"],
                 list(TYPE_PING_TYPES),
             )
-            all_on_view = interaction.response.edit_message.await_args.kwargs["view"]
+            all_on_view = awaited_kwargs(interaction.response.edit_message)["view"]
             all_on_select = next(
                 child
                 for child in all_on_view.children
                 if isinstance(child, discord.ui.Select)
             )
-            self.assertTrue(all(option.default for option in all_on_select.options))
+            self.assertTrue(all(option.default for option in runtime_attribute(all_on_select, "options")))
 
             all_off = next(
                 child
@@ -4520,12 +4569,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.close()
 
     def test_plain_catch_strips_custom_emoji_and_parses_decimal_comma_iv(self) -> None:
-        details = parse_catch_details(
+        details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 14 "
             "Sewaddle<:female:1207734084210532483>! (43,55%)!"
-        )
+        ))
 
-        self.assertIsNotNone(details)
         self.assertEqual(details.pokemon, "Sewaddle")
         self.assertEqual(details.gender, "Female")
         self.assertEqual(details.iv, "43.55%")
@@ -4548,20 +4596,18 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         embed.set_footer(text="Catch Detection System")
         message = Mock(embeds=[embed])
 
-        details = bot.parse_catch_detection_details(message)
+        details = require_not_none(bot.parse_catch_detection_details(message))
 
-        self.assertIsNotNone(details)
         self.assertEqual(details.pokemon, "Sewaddle")
         self.assertEqual(details.iv, "43.55%")
         self.assertEqual(details.iv_value, 43.55)
 
     def test_parses_shiny_catch_details_and_only_shows_explicit_chain(self) -> None:
-        details = parse_catch_details(
+        details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Bagon ♀! "
             "(50.54%)! These colors seem unusual... ✨ Shiny streak reset. (554)"
-        )
+        ))
 
-        self.assertIsNotNone(details)
         self.assertEqual(details.user_id, 123)
         self.assertEqual(details.pokemon, "Bagon")
         self.assertEqual(details.level, "20")
@@ -4582,25 +4628,24 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(shiny_embed.image.url)
         self.assertEqual(shiny_embed.fields, [])
-        self.assertIn("**Caught by:** <@123>", shiny_embed.description)
-        self.assertIn("**Pokémon:** Bagon", shiny_embed.description)
-        self.assertIn("**Level:** 20", shiny_embed.description)
-        self.assertIn("**IV:** 50.54%", shiny_embed.description)
-        self.assertIn("**Gender:** Female", shiny_embed.description)
-        self.assertIn("**Shiny chain:** 554", shiny_embed.description)
+        self.assertIn("**Caught by:** <@123>", embed_description(shiny_embed))
+        self.assertIn("**Pokémon:** Bagon", embed_description(shiny_embed))
+        self.assertIn("**Level:** 20", embed_description(shiny_embed))
+        self.assertIn("**IV:** 50.54%", embed_description(shiny_embed))
+        self.assertIn("**Gender:** Female", embed_description(shiny_embed))
+        self.assertIn("**Shiny chain:** 554", embed_description(shiny_embed))
 
-        no_chain = parse_catch_details(
+        no_chain = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Bagon! "
             "(50.54%)! These colors seem unusual... ✨"
-        )
-        self.assertIsNotNone(no_chain)
+        ))
         self.assertIsNone(no_chain.chain)
         no_chain_embed = format_starboard_embed(
             no_chain,
             "shiny",
             discord.utils.utcnow(),
         )
-        self.assertNotIn("**Shiny chain:**", no_chain_embed.description)
+        self.assertNotIn("**Shiny chain:**", embed_description(no_chain_embed))
 
     def test_normal_starboard_matches_requested_forms_and_all_form_families(
         self,
@@ -4631,12 +4676,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         examples = (("Flying Silvally", "773"),)
         for pokemon, sprite_id in examples:
             with self.subTest(pokemon=pokemon):
-                details = parse_catch_details(
+                details = require_not_none(parse_catch_details(
                     f"Congratulations <@123>! You caught a Level 22 {pokemon}! "
                     "(51.08%)!"
-                )
+                ))
 
-                self.assertIsNotNone(details)
                 self.assertEqual(
                     starboard_art_url(details),
                     "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
@@ -4652,11 +4696,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                     "attachment://flyingsilvally.png",
                 )
 
-        zygarde_details = parse_catch_details(
+        zygarde_details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 22 Zygarde Cell! "
             "(51.08%)!"
-        )
-        self.assertIsNotNone(zygarde_details)
+        ))
         self.assertEqual(
             starboard_art_url(zygarde_details),
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
@@ -4703,8 +4746,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         for text, expected_category, expected_name in examples:
             with self.subTest(expected_category=expected_category):
-                details = parse_catch_details(text)
-                self.assertIsNotNone(details)
+                details = require_not_none(parse_catch_details(text))
                 self.assertEqual(details.pokemon, expected_name)
                 self.assertEqual(starboard_category(details), expected_category)
                 if expected_category == "missingno":
@@ -4714,8 +4756,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                         discord.utils.utcnow(),
                     )
                     self.assertEqual(missingno_embed.fields, [])
-                    self.assertIn("**Level:** ???", missingno_embed.description)
-                    self.assertIn("**IV:** ???", missingno_embed.description)
+                    self.assertIn("**Level:** ???", embed_description(missingno_embed))
+                    self.assertIn("**IV:** ???", embed_description(missingno_embed))
                 if expected_category == "gigantamax":
                     gigantamax_embed = format_starboard_embed(
                         details,
@@ -4725,15 +4767,14 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(gigantamax_embed.fields, [])
                     self.assertIn(
                         f"**Pokémon:** {expected_name}",
-                        gigantamax_embed.description,
+                        embed_description(gigantamax_embed),
                     )
-                    self.assertIn("**Level:** 30", gigantamax_embed.description)
+                    self.assertIn("**Level:** 30", embed_description(gigantamax_embed))
 
     def test_starboard_embed_has_requested_fields_timestamp_and_artwork(self) -> None:
-        details = parse_catch_details(
+        details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 37 Pincurchin! (95.16%)!"
-        )
-        self.assertIsNotNone(details)
+        ))
         caught_at = discord.utils.utcnow()
         embed = format_starboard_embed(
             details,
@@ -4742,10 +4783,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(embed.fields, [])
-        self.assertIn("**Caught by:** <@123>", embed.description)
-        self.assertIn("**Pokémon:** Pincurchin", embed.description)
-        self.assertIn("**IV:** 95.16%", embed.description)
-        self.assertIn("**Level:** 37", embed.description)
+        self.assertIn("**Caught by:** <@123>", embed_description(embed))
+        self.assertIn("**Pokémon:** Pincurchin", embed_description(embed))
+        self.assertIn("**IV:** 95.16%", embed_description(embed))
+        self.assertIn("**Level:** 37", embed_description(embed))
         self.assertEqual(embed.timestamp, caught_at)
         self.assertEqual(
             embed.thumbnail.url,
@@ -4754,10 +4795,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(embed.image.url)
         self.assertEqual(embed.footer.text, "Caught at")
-        shiny_details = parse_catch_details(
+        shiny_details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Grookey! "
             "(50.54%)! These colors seem unusual... ✨"
-        )
+        ))
         self.assertEqual(
             starboard_art_url(shiny_details),
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
@@ -4768,18 +4809,18 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "https://projectpokemon.org/images/sprites-models/"
             "swsh-shiny-sprites/grookey.gif",
         )
-        articuno_details = parse_catch_details(
+        articuno_details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 50 Articuno! "
             "These colors seem unusual... ✨"
-        )
+        ))
         self.assertEqual(
             starboard_art_url(articuno_details, use_3d_shiny_model=True),
             "https://projectpokemon.org/images/shiny-sprite/articuno.gif",
         )
-        wiglett_details = parse_catch_details(
+        wiglett_details = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 20 Wiglett! "
             "These colors seem unusual... ✨"
-        )
+        ))
         self.assertEqual(
             starboard_art_url(wiglett_details, use_3d_shiny_model=True),
             "https://play.pokemonshowdown.com/sprites/ani-shiny/wiglett.gif",
@@ -4797,7 +4838,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             "swsh-shiny-sprites/grookey.gif",
         )
         self.assertIsNone(shiny_model_embed.image.url)
-        self.assertIn("PKParaiso", shiny_model_embed.footer.text)
+        self.assertIn("PKParaiso", require_not_none(shiny_model_embed.footer.text))
 
         actual_shiny_embed = format_starboard_embed(
             shiny_details,
@@ -4805,7 +4846,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             caught_at,
             use_3d_shiny_model=True,
         )
-        self.assertEqual(actual_shiny_embed.footer.text, "Caught at")
+        self.assertEqual(require_not_none(actual_shiny_embed.footer.text), "Caught at")
 
         wiglett_embed = format_starboard_embed(
             wiglett_details,
@@ -4817,12 +4858,12 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             wiglett_embed.thumbnail.url,
             "https://play.pokemonshowdown.com/sprites/ani-shiny/wiglett.gif",
         )
-        self.assertEqual(wiglett_embed.footer.text, "Caught at")
+        self.assertEqual(require_not_none(wiglett_embed.footer.text), "Caught at")
 
-        galarian_articuno = parse_catch_details(
+        galarian_articuno = require_not_none(parse_catch_details(
             "Congratulations <@123>! You caught a Level 50 Galarian Articuno! "
             "These colors seem unusual... ✨"
-        )
+        ))
         self.assertEqual(
             starboard_art_url(
                 galarian_articuno,
@@ -4856,7 +4897,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             view = StarboardSettingsView(self.bot, SERVER_ID)
             self.assertTrue(view.has_components_v2())
             component_ids = {
-                item.custom_id
+                runtime_attribute(item, "custom_id")
                 for item in view.walk_children()
                 if getattr(item, "custom_id", None)
             }
@@ -4897,11 +4938,11 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             main_channel.send.assert_awaited_once()
             shiny_channel.send.assert_awaited_once()
             self.assertEqual(
-                main_channel.send.await_args.kwargs["embed"].title,
+                awaited_kwargs(main_channel.send)["embed"].title,
                 "✨ Shiny Capture ✨",
             )
             self.assertFalse(
-                shiny_channel.send.await_args.kwargs["allowed_mentions"].users
+                awaited_kwargs(shiny_channel.send)["allowed_mentions"].users
             )
 
     async def test_normal_starboard_posts_listed_catch_with_thumbnail(self) -> None:
@@ -4928,13 +4969,13 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             normal_channel.send.assert_awaited_once()
-            embed = normal_channel.send.await_args.kwargs["embed"]
+            embed = awaited_kwargs(normal_channel.send)["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
             self.assertEqual(embed.fields, [])
-            self.assertIn("**Caught by:** <@123>", embed.description)
-            self.assertIn("**Pokémon:** Obstagoon", embed.description)
-            self.assertIn("**Level:** 22", embed.description)
-            self.assertIn("**IV:** 42.12%", embed.description)
+            self.assertIn("**Caught by:** <@123>", embed_description(embed))
+            self.assertIn("**Pokémon:** Obstagoon", embed_description(embed))
+            self.assertIn("**Level:** 22", embed_description(embed))
+            self.assertIn("**IV:** 42.12%", embed_description(embed))
             self.assertEqual(
                 embed.thumbnail.url,
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
@@ -4942,7 +4983,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNone(embed.image.url)
             self.assertEqual(embed.timestamp, message.created_at)
-            button = normal_channel.send.await_args.kwargs["view"].children[0]
+            button = awaited_kwargs(normal_channel.send)["view"].children[0]
             self.assertEqual(button.label, "Jump to message")
             self.assertEqual(button.style, discord.ButtonStyle.link)
             self.assertEqual(
@@ -4974,7 +5015,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             normal_channel.send.assert_awaited_once()
-            send_kwargs = normal_channel.send.await_args.kwargs
+            send_kwargs = awaited_kwargs(normal_channel.send)
             self.assertEqual(
                 send_kwargs["embed"].thumbnail.url,
                 "attachment://zygardecell.png",
@@ -5009,9 +5050,9 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             normal_channel.send.assert_awaited_once()
-            embed = normal_channel.send.await_args.kwargs["embed"]
+            embed = awaited_kwargs(normal_channel.send)["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
-            self.assertIn("**Pokémon:** Xurkitree", embed.description)
+            self.assertIn("**Pokémon:** Xurkitree", embed_description(embed))
 
     async def test_normal_starboard_posts_catch_with_curly_apostrophe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5037,10 +5078,10 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             normal_channel.send.assert_awaited_once()
-            embed = normal_channel.send.await_args.kwargs["embed"]
+            embed = awaited_kwargs(normal_channel.send)["embed"]
             self.assertEqual(embed.title, "⭐ Pokémon Spotlight")
-            self.assertIn("**Pokémon:** Galarian Farfetch'd", embed.description)
-            self.assertIn("**Level:** 10", embed.description)
+            self.assertIn("**Pokémon:** Galarian Farfetch'd", embed_description(embed))
+            self.assertIn("**Level:** 10", embed_description(embed))
 
     async def test_normal_starboard_posts_in_unlisted_guild_for_new_and_edited_catches(
         self,
@@ -5106,15 +5147,15 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 await self.bot.handle_spawn(message, test_mode=True)
 
             normal_channel.send.assert_awaited_once()
-            embed = normal_channel.send.await_args.kwargs["embed"]
+            embed = awaited_kwargs(normal_channel.send)["embed"]
             self.assertEqual(embed.title, "🧪 TEST — ⭐ Pokémon Spotlight")
-            self.assertIn("**Caught by:** <@123>", embed.description)
-            self.assertIn("**Pokémon:** Xurkitree", embed.description)
-            self.assertIn("**Level:** Unknown", embed.description)
-            self.assertIn("**IV:** Unknown", embed.description)
+            self.assertIn("**Caught by:** <@123>", embed_description(embed))
+            self.assertIn("**Pokémon:** Xurkitree", embed_description(embed))
+            self.assertIn("**Level:** Unknown", embed_description(embed))
+            self.assertIn("**IV:** Unknown", embed_description(embed))
             self.assertEqual(embed.footer.text, "Test preview — not an actual catch")
             self.assertEqual(
-                embed.description,
+                embed_description(embed),
                 "\n".join(
                     (
                         "**Caught by:** <@123>",
@@ -5124,7 +5165,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             )
-            button = normal_channel.send.await_args.kwargs["view"].children[0]
+            button = awaited_kwargs(normal_channel.send)["view"].children[0]
             self.assertEqual(
                 button.url,
                 f"https://discord.com/channels/{SERVER_ID}/304/474",
@@ -5162,7 +5203,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 await self.bot.handle_spawn(message, test_mode=True)
 
             normal_channel.send.assert_awaited_once()
-            send_kwargs = normal_channel.send.await_args.kwargs
+            send_kwargs = awaited_kwargs(normal_channel.send)
             self.assertIn(
                 "**Pokémon:** Partner Pikachu",
                 send_kwargs["embed"].description,
@@ -5222,13 +5263,13 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             vivillon_channel.send.assert_awaited_once()
             normal_pokemon_channel.send.assert_not_awaited()
             for channel in (shiny_channel, vivillon_channel):
-                embed = channel.send.await_args.kwargs["embed"]
+                embed = awaited_kwargs(channel.send)["embed"]
                 self.assertEqual(embed.title, "🧪 TEST — ✨ Shiny Capture ✨")
                 self.assertEqual(embed.fields, [])
-                self.assertIn("**Caught by:** <@123>", embed.description)
-                self.assertIn("**Pokémon:** Galarian Articuno", embed.description)
-                self.assertIn("**Level:** Unknown", embed.description)
-                self.assertIn("**IV:** Unknown", embed.description)
+                self.assertIn("**Caught by:** <@123>", embed_description(embed))
+                self.assertIn("**Pokémon:** Galarian Articuno", embed_description(embed))
+                self.assertIn("**Level:** Unknown", embed_description(embed))
+                self.assertIn("**IV:** Unknown", embed_description(embed))
                 self.assertTrue(
                     embed.footer.text.startswith(
                         "Test preview — not an actual catch"
@@ -5236,23 +5277,23 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertIsNone(embed.image.url)
                 self.assertEqual(
-                    channel.send.await_args.kwargs["view"].children[0].url,
+                    awaited_kwargs(channel.send)["view"].children[0].url,
                     f"https://discord.com/channels/{SERVER_ID}/304/475",
                 )
-            shiny_embed = shiny_channel.send.await_args.kwargs["embed"]
+            shiny_embed = awaited_kwargs(shiny_channel.send)["embed"]
             self.assertEqual(
                 shiny_embed.thumbnail.url,
                 "https://projectpokemon.org/images/sprites-models/"
                 "swsh-shiny-sprites/articuno-galar.gif",
             )
-            self.assertIn("PKParaiso", shiny_embed.footer.text)
-            vivillon_embed = vivillon_channel.send.await_args.kwargs["embed"]
+            self.assertIn("PKParaiso", require_not_none(shiny_embed.footer.text))
+            vivillon_embed = awaited_kwargs(vivillon_channel.send)["embed"]
             self.assertEqual(
                 vivillon_embed.thumbnail.url,
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
                 "sprites/pokemon/other/home/shiny/10169.png",
             )
-            self.assertNotIn("PKParaiso", vivillon_embed.footer.text)
+            self.assertNotIn("PKParaiso", require_not_none(vivillon_embed.footer.text))
 
     async def test_real_shiny_featured_catch_skips_normal_starboard(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5291,7 +5332,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             shiny_channel.send.assert_awaited_once()
             normal_pokemon_channel.send.assert_not_awaited()
             for channel in (vivillon_channel, shiny_channel):
-                send_kwargs = channel.send.await_args.kwargs
+                send_kwargs = awaited_kwargs(channel.send)
                 self.assertEqual(
                     send_kwargs["embed"].thumbnail.url,
                     "attachment://cauldronreuniclus.png",
@@ -5351,7 +5392,7 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
                 [
                     next(
                         line
-                        for line in embed.description.splitlines()
+                        for line in embed_description(embed).splitlines()
                         if line.startswith("**Pokémon:** ")
                     ).removeprefix("**Pokémon:** ")
                     for embed in sent_embeds
@@ -5412,8 +5453,8 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             normal_channel.send.assert_awaited_once()
-            sent_embed = normal_channel.send.await_args.kwargs["embed"]
-            self.assertIn("**Pokémon:** Tapu Fini", sent_embed.description)
+            sent_embed = awaited_kwargs(normal_channel.send)["embed"]
+            self.assertIn("**Pokémon:** Tapu Fini", embed_description(sent_embed))
 
     async def test_catch_detection_special_categories_use_vivillon_and_shinyboards(
         self,
@@ -5503,13 +5544,13 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             main_channel.send.assert_awaited_once()
-            embed = main_channel.send.await_args.kwargs["embed"]
+            embed = awaited_kwargs(main_channel.send)["embed"]
             self.assertEqual(embed.title, "❔ MissingNo. Capture")
             self.assertEqual(embed.fields, [])
-            self.assertIn("**Caught by:** <@123>", embed.description)
-            self.assertIn("**Pokémon:** Missingno", embed.description)
-            self.assertIn("**Level:** ???", embed.description)
-            self.assertIn("**IV:** ???", embed.description)
+            self.assertIn("**Caught by:** <@123>", embed_description(embed))
+            self.assertIn("**Pokémon:** Missingno", embed_description(embed))
+            self.assertIn("**Level:** ???", embed_description(embed))
+            self.assertIn("**IV:** ???", embed_description(embed))
 
     async def test_shiny_catches_increment_and_persist_the_channel_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -5622,16 +5663,16 @@ class CatchStarboardTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.on_message(message)
 
             self.assertEqual(
-                main_channel.send.await_args.kwargs["embed"].title,
+                awaited_kwargs(main_channel.send)["embed"].title,
                 "🌟 Gigantamax Capture",
             )
             self.assertEqual(
-                shiny_channel.send.await_args.kwargs["embed"].title,
+                awaited_kwargs(shiny_channel.send)["embed"].title,
                 "✨ Shiny Capture ✨",
             )
             self.assertIn(
                 "**Gender:** Female",
-                shiny_channel.send.await_args.kwargs["embed"].description,
+                awaited_kwargs(shiny_channel.send)["embed"].description,
             )
 
 
@@ -5648,18 +5689,18 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         message = Mock()
         message.author.bot = False
         message.author.id = 99
-        message.channel = unittest.mock.Mock()
+        message.channel = mock.Mock()
         message.channel.guild.id = SERVER_ID
         message.content = "v!test"
         message.embeds = []
         message.attachments = [
-            unittest.mock.Mock(content_type="image/png", url="https://example.test/missingno.png")
+            mock.Mock(content_type="image/png", url="https://example.test/missingno.png")
         ]
         message.reply = AsyncMock()
 
         await self.bot.on_message(message)
 
-        self.bot.handle_spawn.assert_awaited_once_with(
+        cast(AsyncMock, self.bot.handle_spawn).assert_awaited_once_with(
             message,
             test_mode=True,
             shiny_test_mode=False,
@@ -5670,7 +5711,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         message = Mock()
         message.author.bot = False
         message.author.id = 99
-        message.channel = unittest.mock.Mock()
+        message.channel = mock.Mock()
         message.channel.guild.id = SERVER_ID
         message.content = "v!test"
         message.embeds = []
@@ -5679,7 +5720,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.on_message(message)
 
-        self.bot.handle_spawn.assert_not_awaited()
+        cast(AsyncMock, self.bot.handle_spawn).assert_not_awaited()
         message.reply.assert_awaited_once_with(
             "Attach an image to `v!test` or `v!test shiny` "
             "to test spawn recognition.",
@@ -5725,7 +5766,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.pokemon_named_count, 1)
         self.assertEqual(len(self.bot.recognition_durations), 1)
         spawn.channel.set_permissions.assert_awaited_once()
-        self.assertIs(spawn.channel.set_permissions.await_args.kwargs["send_messages"], False)
+        self.assertIs(awaited_kwargs(spawn.channel.set_permissions)["send_messages"], False)
 
         poketwo_message = Mock()
         poketwo_message.author.bot = True
@@ -5739,7 +5780,7 @@ class ImageTestCommandTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.bot.handle_spawn = AsyncMock()
         await self.bot.on_message(poketwo_message)
-        self.bot.handle_spawn.assert_awaited_once_with(poketwo_message)
+        cast(AsyncMock, self.bot.handle_spawn).assert_awaited_once_with(poketwo_message)
 
         resume_command = Mock()
         resume_command.author.bot = False
@@ -5813,7 +5854,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
         self.assertNotIn("author", embed.to_dict())
         self.assertEqual(embed.thumbnail.url, "attachment://ice_type.png")
-        self.assertEqual(embed.description, "`@Pokétwo#8236 c glaceon`")
+        self.assertEqual(embed_description(embed), "`@Pokétwo#8236 c glaceon`")
 
     def test_pc_catch_embed_shows_copy_label_and_spawned_pokemon_name(self) -> None:
         embed = format_pc_catch_embed("Pikachu")
@@ -5823,7 +5864,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
             "Catch Pikachu",
         )
         self.assertEqual(
-            embed.description,
+            embed_description(embed),
             "Copy Below\n```\n@Pokétwo#8236 c pikachu\n```",
         )
 
@@ -5837,7 +5878,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         self.assertEqual(embed.title, "Catch Meowstic")
         self.assertEqual(
-            embed.description,
+            embed_description(embed),
             "Copy Below\n```\n@Pokétwo#8236 c meowstic\n```",
         )
 
@@ -5846,7 +5887,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
         self.assertEqual(embed.title, "Catch Zygarde")
         self.assertEqual(
-            embed.description,
+            embed_description(embed),
             "Copy Below\n```\n@Pokétwo#8236 c zygarde\n```",
         )
         self.assertEqual(
@@ -5895,7 +5936,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
 
                 self.assertEqual(embed.title, f"Catch {form}")
                 self.assertEqual(
-                    embed.description,
+                    embed_description(embed),
                     f"Copy Below\n```\n@Pokétwo#8236 c {species.casefold()}\n```",
                 )
                 self.assertEqual(embed.thumbnail.url, f"attachment://{filename}")
@@ -5919,11 +5960,10 @@ class FireSpawnFormattingTests(unittest.TestCase):
         )
         for form in forms:
             with self.subTest(form=form):
-                details = parse_catch_details(
+                details = require_not_none(parse_catch_details(
                     f"Congratulations <@123>! You caught a Level 22 {form}! "
                     "(51.08%)!"
-                )
-                self.assertIsNotNone(details)
+                ))
                 embed = format_starboard_embed(
                     details,
                     "normal_pokemon",
@@ -6010,7 +6050,7 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 )
                 embed = format_pc_catch_embed(name, alias)
                 self.assertEqual(embed.title, "Catch Hisuian Sneasel")
-                self.assertIn("@Pokétwo#8236 c sneasel", embed.description)
+                self.assertIn("@Pokétwo#8236 c sneasel", embed_description(embed))
 
     def test_hangry_morpeko_uses_own_thumbnail_but_is_named_morpeko(self) -> None:
         self.assertEqual(image_match.species_display_name("Hangry Morpeko"), "Morpeko")
@@ -6451,7 +6491,7 @@ class GuessFormatTests(unittest.TestCase):
 
                 embed = format_pc_catch_embed(form, form)
                 self.assertEqual(embed.title, f"Catch {form}")
-                self.assertIn("@Pokétwo#8236 c aegislash", embed.description)
+                self.assertIn("@Pokétwo#8236 c aegislash", embed_description(embed))
 
     def test_average_gourgeist_uses_species_name_in_spawn_output(self) -> None:
         name = image_match.species_display_name("Average Gourgeist")
@@ -6913,7 +6953,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             [f"pokemon{i}" for i in range(45)]
         )
         self.assertEqual(
-            [len(embed.description.splitlines()) for embed in paged_embeds],
+            [len(embed_description(embed).splitlines()) for embed in paged_embeds],
             [20, 20, 5],
         )
         self.assertEqual(
@@ -7421,7 +7461,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             [f"pokemon{i}" for i in range(45)],
         )
         self.assertEqual(
-            [len(embed.description.splitlines()) for embed in paged_embeds],
+            [len(embed_description(embed).splitlines()) for embed in paged_embeds],
             [20, 20, 5],
         )
         self.assertEqual(
@@ -7516,7 +7556,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             "Arceus",
         )
 
-        rows = set("\n".join(embed.description for embed in embeds).splitlines())
+        rows = set("\n".join(embed_description(embed) for embed in embeds).splitlines())
         self.assertEqual(
             rows,
             {
@@ -7551,7 +7591,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             "Arceus",
         )
 
-        lines = "\n".join(embed.description for embed in embeds).splitlines()
+        lines = "\n".join(embed_description(embed) for embed in embeds).splitlines()
         self.assertEqual(len(lines), 18)
         self.assertEqual(lines[0], "normal arceus <@123>")
         self.assertEqual(lines[-1], "fairy arceus <@123>")
@@ -7566,7 +7606,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             "Arceus",
         )
 
-        rows = "\n".join(embed.description for embed in embeds).splitlines()
+        rows = "\n".join(embed_description(embed) for embed in embeds).splitlines()
         self.assertEqual(len(rows), 18)
         self.assertIn("ghost arceus <@123>", rows)
         self.assertIn("fairy arceus <@456>", rows)
@@ -7585,7 +7625,7 @@ class ReservationPersistenceTests(unittest.TestCase):
                 )
 
                 rows = (
-                    "\n".join(embed.description for embed in embeds)
+                    "\n".join(embed_description(embed) for embed in embeds)
                     .casefold()
                     .splitlines()
                 )
@@ -7615,7 +7655,7 @@ class ReservationPersistenceTests(unittest.TestCase):
             "Raichu",
         )
 
-        description = "\n".join(embed.description for embed in embeds)
+        description = "\n".join(embed_description(embed) for embed in embeds)
         self.assertIn("raichu <@123>", description)
         self.assertIn("mega-x raichu <@123>", description)
         regional_rows = [
@@ -7636,7 +7676,7 @@ class ReservationPersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [len(embed.description.splitlines()) for embed in embeds],
+            [len(embed_description(embed).splitlines()) for embed in embeds],
             [20, 16],
         )
         self.assertEqual(
@@ -7691,7 +7731,7 @@ class ReservationPersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [len(embed.description.splitlines()) for embed in embeds],
+            [len(embed_description(embed).splitlines()) for embed in embeds],
             [20, 20, 5],
         )
 
@@ -7704,7 +7744,7 @@ class ReservationPersistenceTests(unittest.TestCase):
         embeds = format_server_reservation_embeds(reservations, 1)
 
         self.assertEqual(
-            [len(embed.description.splitlines()) for embed in embeds],
+            [len(embed_description(embed).splitlines()) for embed in embeds],
             [20, 20, 5],
         )
         self.assertEqual(
@@ -7719,14 +7759,14 @@ class ReservationPersistenceTests(unittest.TestCase):
         ]
         view = ReservationPagesView(embeds, guild_id=1)
 
-        buttons = {button.custom_id: button for button in view.children}
-        self.assertTrue(buttons["reserve_pages:previous"].disabled)
-        self.assertFalse(buttons["reserve_pages:next"].disabled)
+        buttons = {runtime_attribute(button, "custom_id"): button for button in view.children}
+        self.assertTrue(runtime_attribute(buttons["reserve_pages:previous"], "disabled"))
+        self.assertFalse(runtime_attribute(buttons["reserve_pages:next"], "disabled"))
 
         view.current_page = 1
         view.update_buttons()
-        self.assertFalse(buttons["reserve_pages:previous"].disabled)
-        self.assertTrue(buttons["reserve_pages:next"].disabled)
+        self.assertFalse(runtime_attribute(buttons["reserve_pages:previous"], "disabled"))
+        self.assertTrue(runtime_attribute(buttons["reserve_pages:next"], "disabled"))
 
 
 class ReserveCategoryTests(unittest.TestCase):
@@ -7827,15 +7867,17 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
         message.reply = AsyncMock()
 
         with patch("bot.reply_with_reservation_embeds", new=AsyncMock()) as reply:
-            await NamingBot.handle_reserve_command(bot, message)
+            await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
             reply.assert_awaited_once()
-            embeds = reply.await_args.args[1]
+            embeds = awaited_args(reply)[1]
             self.assertEqual(embeds[0].title, "Pokémon reserved by Test member")
             self.assertEqual(embeds[0].description, "Pikachu")
 
             message.content = "v!r <@456>"
-            await NamingBot.handle_reserve_command(bot, message)
+            await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
         message.reply.assert_awaited_once_with(
             "Only reserve managers or members with the configured "
@@ -7863,7 +7905,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             message.mentions = [target]
             message.reply = AsyncMock()
 
-            await NamingBot.handle_reserve_command(bot, message)
+            await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
             self.assertEqual(bot.reservations, {"1:pikachu": [123]})
 
@@ -7889,7 +7932,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
         message.content = "v!r all"
         message.reply = AsyncMock()
 
-        await NamingBot.handle_reserve_command(bot, message)
+        await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
         self.assertEqual(bot.muted_poketwo_channels, {20})
         self.assertEqual(
@@ -7935,10 +7979,11 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
                 message.mentions = [target]
                 message.reply = AsyncMock()
 
-                await NamingBot.handle_reserve_command(bot, message)
+                await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
                 self.assertEqual(bot.reservations, {})
-                view = message.reply.await_args.kwargs["view"]
+                view = awaited_kwargs(message.reply)["view"]
                 interaction = Mock()
                 interaction.guild_id = 1
                 interaction.user = Mock(spec=discord.Member)
@@ -7976,7 +8021,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             message.mentions = [target]
             message.reply = AsyncMock()
 
-            await NamingBot.handle_reserve_command(bot, message)
+            await NamingBot.handle_reserve_command(
+            cast(NamingBot, bot), message)
 
             self.assertEqual(bot.reservations, {})
             self.assertFalse(bot.reserve_path.exists())
@@ -7993,7 +8039,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
         message.mentions = []
         message.reply = AsyncMock()
 
-        await NamingBot.handle_reserve_search(bot, message)
+        await NamingBot.handle_reserve_search(
+            cast(NamingBot, bot), message)
 
         message.reply.assert_awaited_once_with(
             "**towel** is not a valid Pokémon name.",
@@ -8009,7 +8056,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             )
 
             async def handle_remove(message: Mock) -> None:
-                await NamingBot.handle_reserve_remove(bot, message)
+                await NamingBot.handle_reserve_remove(
+            cast(NamingBot, bot), message)
 
             bot.handle_reserve_remove = handle_remove
 
@@ -8027,7 +8075,7 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
                 return message
 
             await NamingBot.handle_reserve_command(
-                bot,
+                cast(NamingBot, bot),
                 reserve_message("v!r add rare <@123>"),
             )
             self.assertEqual(
@@ -8036,7 +8084,7 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             )
 
             await NamingBot.handle_reserve_command(
-                bot,
+                cast(NamingBot, bot),
                 reserve_message("v!r remove rare <@123>"),
             )
             self.assertEqual(bot.reservations, {})
@@ -8052,7 +8100,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             message.content = "v!addcategory rare"
             message.reply = AsyncMock()
 
-            await NamingBot.handle_reserve_category_command(bot, message)
+            await NamingBot.handle_reserve_category_command(
+            cast(NamingBot, bot), message)
 
             message.reply.assert_awaited_once_with(
                 "Only reserve managers or members with the configured "
@@ -8072,11 +8121,13 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             message.reply = AsyncMock()
 
             message.content = "v!addcategory rare"
-            await NamingBot.handle_reserve_category_command(bot, message)
+            await NamingBot.handle_reserve_category_command(
+            cast(NamingBot, bot), message)
             self.assertEqual(bot.reserve_categories, {"1": {"rare": []}})
 
             message.content = "v!categorycreate rare pikachu, eevee"
-            await NamingBot.handle_reserve_category_command(bot, message)
+            await NamingBot.handle_reserve_category_command(
+            cast(NamingBot, bot), message)
             self.assertEqual(
                 bot.reserve_categories,
                 {"1": {"rare": ["pikachu", "eevee"]}},
@@ -8087,7 +8138,8 @@ class ReserveCategoryCommandTests(unittest.IsolatedAsyncioTestCase):
             )
 
             message.content = "v!cd rare"
-            await NamingBot.handle_reserve_category_command(bot, message)
+            await NamingBot.handle_reserve_category_command(
+            cast(NamingBot, bot), message)
             self.assertEqual(bot.reserve_categories, {})
 
 
@@ -8181,7 +8233,9 @@ class CommandPermissionTests(unittest.TestCase):
         manager = SimpleNamespace(id=user_id, guild=home, roles=[])
         away = SimpleNamespace(id=user_id, guild=elsewhere, roles=[])
         stranger = SimpleNamespace(id=user_id + 1, guild=home, roles=[])
-        self.assertTrue(bot_module.member_guild_permissions(manager).administrator)
+        self.assertTrue(
+            require_not_none(bot_module.member_guild_permissions(manager)).administrator
+        )
         self.assertIsNone(bot_module.member_guild_permissions(away))
         self.assertIsNone(bot_module.member_guild_permissions(stranger))
         bot = SimpleNamespace(command_permissions={str(guild_id): 900})
@@ -8386,7 +8440,7 @@ class CommandLockTests(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.on_message(message)
 
-        self.bot.handle_spawn.assert_awaited_once_with(message)
+        cast(AsyncMock, self.bot.handle_spawn).assert_awaited_once_with(message)
 
 
 class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -8407,14 +8461,16 @@ class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             message.reply = AsyncMock()
             message.content = "v!permission 900"
 
-            await NamingBot.handle_permission_command(bot, message)
+            await NamingBot.handle_permission_command(
+            cast(NamingBot, bot), message)
 
             expected = {str(SERVER_ID): 900}
             self.assertEqual(bot.command_permissions, expected)
             self.assertEqual(load_command_permissions(bot.command_permissions_path), expected)
 
             message.content = "v!permission off"
-            await NamingBot.handle_permission_command(bot, message)
+            await NamingBot.handle_permission_command(
+            cast(NamingBot, bot), message)
 
             self.assertEqual(bot.command_permissions, {})
             self.assertEqual(load_command_permissions(bot.command_permissions_path), {})
@@ -8430,7 +8486,8 @@ class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
         message.content = "v!permission 900"
         message.reply = AsyncMock()
 
-        await NamingBot.handle_permission_command(bot, message)
+        await NamingBot.handle_permission_command(
+            cast(NamingBot, bot), message)
 
         self.assertIn(
             "Manage Server permission",
@@ -8452,7 +8509,8 @@ class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             message.content = "v!addcategory rare"
             message.reply = AsyncMock()
 
-            await NamingBot.handle_reserve_category_command(bot, message)
+            await NamingBot.handle_reserve_category_command(
+            cast(NamingBot, bot), message)
 
             self.assertEqual(
                 bot.reserve_categories,
@@ -8473,7 +8531,8 @@ class CommandPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
         message.content = "v!backfill stop"
         message.reply = AsyncMock()
 
-        await NamingBot.handle_profile_backfill_command(bot, message)
+        await NamingBot.handle_profile_backfill_command(
+            cast(NamingBot, bot), message)
 
         self.assertEqual(
             message.reply.await_args.args[0],

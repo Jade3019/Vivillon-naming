@@ -618,7 +618,9 @@ class SettingButton(discord.ui.Button):
         self.key = key
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view: DaycareSettingsView = self.view
+        view = self.view
+        if not isinstance(view, DaycareSettingsView):
+            raise RuntimeError("Settings button is not attached to its view")
         cycle = SETTING_CYCLES[self.key]
         current = view.settings[self.key]
         new_value = cycle[(cycle.index(current) + 1) % len(cycle)]
@@ -647,7 +649,9 @@ class PairCountSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view: DaycareSettingsView = self.view
+        view = self.view
+        if not isinstance(view, DaycareSettingsView):
+            raise RuntimeError("Pair-count select is not attached to its view")
         view.settings = view.feature.store.update_settings(
             view.user_id, pairs=int(self.values[0])
         )
@@ -717,7 +721,9 @@ class DaycareSettingsView(discord.ui.View):
 
     async def close_panel(self, interaction: discord.Interaction) -> None:
         self.stop()
-        await interaction.message.delete()
+        message = interaction.message
+        if message is not None:
+            await message.delete()
 
 
 HELP_ROWS: Final[list[tuple[str, str]]] = [
@@ -1139,7 +1145,7 @@ class DaycareFeature:
         create_missing = "-c" in words
         name = " ".join(word for word in words if word != "-c") or None
         slug = BULK_SLUG if not name else self.store.find_box(user_id, name)
-        if slug is None and create_missing:
+        if slug is None and create_missing and name is not None:
             try:
                 slug = self.store.create_box(user_id, name)
             except ValueError as error:
@@ -1204,8 +1210,11 @@ class DaycareFeature:
         resolved = message.reference.resolved
         if isinstance(resolved, discord.Message):
             return resolved
+        message_id = message.reference.message_id
+        if message_id is None:
+            return None
         try:
-            return await message.channel.fetch_message(message.reference.message_id)
+            return await message.channel.fetch_message(message_id)
         except discord.HTTPException:
             return None
 

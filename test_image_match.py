@@ -1,10 +1,20 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import TypeVar
 from unittest.mock import Mock, patch
 
 import image_match
 from image_match import ImageMatcher, compute_descriptors, reference_images
+
+
+T = TypeVar("T")
+
+
+def require_match(value: T | None) -> T:
+    if value is None:
+        raise AssertionError("Expected the image matcher to return a result")
+    return value
 
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
@@ -82,7 +92,7 @@ class ImageMatcherTests(unittest.TestCase):
                 references = [path for path in groups[name] if path.parent.name == folder]
                 self.assertTrue(references)
                 result = matcher.match(references[0].read_bytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], name)
 
     def test_user_east_shellos_reference_matches_as_east_shellos(self) -> None:
@@ -95,7 +105,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "East Shellos")
 
     def test_bonsly_recent_spawn_matches_in_both_orientations(self) -> None:
@@ -107,7 +117,7 @@ class ImageMatcherTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -117,7 +127,7 @@ class ImageMatcherTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Bonsly")
 
     def test_hippopotas_recent_spawn_matches_in_both_orientations(self) -> None:
@@ -129,7 +139,7 @@ class ImageMatcherTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -139,7 +149,7 @@ class ImageMatcherTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Hippopotas")
 
     def test_wiglett_spawn_reference_matches_as_wiglett(self) -> None:
@@ -152,7 +162,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Wiglett")
 
     def test_wiglett_user_screenshot_matches_as_wiglett(self) -> None:
@@ -165,7 +175,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Wiglett")
 
     def test_wiglett_unnamed_spawn_matches_as_wiglett(self) -> None:
@@ -178,7 +188,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Wiglett")
 
     def test_wiglett_recent_spawn_matches_in_both_orientations(self) -> None:
@@ -190,7 +200,7 @@ class ImageMatcherTests(unittest.TestCase):
             / "spawn-reference-4.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -200,7 +210,7 @@ class ImageMatcherTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Wiglett")
 
     def test_sunkern_spawn_reference_matches_as_sunkern(self) -> None:
@@ -213,7 +223,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Sunkern")
 
     def test_shroodle_spawn_reference_matches_as_shroodle(self) -> None:
@@ -226,7 +236,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Shroodle")
 
     def test_sandygast_spawn_reference_matches_as_sandygast(self) -> None:
@@ -239,7 +249,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         result = matcher.match(image_path.read_bytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Sandygast")
 
     def test_rapid_strike_urshifu_reference_uses_spaced_form_name(self) -> None:
@@ -316,7 +326,8 @@ class ImageMatcherTests(unittest.TestCase):
         cv2 = image_match.cv2
         np = image_match.np
         image = np.random.default_rng(5).integers(0, 256, (256, 256), dtype=np.uint8)
-        descriptors = compute_descriptors(cv2.imencode(".png", image)[1].tobytes())
+        encoded = require_match(cv2.imencode(".png", image)[1])
+        descriptors = require_match(compute_descriptors(encoded.tobytes()))
 
         with tempfile.TemporaryDirectory() as directory:
             bank_path = Path(directory) / "image_bank.npz"
@@ -326,7 +337,7 @@ class ImageMatcherTests(unittest.TestCase):
                 labels=np.zeros(len(descriptors), dtype=np.int32),
                 names=np.array(["Paldean Tauros"]),
             )
-            result = ImageMatcher(bank_path).match(cv2.imencode(".png", image)[1].tobytes())
+            result = require_match(ImageMatcher(bank_path).match(encoded.tobytes()))
 
         self.assertEqual(result[0], "Tauros")
 
@@ -335,7 +346,7 @@ class ImageMatcherTests(unittest.TestCase):
         np = image_match.np
         image = np.random.default_rng(6).integers(0, 256, (256, 256), dtype=np.uint8)
         encoded = cv2.imencode(".png", image)[1].tobytes()
-        descriptors = compute_descriptors(encoded)
+        descriptors = require_match(compute_descriptors(encoded))
 
         for form_name in (
             "Busted Mimikyu",
@@ -352,7 +363,7 @@ class ImageMatcherTests(unittest.TestCase):
                     labels=np.zeros(len(descriptors), dtype=np.int32),
                     names=np.array([form_name]),
                 )
-                result = ImageMatcher(bank_path).match(encoded)
+                result = require_match(ImageMatcher(bank_path).match(encoded))
 
             self.assertEqual(result[0], form_name.split()[-1])
 
@@ -363,7 +374,7 @@ class ImageMatcherTests(unittest.TestCase):
         encoded = cv2.imencode(".png", image)[1].tobytes()
         flipped = cv2.imencode(".png", cv2.flip(image, 1))[1].tobytes()
         descriptors = compute_descriptors(encoded)
-        self.assertIsNotNone(descriptors)
+        descriptors = require_match(descriptors)
 
         with tempfile.TemporaryDirectory() as directory:
             bank_path = Path(directory) / "image_bank.npz"
@@ -376,7 +387,7 @@ class ImageMatcherTests(unittest.TestCase):
             matcher = ImageMatcher(bank_path)
 
             result = matcher.match(flipped)
-            self.assertIsNotNone(result)
+            result = require_match(result)
             self.assertEqual(result[0], "Pikachu")
 
     def test_foreground_retry_cannot_reclassify_boldore_or_milcery(self) -> None:
@@ -417,7 +428,7 @@ class ImageMatcherTests(unittest.TestCase):
 
         mask = image_match.foreground_mask(encoded)
 
-        self.assertIsNotNone(mask)
+        mask = require_match(mask)
         self.assertTrue(np.any(mask == 0))
         self.assertTrue(np.any(mask == 255))
 
@@ -526,7 +537,7 @@ class ImageMatcherTests(unittest.TestCase):
             / "bulbasaur-example-1.png"
         )
         image = cv2.imread(str(path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -535,7 +546,7 @@ class ImageMatcherTests(unittest.TestCase):
                 success, encoded = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(encoded.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Finizen")
 
     def test_palafin_spawn_reference_matches_normal_and_mirrored(self) -> None:
@@ -548,7 +559,7 @@ class ImageMatcherTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -557,7 +568,7 @@ class ImageMatcherTests(unittest.TestCase):
                 success, encoded = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(encoded.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Palafin")
 
     def test_vivillon_match_requires_a_valid_pattern_alignment(self) -> None:
@@ -684,7 +695,10 @@ class VivillonTests(unittest.TestCase):
         for form in image_match.VIVILLON_FORMS:
             data = image_match.form_thumbnail_path(form).read_bytes()
             self.assertEqual(image_match.vivillon_form_by_pattern(data), form)
-            image = cv2.flip(cv2.imread(str(image_match.form_thumbnail_path(form))), 1)
+            source = require_match(
+                cv2.imread(str(image_match.form_thumbnail_path(form)))
+            )
+            image = cv2.flip(source, 1)
             mirrored = cv2.imencode(".png", image)[1].tobytes()
             self.assertEqual(image_match.vivillon_form_by_pattern(mirrored), form)
 
@@ -701,7 +715,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "bulbasaur-example-big-1.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -710,7 +724,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Sealeo")
 
     def test_yamask_spawn_reference_is_recognized_when_mirrored(self) -> None:
@@ -723,7 +737,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "reference-002.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -732,7 +746,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Yamask")
 
     def test_enchanted_applin_spawn_is_recognized_when_mirrored(self) -> None:
@@ -745,7 +759,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -754,7 +768,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Enchanted Applin")
 
     def test_applin_spawn_is_recognized_when_mirrored(self) -> None:
@@ -767,7 +781,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference-002.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -776,7 +790,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Applin")
 
     def test_flamigo_spawn_is_recognized_when_mirrored(self) -> None:
@@ -789,7 +803,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -798,7 +812,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Flamigo")
 
     def test_ditto_spawn_is_recognized_when_mirrored(self) -> None:
@@ -811,7 +825,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -820,7 +834,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Ditto")
 
     def test_squawkabilly_spawn_is_recognized_when_mirrored(self) -> None:
@@ -833,7 +847,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -842,7 +856,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Green-Plumage Squawkabilly")
 
     def test_yellow_squawkabilly_spawn_is_recognized_when_mirrored(self) -> None:
@@ -855,7 +869,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -864,7 +878,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Yellow-Plumage Squawkabilly")
 
     def test_oddish_spawn_is_recognized_when_mirrored(self) -> None:
@@ -877,7 +891,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "spawn-reference.png"
         )
         image = cv2.imread(str(image_path))
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
 
@@ -886,7 +900,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 success, buffer = cv2.imencode(".png", candidate)
                 self.assertTrue(success)
                 result = matcher.match(buffer.tobytes())
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], "Oddish")
 
     def test_oddish_accepts_four_distinctive_votes(self) -> None:
@@ -990,7 +1004,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 )
                 result = matcher.match(image_path.read_bytes())
 
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], form)
 
     def test_low_vote_user_crops_match_their_folder_species(self) -> None:
@@ -1012,7 +1026,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 )
                 result = matcher.match(image_path.read_bytes())
 
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], expected)
 
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
@@ -1073,7 +1087,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 )
                 result = matcher.match(image_path.read_bytes())
 
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], expected)
                 if expected == "Unown Variant 2":
                     import bot
@@ -1101,7 +1115,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
                     / "image.png"
                 )
                 image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
-                self.assertIsNotNone(image)
+                image = require_match(image)
                 if image is None:
                     continue
                 success, buffer = cv2.imencode(".png", cv2.flip(image, 1))
@@ -1109,7 +1123,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
 
                 result = matcher.match(buffer.tobytes())
 
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], form)
 
     def test_zenith_marshadow_is_recognized_when_flipped(self) -> None:
@@ -1122,7 +1136,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "image.png"
         )
         image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
-        self.assertIsNotNone(image)
+        image = require_match(image)
         if image is None:
             return
         success, buffer = cv2.imencode(".png", cv2.flip(image, 1))
@@ -1130,7 +1144,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
 
         result = matcher.match(buffer.tobytes())
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Zenith Marshadow")
 
     def test_all_vivillon_forms_match_their_reference_images(self) -> None:
@@ -1140,7 +1154,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             with self.subTest(form=form):
                 result = matcher.match(groups[form][0].read_bytes())
 
-                self.assertIsNotNone(result)
+                result = require_match(result)
                 self.assertEqual(result[0], form)
 
     def test_zygarde_cell_matches_when_rendered_in_a_scene(self) -> None:
@@ -1153,7 +1167,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             / "Zygarde Cell"
             / "image.png"
         )
-        source = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+        source = require_match(cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED))
         canvas = np.full((420, 420, 3), (70, 105, 45), dtype=np.uint8)
         pokemon = cv2.resize(source, (250, 250))
         alpha = pokemon[..., 3:4] / 255.0
@@ -1165,7 +1179,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
 
         result = matcher.match(data)
 
-        self.assertIsNotNone(result)
+        result = require_match(result)
         self.assertEqual(result[0], "Zygarde Cell")
 
 
@@ -1186,7 +1200,11 @@ class ArceusTests(unittest.TestCase):
         for form in image_match.ARCEUS_FORMS:
             path = image_match.form_thumbnail_path(form)
             self.assertEqual(image_match.arceus_form_by_color(path.read_bytes()), form)
-            mirrored = cv2.imencode(".png", cv2.flip(cv2.imread(str(path)), 1))[1].tobytes()
+            source = require_match(cv2.imread(str(path)))
+            mirrored_buffer = require_match(
+                cv2.imencode(".png", cv2.flip(source, 1))[1]
+            )
+            mirrored = mirrored_buffer.tobytes()
             self.assertEqual(image_match.arceus_form_by_color(mirrored), form)
 
 
@@ -1223,7 +1241,9 @@ class DeoxysTests(unittest.TestCase):
         for form in self.FORMS:
             folder = Path(__file__).with_name("pokemon_images") / form
             for name in ("image.png", "image_mirrored.png"):
-                img = cv2.imread(str(folder / name), cv2.IMREAD_UNCHANGED)
+                img = require_match(
+                    cv2.imread(str(folder / name), cv2.IMREAD_UNCHANGED)
+                )
                 bg = cv2.resize(img[..., :3], (500, 400)) // 2 + 60
                 x, y = 60, 20
                 roi = bg[y:y + 360, x:x + 360]
@@ -1231,7 +1251,10 @@ class DeoxysTests(unittest.TestCase):
                 al = small[..., 3:4] / 255.0
                 bg[y:y + 360, x:x + 360] = (small[..., :3] * al + roi * (1 - al)).astype(bg.dtype)
                 ok, buf = cv2.imencode(".png", bg)
-                self.assertEqual(matcher.match(buf.tobytes())[0], form, name)
+                self.assertTrue(ok)
+                buf = require_match(buf)
+                result = require_match(matcher.match(buf.tobytes()))
+                self.assertEqual(result[0], form, name)
 
 
 class PichuTests(unittest.TestCase):
@@ -1252,7 +1275,9 @@ class PichuTests(unittest.TestCase):
         for form in self.FORMS:
             folder = Path(__file__).with_name("pokemon_images") / form
             for name in ("image.png", "image_mirrored.png"):
-                img = cv2.imread(str(folder / name), cv2.IMREAD_UNCHANGED)
+                img = require_match(
+                    cv2.imread(str(folder / name), cv2.IMREAD_UNCHANGED)
+                )
                 bg = cv2.resize(img[..., :3], (500, 400)) // 2 + 60
                 x, y = 60, 20
                 roi = bg[y:y + 360, x:x + 360]
@@ -1260,7 +1285,10 @@ class PichuTests(unittest.TestCase):
                 al = small[..., 3:4] / 255.0
                 bg[y:y + 360, x:x + 360] = (small[..., :3] * al + roi * (1 - al)).astype(bg.dtype)
                 ok, buf = cv2.imencode(".png", bg)
-                self.assertEqual(matcher.match(buf.tobytes())[0], form, name)
+                self.assertTrue(ok)
+                buf = require_match(buf)
+                result = require_match(matcher.match(buf.tobytes()))
+                self.assertEqual(result[0], form, name)
 
 
 if __name__ == "__main__":

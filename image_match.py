@@ -8,9 +8,12 @@ import logging
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from data_paths import data_path
 
+cv2: Any
+np: Any
 try:
     import cv2
     cv2.setNumThreads(1)
@@ -624,7 +627,7 @@ def squawkabilly_form_by_color(data: bytes) -> str | None:
         "Green-Plumage Squawkabilly": share(50, 75),
         "Blue-Plumage Squawkabilly": share(95, 130),
     }
-    form = max(scores, key=scores.get)
+    form = max(scores, key=lambda candidate: scores[candidate])
     return form if scores[form] >= 0.12 else None
 
 
@@ -891,21 +894,25 @@ class ImageMatcher:
         allow_weak: bool = False,
         descriptors=None,
     ) -> tuple[str, int] | None:
+        matcher = self.matcher
+        labels = self.labels
+        if matcher is None or labels is None:
+            return None
         if descriptors is None:
             descriptors = compute_descriptors(data, mirror, mask)
         if descriptors is None or len(descriptors) < 2:
             return None
         votes = np.zeros(len(self.names), int)
-        for neighbours in self.matcher.knnMatch(descriptors, k=NEIGHBOURS):
+        for neighbours in matcher.knnMatch(descriptors, k=NEIGHBOURS):
             if len(neighbours) < 2:
                 continue
-            best_label = int(self.labels[neighbours[0].trainIdx])
+            best_label = int(labels[neighbours[0].trainIdx])
             rival = neighbours[1]
             family = self.families[best_label]
             if self.names[best_label] != family or family in INDISTINGUISHABLE_FAMILIES:
                 # Variants of one species share features; only outside rivals count.
                 rival = next(
-                    (n for n in neighbours[1:] if self.families[int(self.labels[n.trainIdx])] != family),
+                    (n for n in neighbours[1:] if self.families[int(labels[n.trainIdx])] != family),
                     neighbours[-1],
                 )
             if neighbours[0].distance < RATIO * rival.distance:

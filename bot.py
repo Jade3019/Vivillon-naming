@@ -8767,8 +8767,12 @@ class NamingBot(discord.Client):
             self.pokemon_confidence_path
         ):
             return
+        image_http = self.image_http
+        if image_http is None:
+            logger.error("HTTP client is unavailable; cannot save flagged spawn image")
+            return
         try:
-            image_bytes, content_type = await download_image(self.image_http, url)
+            image_bytes, content_type = await download_image(image_http, url)
             extension = mimetypes.guess_extension(content_type, strict=False) or ".img"
             slug = re.sub(
                 r"[^a-z0-9]+",

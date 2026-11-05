@@ -755,6 +755,11 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             "assisted": False,
         }
         self.bot.low_accuracy_channels = {}
+        confidence_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(confidence_dir.cleanup)
+        self.bot.pokemon_confidence_path = (
+            Path(confidence_dir.name) / "pokemon_confidence.csv"
+        )
         message = Mock()
         message.id = 9003
         message.guild.id = SERVER_ID
@@ -781,6 +786,23 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         ):
             await self.bot.handle_spawn(message)
 
+        self.assertEqual(
+            self.bot.pokemon_confidence_path.read_text(encoding="utf-8").splitlines(),
+            ["pokemon_name,confidence_percent", "Pikachu,49.99"],
+        )
+        bot_module.append_pokemon_confidence(
+            self.bot.pokemon_confidence_path,
+            "Oddish",
+            12.5,
+        )
+        self.assertEqual(
+            self.bot.pokemon_confidence_path.read_text(encoding="utf-8").splitlines(),
+            [
+                "pokemon_name,confidence_percent",
+                "Pikachu,49.99",
+                "Oddish,12.50",
+            ],
+        )
         message.reply.assert_awaited_once()
         self.assertIn("Pikachu: 49.99%", message.reply.await_args.args[0])
         self.assertNotIn("below 50%", message.reply.await_args.args[0])
@@ -820,11 +842,18 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         message.embeds = []
         message.reply = AsyncMock()
 
-        with patch(
-            "bot.recognize_pokemon",
-            new=AsyncMock(return_value=("Pikachu", 50.0)),
-        ):
-            await self.bot.handle_spawn(message)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.bot.pokemon_confidence_path = Path(temp_dir) / "pokemon_confidence.csv"
+            with patch(
+                "bot.recognize_pokemon",
+                new=AsyncMock(return_value=("Pikachu", 50.0)),
+            ):
+                await self.bot.handle_spawn(message)
+
+            self.assertEqual(
+                self.bot.pokemon_confidence_path.read_text(encoding="utf-8").splitlines(),
+                ["pokemon_name,confidence_percent", "Pikachu,50.00"],
+            )
 
         message.reply.assert_awaited_once()
         self.assertIn("Pikachu: 50.00%", message.reply.await_args.args[0])

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import csv
 from io import BytesIO
 import json
 import logging
@@ -661,6 +662,17 @@ def image_url(message: discord.Message) -> str | None:
 
 LOW_ACCURACY_THRESHOLD = 50
 CORROBORATED_CONFIDENCE_FLOOR = 85.0
+
+
+def append_pokemon_confidence(path: Path, name: str, confidence: float) -> None:
+    try:
+        with path.open("a", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            if file.tell() == 0:
+                writer.writerow(("pokemon_name", "confidence_percent"))
+            writer.writerow((name, f"{confidence:.2f}"))
+    except OSError:
+        logger.exception("Could not save Pokemon confidence to %s", path)
 
 
 def load_low_accuracy_channels(path: Path) -> dict[str, int]:
@@ -6514,6 +6526,9 @@ class NamingBot(discord.Client):
         self.low_accuracy_path = Path(
             os.environ.get("LOW_ACCURACY_FILE", str(data_path("low_accuracy.json")))
         )
+        self.pokemon_confidence_path = Path(__file__).with_name(
+            "pokemon_confidence.csv"
+        )
         self.low_accuracy_channels = load_low_accuracy_channels(
             self.low_accuracy_path
         )
@@ -10427,6 +10442,16 @@ class NamingBot(discord.Client):
         if not name:
             await self.send_recognition_failure_alert(message)
             return
+        if (
+            confidence <= LOW_ACCURACY_THRESHOLD
+            and not test_mode
+            and not shiny_test_mode
+        ):
+            append_pokemon_confidence(
+                self.pokemon_confidence_path,
+                display_pokemon_name(name),
+                confidence,
+            )
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
         thumbnail_name = name

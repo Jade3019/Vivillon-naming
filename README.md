@@ -125,7 +125,9 @@ an image and replies with one predicted name and its estimated confidence
 percentage (for example, `Pikachu: 85.00%`). Registered reserve, shinyhunt,
 collection, and type-ping members are mentioned when they match; registrations
 do not limit which spawns are named. The confidence is an estimate, not a
-calibrated probability. If recognition has no verified match, the bot reports
+calibrated probability. Real-spawn guesses at or below 50% are appended to
+`pokemon_confidence.csv` in the project root, creating it with a header if needed.
+If recognition has no verified match, the bot reports
 when no guess is available, without posting an error reply in the spawn channel.
 If the vision model is unavailable, the bot names the best local reference
 candidate when possible and reports it as a low-confidence guess. The vision

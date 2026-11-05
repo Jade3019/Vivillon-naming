@@ -760,6 +760,9 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.bot.pokemon_confidence_path = (
             Path(confidence_dir.name) / "pokemon_confidence.csv"
         )
+        self.bot.pokemon_confidence_review_dir = (
+            Path(confidence_dir.name) / "pokemon_confidence_review"
+        )
         message = Mock()
         message.id = 9003
         message.guild.id = SERVER_ID
@@ -783,6 +786,10 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 "bot.recognize_pokemon",
                 new=AsyncMock(return_value=("Pikachu", 49.99)),
             ),
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
+            ),
         ):
             await self.bot.handle_spawn(message)
 
@@ -803,6 +810,10 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 "Oddish,12.50",
             ],
         )
+        saved_images = list(self.bot.pokemon_confidence_review_dir.glob("*.png"))
+        self.assertEqual(len(saved_images), 1)
+        self.assertTrue(saved_images[0].name.endswith("_pikachu.png"))
+        self.assertEqual(saved_images[0].read_bytes(), b"spawn image")
         message.reply.assert_awaited_once()
         self.assertIn("Pikachu: 49.99%", message.reply.await_args.args[0])
         self.assertNotIn("below 50%", message.reply.await_args.args[0])
@@ -844,9 +855,15 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             self.bot.pokemon_confidence_path = Path(temp_dir) / "pokemon_confidence.csv"
+            self.bot.pokemon_confidence_review_dir = (
+                Path(temp_dir) / "pokemon_confidence_review"
+            )
             with patch(
                 "bot.recognize_pokemon",
                 new=AsyncMock(return_value=("Pikachu", 50.0)),
+            ), patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(b"spawn image", "image/png")),
             ):
                 await self.bot.handle_spawn(message)
 
@@ -854,10 +871,57 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
                 self.bot.pokemon_confidence_path.read_text(encoding="utf-8").splitlines(),
                 ["pokemon_name,confidence_percent", "Pikachu,50.00"],
             )
-
+            self.assertEqual(
+                len(list(self.bot.pokemon_confidence_review_dir.glob("*.png"))),
+                1,
+            )
         message.reply.assert_awaited_once()
         self.assertIn("Pikachu: 50.00%", message.reply.await_args.args[0])
         self.assertNotIn("below 50%", message.reply.await_args.args[0])
+
+    async def test_flagged_pokemon_spawn_is_saved_even_with_high_confidence(
+        self,
+    ) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            self.bot.pokemon_confidence_path = temp_path / "pokemon_confidence.csv"
+            self.bot.pokemon_confidence_review_dir = temp_path / "pokemon_confidence_review"
+            bot_module.append_pokemon_confidence(
+                self.bot.pokemon_confidence_path,
+                "Inteleon",
+                33.33,
+            )
+            message = Mock()
+            message.id = 9007
+            message.guild.id = SERVER_ID
+            message.channel.id = 9008
+            message.attachments = [
+                Mock(content_type="image/png", url="https://example.test/spawn.png")
+            ]
+            message.embeds = []
+            message.reply = AsyncMock()
+
+            with (
+                patch(
+                    "bot.recognize_pokemon",
+                    new=AsyncMock(return_value=("Inteleon", 95.0)),
+                ),
+                patch(
+                    "bot.download_image",
+                    new=AsyncMock(return_value=(b"inteleon spawn", "image/png")),
+                ),
+            ):
+                await self.bot.handle_spawn(message)
+
+            saved_images = list(self.bot.pokemon_confidence_review_dir.glob("*.png"))
+            self.assertEqual(len(saved_images), 1)
+            self.assertTrue(saved_images[0].name.endswith("_inteleon.png"))
+            self.assertEqual(saved_images[0].read_bytes(), b"inteleon spawn")
 
     def test_recognizes_only_poketwo_incense_commands(self) -> None:
         self.assertEqual(

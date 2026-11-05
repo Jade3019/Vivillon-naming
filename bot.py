@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import csv
+import mimetypes
 from io import BytesIO
 import json
 import logging
@@ -673,6 +674,21 @@ def append_pokemon_confidence(path: Path, name: str, confidence: float) -> None:
             writer.writerow((name, f"{confidence:.2f}"))
     except OSError:
         logger.exception("Could not save Pokemon confidence to %s", path)
+
+
+def load_pokemon_confidence_names(path: Path) -> set[str]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as file:
+            return {
+                normalize_pokemon_alias(name)
+                for row in csv.DictReader(file)
+                if isinstance((name := row.get("pokemon_name")), str) and name.strip()
+            }
+    except FileNotFoundError:
+        return set()
+    except (OSError, csv.Error):
+        logger.exception("Could not read Pokemon confidence file %s", path)
+        return set()
 
 
 def load_low_accuracy_channels(path: Path) -> dict[str, int]:
@@ -6529,6 +6545,9 @@ class NamingBot(discord.Client):
         self.pokemon_confidence_path = Path(__file__).with_name(
             "pokemon_confidence.csv"
         )
+        self.pokemon_confidence_review_dir = Path(__file__).with_name(
+            "pokemon_confidence_review"
+        )
         self.low_accuracy_channels = load_low_accuracy_channels(
             self.low_accuracy_path
         )
@@ -8740,6 +8759,37 @@ class NamingBot(discord.Client):
             confirmation = "Bot commands are enabled again for this server."
         await message.reply(confirmation, mention_author=False)
 
+    async def save_flagged_pokemon_spawn_image(
+        self, url: str, name: str, message_id: int
+    ) -> None:
+        display_name = display_pokemon_name(name)
+        if normalize_pokemon_alias(display_name) not in load_pokemon_confidence_names(
+            self.pokemon_confidence_path
+        ):
+            return
+        try:
+            image_bytes, content_type = await download_image(self.image_http, url)
+            extension = mimetypes.guess_extension(content_type, strict=False) or ".img"
+            slug = re.sub(
+                r"[^a-z0-9]+",
+                "-",
+                normalize_pokemon_alias(display_name),
+            ).strip("-")
+            destination = self.pokemon_confidence_review_dir
+            destination.mkdir(parents=True, exist_ok=True)
+            image_path = destination / f"{message_id}_{slug or 'pokemon'}{extension}"
+            image_path.write_bytes(image_bytes)
+            logger.info(
+                "Saved flagged %s spawn image to %s",
+                display_name,
+                image_path,
+            )
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, OSError):
+            logger.exception(
+                "Could not save flagged spawn image for message %s",
+                message_id,
+            )
+
     async def report_low_accuracy(
         self, message: discord.Message, name: str, confidence: float
     ) -> None:
@@ -10452,6 +10502,8 @@ class NamingBot(discord.Client):
                 display_pokemon_name(name),
                 confidence,
             )
+        if not test_mode and not shiny_test_mode:
+            await self.save_flagged_pokemon_spawn_image(url, name, message.id)
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
         thumbnail_name = name

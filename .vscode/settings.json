@@ -3,6 +3,14 @@
         "/^\\(sudo -n true && echo sudo ok\\); \\(sudo apt-get update -qq && sudo apt-get install -y -qq postgresql postgresql-client\\) 2>&1 \\| tail -5; ls /usr/lib/postgresql$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python - <<'PY'\nfrom pathlib import Path\nfrom image_match import ImageMatcher, reference_images, family_name\nroot = Path\\('pokemon_images'\\)\nmatcher = ImageMatcher\\(Path\\('image_bank\\.npz'\\)\\)\nfocus = \\{'Oddish','Smoliv','Gulpin','Spheal','Swalot','Duskull','Yamask','Flamigo','Salandit','Shroodle','Tadbulb','Bellsprout','Yellow-Plumage Squawkabilly','Weedle','Swirlix'\\}\ngroups = reference_images\\(root\\)\nchecked = 0\nmismatches = \\[\\]\nfor name, paths in groups\\.items\\(\\):\n    if name not in focus:\n        continue\n    for path in paths:\n        if 'example' not in path\\.stem\\.casefold\\(\\) and path\\.stem != 'spawn-reference':\n            continue\n        result = matcher\\.match\\(path\\.read_bytes\\(\\)\\)\n        checked \\+= 1\n        if result is None or family_name\\(result\\[0\\]\\) != family_name\\(name\\):\n            mismatches\\.append\\(\\(str\\(path\\), result\\)\\)\nprint\\(f'checked \\{checked\\} stored examples; mismatches \\{len\\(mismatches\\)\\}'\\)\nfor path, result in mismatches\\[:80\\]:\n    print\\(f'\\{path\\} -> \\{result\\}'\\)\nPY$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python - <<'PY'\nfrom pathlib import Path\nfrom image_match import ImageMatcher\nmatcher = ImageMatcher\\(Path\\('image_bank\\.npz'\\)\\)\npaths = \\[\n'pokemon_images/Gulpin/bulbasaur-example-3\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c29n\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c44n\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c4n\\.png',\n'pokemon_images/Salandit/bulbasaur-example-tight-c7n\\.png',\n'pokemon_images/Spheal/bulbasaur-example-3\\.png',\n'pokemon_images/Spheal/bulbasaur-example-6\\.png',\n'pokemon_images/Spheal/bulbasaur-example-tight-c28n\\.png',\n'pokemon_images/Yamask/bulbasaur-example-tight-c33n\\.png',\n\\]\nfor value in paths:\n    path = Path\\(value\\)\n    print\\(f'\\{path\\}: \\{matcher\\.best_guess\\(path\\.read_bytes\\(\\)\\)\\}'\\)\nPY$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

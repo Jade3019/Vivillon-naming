@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 FEATURES_PER_IMAGE = 250
+WIDE_FEATURES_PER_IMAGE = 600
 MAX_SIDE = 512
 MAX_FEATURES_PER_POKEMON = 300
 CONSENSUS_COMPARISONS = 8
@@ -269,7 +270,9 @@ def species_display_name(name: str) -> str:
     return THUMBNAIL_FORM_SPECIES.get(name, base_pokemon_name(name))
 
 
-def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
+def compute_descriptors(
+    data: bytes, mirror: bool = False, mask=None, features: int = FEATURES_PER_IMAGE
+):
     """SIFT descriptors (float32) of an image, or None if unreadable."""
     if cv2 is None:
         return None
@@ -285,7 +288,7 @@ def compute_descriptors(data: bytes, mirror: bool = False, mask=None):
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         if mask is not None:
             mask = cv2.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
-    sift = cv2.SIFT_create(nfeatures=FEATURES_PER_IMAGE)
+    sift = cv2.SIFT_create(nfeatures=features)
     _, descriptors = sift.detectAndCompute(image, mask)
     return descriptors
 
@@ -787,6 +790,20 @@ class ImageMatcher:
                     mask=mask,
                     relaxed=True,
                     descriptors=descriptors[mirror],
+                )
+                if result is not None:
+                    results.append(result)
+        if not results:
+            # Last resort: scenery can use up every feature slot, so describe the
+            # picture with more of them. Only unmatched spawns pay for this.
+            for mirror in (False, True):
+                result = self._match(
+                    data,
+                    mirror,
+                    mask=mask,
+                    descriptors=compute_descriptors(
+                        data, mirror, mask, WIDE_FEATURES_PER_IMAGE
+                    ),
                 )
                 if result is not None:
                     results.append(result)

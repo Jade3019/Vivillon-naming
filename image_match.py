@@ -36,12 +36,16 @@ SPECIES_MIN_VOTES = {
     "Dreepy": 4,
     "East Shellos": 8,
     "Enchanted Applin": 4,
+    "Gulpin": 4,
     "Lotad": 4,
     "Milcery": 6,
+    "Salandit": 4,
     "Shellos": 8,
     "Oddish": 4,
+    "Spheal": 4,
     "White-Plumage Squawkabilly": 4,
     "Wiglett": 4,
+    "Yamask": 4,
 }
 SPECIES_MIN_MARGIN = {"Boldore": 4, "Enchanted Applin": 2, "Milcery": 3}
 SHARED_DISTANCE = 150.0
@@ -745,6 +749,7 @@ class ImageMatcher:
             logger.warning("Could not read %s; image matching disabled", bank_path)
             self.names = []
             return
+        cv2.setRNGSeed(0)
         self.matcher = cv2.FlannBasedMatcher(
             dict(algorithm=1, trees=4), dict(checks=32)
         )

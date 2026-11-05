@@ -993,6 +993,28 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 self.assertIsNotNone(result)
                 self.assertEqual(result[0], form)
 
+    def test_low_vote_user_crops_match_their_folder_species(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        examples = (
+            ("Gulpin", "bulbasaur-example-3.png"),
+            ("Gulpin", "bulbasaur-example-tight-c44n.png"),
+            ("Salandit", "bulbasaur-example-tight-c7n.png"),
+            ("Spheal", "bulbasaur-example-3.png"),
+            ("Spheal", "bulbasaur-example-tight-c28n.png"),
+            ("Yamask", "bulbasaur-example-tight-c33n.png"),
+        )
+        for expected, filename in examples:
+            with self.subTest(pokemon=expected, filename=filename):
+                image_path = (
+                    Path(__file__).with_name("pokemon_images")
+                    / expected
+                    / filename
+                )
+                result = matcher.match(image_path.read_bytes())
+
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0], expected)
+
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (

@@ -20,6 +20,7 @@ from typing import Any, Final, Literal, TypeGuard, TypedDict
 
 import aiohttp
 import discord
+from discord.ext import commands
 from aiohttp import web
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 from image_match import (
@@ -6449,11 +6450,12 @@ class ProfileView(discord.ui.View):
         )
 
 
-class NamingBot(discord.Client):
+class NamingBot(commands.Bot):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
-        super().__init__(intents=intents)
+        # Only jishaku uses the commands framework; on_message routes just its commands.
+        super().__init__(command_prefix="v!", intents=intents, help_command=None)
         self.config = config
         self.time_tasks: dict[int, asyncio.Task] = {}
         self.openai: AsyncOpenAI | None = (
@@ -7362,6 +7364,10 @@ class NamingBot(discord.Client):
         logger.info("Music Activity listening on port %s", port)
 
     async def setup_hook(self) -> None:
+        try:
+            await self.load_extension("jishaku")
+        except commands.ExtensionError:
+            logger.exception("Could not load jishaku")
         await self.start_org_api()
         await self.start_music_activity()
         await self.start_org_rpc()
@@ -7549,6 +7555,9 @@ class NamingBot(discord.Client):
         # The org transport runs first, before the bot-author guard below would
         # drop the org bot's own JSON requests, and before channel filtering.
         if self.org_rpc is not None and await self.org_rpc.handle_message(message):
+            return
+        if re.match(r"^v!(?:jsk|jishaku)(?:\s|$)", message.content, re.IGNORECASE):
+            await self.process_commands(message)
             return
         if (
             not message.author.bot

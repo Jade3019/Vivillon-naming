@@ -6434,7 +6434,8 @@ class ProfileShopView(discord.ui.View):
         if self.message is None:
             return
         for child in self.children:
-            child.disabled = True
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
         try:
             await self.message.edit(view=self)
         except discord.HTTPException:
@@ -7858,6 +7859,19 @@ class NamingBot(commands.Bot):
             self.reservations = updated
         return removed
 
+    def org_clear_reserves(self, guild_id: int) -> int:
+        guild_prefix = f"{guild_id}:"
+        cleared = sum(
+            len(user_ids)
+            for key, user_ids in self.reservations.items()
+            if key.startswith(guild_prefix)
+        )
+        updated = clear_guild_reservations(self.reservations, guild_id)
+        if cleared:
+            save_reservations(self.reserve_path, updated)
+            self.reservations = updated
+        return cleared
+
     def org_store(self, restrictions_path: Path | None = None) -> OrgReserves:
         """The one shared org store, built once and reused by every transport.
 
@@ -7934,6 +7948,7 @@ class NamingBot(commands.Bot):
             self.org_remove_reserve,
             lambda: self.reserve_categories,
             self.org_add_category_reserves,
+            self.org_clear_reserves,
         )
         port = _org_api_port_from_environment()
         if (

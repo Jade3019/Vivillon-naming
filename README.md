@@ -520,11 +520,11 @@ All requests except the health endpoint need the `Authorization: Bearer <ORG_BOT
 
 - `GET /api/org/health` needs no key; open it in a browser to check the URL works (`{"success": true, "status": "ok"}`).
 - `POST /api/org/validate` with `{"pokemon": "Pikachu", "slot": "slot1"}` checks the name exists and the slot allows it. `slot` is optional; `"All Eevee"` is accepted for all forms.
-- `POST /api/org/reserves` with `{"action": "add" or "remove", "pokemon": "Pikachu", "userId": "123456789012345678", "slot": "slot1"}` validates, then adds/removes the reserve in the org list and in Vivillon's saved reserves (same as `v!r add`). Success: `{"success": true, "action": "add", "pokemon": "Pikachu", "userId": "...", "slot": "slot1", "changed": true}`.
+- `POST /api/org/reserves` with `{"action": "add" or "remove", "pokemon": "Pikachu", "userId": "123456789012345678", "slot": "slot1"}` adds/removes the reserve in the org list and Vivillon's saved reserves. `slot` is optional for add, but required for remove. Removal matches Pokémon, user ID, and slot exactly; another slot's reserve for the same Pokémon/user is preserved. Success: `{"success": true, "action": "remove", "pokemon": "Pikachu", "userId": "...", "slot": "slot1", "changed": true}`.
 - `GET /api/org/categories` lists categories for `ORG_GUILD_ID`: `{"success": true, "count": 1, "categories": [{"name": "regional", "pokemon": ["Pikachu", "Eevee"], "count": 2}]}`. Vivillon reads this from its `RESERVE_CATEGORIES_FILE` data.
 - `POST /api/org/reserves/category` with `{"category": "regional", "userId": "123456789012345678"}` reserves every Pokémon in that category for the user. Success returns `{"success": true, "category": "regional", "userId": "...", "count": 2, "pokemon": ["Pikachu", "Eevee"], "changed": true}`. Repeating the same claim is idempotent (`changed: false`); conflicts return `409` without applying a partial claim.
-- `GET /api/org/reserves` lists the org's reserves: `{"success": true, "count": 1, "reserves": [{"pokemon": "Pikachu", "userId": "...", "slot": "slot1", "type": "individual"}]}`. Category reservations have `"type": "category"` and a `"category"` name. Use this for `!res list`.
-- `POST /api/org/reset` (for `!org start`) clears the org list only; Pokémon already saved in Vivillon's reserves are kept.
+- `GET /api/org/reserves` lists the org's reserves: `{"success": true, "count": 1, "reserves": [{"pokemon": "Pikachu", "userId": "...", "slot": "slot1", "type": "individual"}]}`. Every entry includes `slot` (category entries use `null`). Category reservations have `"type": "category"` and a `"category"` name. Use this for `!res list` and slot-specific releases.
+- `POST /api/org/reset` (for `!org start`) clears all Org entries, including category claims, and all Vivillon reservations for `ORG_GUILD_ID`. It returns `{"success": true, "cleared": 2, "clearedVivillon": 3}`. Reserves for other guilds are preserved.
 
 Example:
 

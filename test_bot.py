@@ -2168,9 +2168,13 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(cast(discord.ui.Button, view.children[-1]).disabled)
 
     async def test_inventory_lists_equipped_assets_with_codes(self) -> None:
-        self.bot.profiles = {
-            "123": {**bot_module.PROFILE_DEFAULTS, "frame": "mystic"}
+        profile: dict[str, int | str] = {
+            "text_color": "white",
+            "background": "default",
+            "middle_background": "white",
+            "frame": "mystic",
         }
+        self.bot.profiles = {"123": profile}
         self.bot.profile_inventory = bot_module.load_profile_inventory(
             self.bot.profile_inventory_path,
             self.bot.profiles,
@@ -9019,6 +9023,151 @@ class OrgApiValidationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.status, 500)
                 self.assertEqual(org.entries, [])
                 self.assertEqual((root / "org.json").read_text(encoding="utf-8"), "[]\n")
+
+    async def test_individual_remove_matches_pokemon_user_and_slot(self) -> None:
+        import tempfile
+        from aiohttp.test_utils import TestClient, TestServer
+        from org_api import OrgReserves, create_app
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vivillon_reserves: set[tuple[str, int]] = set()
+
+            def add_to_vivillon(name: str, user_id: int) -> None:
+                vivillon_reserves.add((name, user_id))
+
+            def remove_from_vivillon(name: str, user_id: int) -> bool:
+                reservation = (name, user_id)
+                if reservation not in vivillon_reserves:
+                    return False
+                vivillon_reserves.remove(reservation)
+                return True
+
+            org = OrgReserves(root / "org.json", root / "restrictions.json", ["Pikachu"])
+            app = create_app(
+                "test-api-key",
+                org,
+                1,
+                add_to_vivillon,
+                remove_from_vivillon,
+            )
+            headers = {"Authorization": "Bearer test-api-key"}
+
+            async with TestClient(TestServer(app)) as client:
+                for slot in ("slot1", "slot2"):
+                    response = await client.post(
+                        "/api/org/reserves",
+                        json={
+                            "action": "add",
+                            "pokemon": "Pikachu",
+                            "userId": "123",
+                            "slot": slot,
+                        },
+                        headers=headers,
+                    )
+                    self.assertEqual(response.status, 200)
+
+                listed = await (await client.get("/api/org/reserves", headers=headers)).json()
+                self.assertEqual(
+                    [entry["slot"] for entry in listed["reserves"]],
+                    ["slot1", "slot2"],
+                )
+
+                response = await client.post(
+                    "/api/org/reserves",
+                    json={
+                        "action": "remove",
+                        "pokemon": "Pikachu",
+                        "userId": "123",
+                        "slot": "slot1",
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 200)
+                self.assertIn(("Pikachu", 123), vivillon_reserves)
+                self.assertEqual(
+                    [(entry["pokemon"], entry["slot"]) for entry in org.entries],
+                    [("Pikachu", "slot2")],
+                )
+
+                response = await client.post(
+                    "/api/org/reserves",
+                    json={
+                        "action": "remove",
+                        "pokemon": "Pikachu",
+                        "userId": "123",
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 400)
+
+                response = await client.post(
+                    "/api/org/reserves",
+                    json={
+                        "action": "remove",
+                        "pokemon": "Pikachu",
+                        "userId": "123",
+                        "slot": "slot2",
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 200)
+                self.assertEqual(vivillon_reserves, set())
+                self.assertEqual(org.entries, [])
+
+    async def test_round_reset_clears_org_and_configured_guild_reserves(self) -> None:
+        import tempfile
+        from aiohttp.test_utils import TestClient, TestServer
+        from org_api import OrgReserves, create_app, save_json
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            org = OrgReserves(root / "org.json", root / "restrictions.json", ["Pikachu"])
+            org.entries = [
+                {"pokemon": "Pikachu", "userId": "123", "slot": "slot1"},
+                {
+                    "pokemon": "Eevee",
+                    "userId": "456",
+                    "slot": None,
+                    "type": "category",
+                    "category": "regional",
+                },
+            ]
+            save_json(org.path, org.entries)
+            vivillon_reserves = {
+                1: {"Pikachu", "Eevee"},
+                2: {"Pikachu"},
+            }
+
+            def clear_vivillon(guild_id: int) -> int:
+                cleared = len(vivillon_reserves.get(guild_id, set()))
+                vivillon_reserves.pop(guild_id, None)
+                return cleared
+
+            app = create_app(
+                "test-api-key",
+                org,
+                1,
+                lambda *_: None,
+                lambda *_: False,
+                clear_reserves_from_vivillon=clear_vivillon,
+            )
+            async with TestClient(TestServer(app)) as client:
+                response = await client.post(
+                    "/api/org/reset",
+                    headers={"Authorization": "Bearer test-api-key"},
+                )
+                self.assertEqual(response.status, 200)
+                self.assertEqual(
+                    await response.json(),
+                    {
+                        "success": True,
+                        "cleared": 2,
+                        "clearedVivillon": 2,
+                    },
+                )
+                self.assertEqual(org.entries, [])
+                self.assertEqual(vivillon_reserves, {2: {"Pikachu"}})
 
 
 class TypeEmojiTests(unittest.TestCase):

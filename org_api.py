@@ -101,7 +101,11 @@ class OrgReserves:
         if self.category_owner_for(name, user_id) is not None:
             raise OrgError(409, f"{name} is reserved by another category claim")
         for entry in self.entries:
-            if entry["pokemon"] == name and entry["userId"] == str(user_id):
+            if (
+                fold(entry["pokemon"]) == fold(name)
+                and entry["userId"] == str(user_id)
+                and entry.get("slot") == slot
+            ):
                 return False
         self.entries.append({"pokemon": name, "userId": str(user_id), "slot": slot})
         save_json(self.path, self.entries)
@@ -117,11 +121,23 @@ class OrgReserves:
                 return entry["userId"]
         return None
 
-    def remove(self, name: str, user_id: int) -> bool:
+    def has_reservation(self, name: str, user_id: int) -> bool:
+        return any(
+            fold(entry["pokemon"]) == fold(name)
+            and entry["userId"] == str(user_id)
+            for entry in self.entries
+        )
+
+    def remove(self, name: str, user_id: int, slot: str | None = None) -> bool:
         kept = [
             entry
             for entry in self.entries
-            if not (entry["pokemon"] == name and entry["userId"] == str(user_id))
+            if not (
+                fold(entry["pokemon"]) == fold(name)
+                and entry["userId"] == str(user_id)
+                and entry.get("slot") == slot
+                and entry.get("type", "individual") == "individual"
+            )
         ]
         removed = len(kept) != len(self.entries)
         if removed:
@@ -144,6 +160,7 @@ def create_app(
     remove_from_vivillon: Callable[[str, int], bool],
     categories: Callable[[], dict[str, dict[str, list[str]]]] | None = None,
     add_category_to_vivillon: Callable[[list[str], int], None] | None = None,
+    clear_reserves_from_vivillon: Callable[[int], int] | None = None,
 ) -> web.Application:
     @web.middleware
     async def guard(request: web.Request, handler: Any) -> web.StreamResponse:
@@ -217,6 +234,8 @@ def create_app(
         user_id = parse_user(data)
         slot = parse_slot(data)
         pokemon = parse_pokemon(data)
+        if action == "remove" and "slot" not in data:
+            raise OrgError(400, "Invalid request: slot is required for removal")
         if action == "add":
             name, all_forms = org.validate(pokemon, slot)
         else:
@@ -227,10 +246,11 @@ def create_app(
             add_to_vivillon(stored, user_id)
             changed = created
         else:
-            changed = org.remove(stored, user_id)
-            changed = remove_from_vivillon(stored, user_id) or changed
+            changed = org.remove(stored, user_id, slot)
             if not changed:
-                raise OrgError(404, f"{stored} is not reserved for that user")
+                raise OrgError(404, f"{stored} is not reserved in that slot for that user")
+            if not org.has_reservation(stored, user_id):
+                remove_from_vivillon(stored, user_id)
         return web.json_response(
             {
                 "success": True,
@@ -256,7 +276,11 @@ def create_app(
     async def list_reserves(request: web.Request) -> web.Response:
         del request
         entries = [
-            {**entry, "type": entry.get("type", "individual")}
+            {
+                **entry,
+                "slot": entry.get("slot"),
+                "type": entry.get("type", "individual"),
+            }
             for entry in org.entries
         ]
         return web.json_response(
@@ -372,7 +396,36 @@ def create_app(
 
     async def reset(request: web.Request) -> web.Response:
         del request
-        return web.json_response({"success": True, "cleared": org.reset()})
+        previous_entries = [dict(entry) for entry in org.entries]
+        try:
+            cleared_org = org.reset()
+        except Exception as error:
+            logger.exception("Could not clear Org reserve list")
+            raise ValueError("Could not clear Org reserve list") from error
+        try:
+            cleared_vivillon = (
+                clear_reserves_from_vivillon(guild_id)
+                if clear_reserves_from_vivillon is not None
+                else 0
+            )
+        except Exception as error:
+            try:
+                save_json(org.path, previous_entries)
+            except Exception as rollback_error:
+                logger.exception("Could not roll back failed Org reserve reset")
+                raise ValueError(
+                    "Reset failed and the Org reserve list could not be restored"
+                ) from rollback_error
+            org.entries = previous_entries
+            logger.exception("Could not clear Vivillon reserve list")
+            raise ValueError("Could not clear Vivillon reserve list") from error
+        return web.json_response(
+            {
+                "success": True,
+                "cleared": cleared_org,
+                "clearedVivillon": cleared_vivillon,
+            }
+        )
 
     async def health(request: web.Request) -> web.Response:
         del request

@@ -5109,22 +5109,31 @@ def parse_grab_entries(texts: list[str]) -> list[tuple[str, list[int]]]:
     entries: list[tuple[str, list[int]]] = []
     for text in texts:
         for line in text.replace("’", "'").splitlines():
+            previous_user: int | None = None
             for group in line.split("|"):
-                user_ids = list(
-                    dict.fromkeys(
-                        int(user_id)
-                        for user_id in MENTION_PATTERN.findall(group)
-                    )
-                )
-                for match in GRAB_NAME_PATTERN.finditer(
-                    MENTION_PATTERN.sub(" ", group)
-                ):
+                mentions = [
+                    (m.start(), int(user_id))
+                    for m in MENTION_PATTERN.finditer(group)
+                    for user_id in MENTION_PATTERN.findall(m.group())[:1]
+                ]
+                blanked = MENTION_PATTERN.sub(lambda m: " " * len(m.group()), group)
+                for match in GRAB_NAME_PATTERN.finditer(blanked):
                     name = " ".join(
                         unicodedata.normalize("NFC", match.group()).split()
                     )
                     if name.casefold().startswith("all forms of "):
                         name = "all " + name[len("all forms of ") :]
-                    entries.append((name, list(user_ids)))
+                    # Only the nearest mention before the name gets it.
+                    before = [uid for pos, uid in mentions if pos < match.start()]
+                    if before:
+                        owner = before[-1]
+                    elif mentions:
+                        owner = mentions[0][1]
+                    else:
+                        owner = previous_user
+                    entries.append((name, [] if owner is None else [owner]))
+                    if owner is not None:
+                        previous_user = owner
     return entries
 
 

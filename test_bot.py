@@ -6751,7 +6751,7 @@ class GrabListTests(unittest.TestCase):
 
         self.assertEqual(
             entries,
-            [("pikachu", [1]), ("eevee", []), ("all arceus", [2, 3])],
+            [("pikachu", [1]), ("eevee", []), ("all arceus", [2])],
         )
 
     def test_parses_labelled_org_reserve_list(self) -> None:
@@ -6780,6 +6780,22 @@ class GrabListTests(unittest.TestCase):
                 ["Regional — <@1> - Sneasel | <@2> Amaura | <@3> Zorua"]
             ),
             [("Sneasel", [1]), ("Amaura", [2]), ("Zorua", [3])],
+        )
+
+    def test_two_mentions_give_pokemon_only_to_nearest_user(self) -> None:
+        self.assertEqual(
+            parse_grab_entries(
+                [
+                    "Rare — <@1> - <@2> Zorua | <@3> - Archaludon\n"
+                    "Res 3 — <@4> - Aerodactyl | Honedge"
+                ]
+            ),
+            [
+                ("Zorua", [2]),
+                ("Archaludon", [3]),
+                ("Aerodactyl", [4]),
+                ("Honedge", [4]),
+            ],
         )
 
     def test_order_all_forms_and_emoji_cycle(self) -> None:

@@ -437,6 +437,27 @@ def profile_asset_codes() -> dict[str, str]:
     return codes
 
 
+def profile_inventory_code(
+    user_id: str,
+    asset_id: str,
+    copy_number: int,
+    used_codes: set[str],
+) -> str:
+    salt = 0
+    while True:
+        value = f"inventory:{user_id}:{asset_id}:{copy_number}:{salt}"
+        code = hashlib.sha256(value.encode()).hexdigest()[:7].upper()
+        if code not in used_codes:
+            used_codes.add(code)
+            return code
+        salt += 1
+
+
+def profile_inventory_item(asset_id: str, code: str) -> dict[str, str]:
+    setting, _, key = asset_id.partition(":")
+    return {"code": code, "type": setting, "key": key}
+
+
 def load_profile_shop(path: Path) -> dict[str, dict[str, str | int]]:
     if not path.exists():
         return {}
@@ -484,14 +505,18 @@ def load_profile_inventory(
     path: Path,
     profiles: dict[str, dict[str, int | str]],
 ) -> dict[str, dict[str, Any]]:
+    used_codes = set(profile_asset_codes().values())
     if not path.exists():
         users: dict[str, dict[str, Any]] = {}
-        for user_id, settings in profiles.items():
-            assets = sorted(
-                profile_asset_id(setting, str(settings[setting]))
-                for setting in PROFILE_ASSET_SETTINGS
-                if settings.get(setting) != PROFILE_DEFAULT_ASSETS[setting]
-            )
+        for user_id, settings in sorted(profiles.items()):
+            assets: list[dict[str, str]] = []
+            for setting in PROFILE_ASSET_SETTINGS:
+                key = str(settings.get(setting, PROFILE_DEFAULT_ASSETS[setting]))
+                if key == PROFILE_DEFAULT_ASSETS[setting]:
+                    continue
+                asset_id = profile_asset_id(setting, key)
+                code = profile_inventory_code(user_id, asset_id, 1, used_codes)
+                assets.append(profile_inventory_item(asset_id, code))
             if assets:
                 users[user_id] = {"balances": {}, "assets": assets}
         return users
@@ -503,7 +528,7 @@ def load_profile_inventory(
         raise ValueError(f"Profile inventory in {path} has an invalid format")
 
     users: dict[str, dict[str, Any]] = {}
-    for user_id, stored_inventory in data["users"].items():
+    for user_id, stored_inventory in sorted(data["users"].items()):
         if (
             not isinstance(user_id, str)
             or not user_id.isdecimal()
@@ -522,13 +547,68 @@ def load_profile_inventory(
             for currency, amount in balances.items()
         ):
             raise ValueError(f"Profile inventory in {path} has an invalid balance")
-        assets = stored_inventory.get("assets", [])
-        if any(not isinstance(asset_id, str) or ":" not in asset_id for asset_id in assets):
-            raise ValueError(f"Profile inventory in {path} has an invalid asset")
+        assets: list[dict[str, str]] = []
+        copy_counts: dict[str, int] = {}
+        for stored_asset in stored_inventory.get("assets", []):
+            if isinstance(stored_asset, str):
+                setting, separator, key = stored_asset.partition(":")
+                if not separator:
+                    raise ValueError(f"Profile inventory in {path} has an invalid asset")
+                asset_id = profile_asset_id(setting, key)
+                copy_number = copy_counts.get(asset_id, 0) + 1
+                copy_counts[asset_id] = copy_number
+                code = profile_inventory_code(user_id, asset_id, copy_number, used_codes)
+            elif isinstance(stored_asset, dict):
+                setting = stored_asset.get("type")
+                key = stored_asset.get("key")
+                code = stored_asset.get("code")
+                if (
+                    not isinstance(setting, str)
+                    or not isinstance(key, str)
+                    or not isinstance(code, str)
+                    or re.fullmatch(r"[A-Z0-9]{7}", code) is None
+                ):
+                    raise ValueError(f"Profile inventory in {path} has an invalid asset")
+                asset_id = profile_asset_id(setting, key)
+                if code in used_codes:
+                    raise ValueError(f"Profile inventory in {path} has duplicate asset codes")
+                used_codes.add(code)
+                copy_counts[asset_id] = copy_counts.get(asset_id, 0) + 1
+            else:
+                raise ValueError(f"Profile inventory in {path} has an invalid asset")
+            if (
+                setting not in PROFILE_ASSET_SETTINGS
+                or key not in PROFILE_SETTING_CHOICES[setting]
+                or key == PROFILE_DEFAULT_ASSETS[setting]
+            ):
+                raise ValueError(f"Profile inventory in {path} has an invalid asset")
+            assets.append(profile_inventory_item(asset_id, code))
         users[user_id] = {
             "balances": dict(balances),
-            "assets": sorted(set(assets)),
+            "assets": assets,
         }
+
+    for user_id, settings in sorted(profiles.items()):
+        inventory = users.setdefault(user_id, {"balances": {}, "assets": []})
+        owned_asset_ids = {
+            profile_asset_id(asset["type"], asset["key"])
+            for asset in inventory["assets"]
+        }
+        copy_counts: dict[str, int] = {}
+        for asset in inventory["assets"]:
+            asset_id = profile_asset_id(asset["type"], asset["key"])
+            copy_counts[asset_id] = copy_counts.get(asset_id, 0) + 1
+        for setting in PROFILE_ASSET_SETTINGS:
+            key = str(settings.get(setting, PROFILE_DEFAULT_ASSETS[setting]))
+            if key == PROFILE_DEFAULT_ASSETS[setting]:
+                continue
+            asset_id = profile_asset_id(setting, key)
+            if asset_id in owned_asset_ids:
+                continue
+            copy_number = copy_counts.get(asset_id, 0) + 1
+            code = profile_inventory_code(user_id, asset_id, copy_number, used_codes)
+            inventory["assets"].append(profile_inventory_item(asset_id, code))
+            owned_asset_ids.add(asset_id)
     return users
 
 
@@ -6470,14 +6550,16 @@ class ProfileInventoryView(discord.ui.View):
         ]
         if PROFILE_SHOP_CURRENCY not in balances:
             entries.insert(0, f"0 {PROFILE_SHOP_CURRENCY}")
-        codes = profile_asset_codes()
+        inventory = self.bot.profile_inventory.get(str(self.user_id), {})
         assets = sorted(
-            self.bot.profile_assets_for_user(self.user_id),
-            key=lambda asset_id: profile_asset_display(asset_id).casefold(),
+            inventory.get("assets", []),
+            key=lambda asset: profile_asset_display(
+                profile_asset_id(str(asset["type"]), str(asset["key"]))
+            ).casefold(),
         )
         entries.extend(
-            f"{codes.get(asset_id, '???????')} - {profile_asset_display(asset_id)}"
-            for asset_id in assets
+            f"{asset['code']} - {profile_asset_display(profile_asset_id(asset['type'], asset['key']))}"
+            for asset in assets
         )
         return entries
 
@@ -7064,7 +7146,10 @@ class NamingBot(commands.Bot):
 
     def profile_assets_for_user(self, user_id: int) -> set[str]:
         inventory = self.profile_inventory.get(str(user_id), {})
-        assets = set(inventory.get("assets", []))
+        assets = {
+            profile_asset_id(str(asset["type"]), str(asset["key"]))
+            for asset in inventory.get("assets", [])
+        }
         settings = self.profile_settings_for_user(user_id)
         for setting in PROFILE_ASSET_SETTINGS:
             key = settings[setting]
@@ -7108,8 +7193,6 @@ class NamingBot(commands.Bot):
         item = self.profile_shop.get(asset_id)
         if item is None:
             raise ValueError("That profile asset is no longer available in the shop.")
-        if asset_id in self.profile_assets_for_user(user_id):
-            raise ValueError("You already own this profile asset.")
         setting = str(item["type"])
         key = str(item["key"])
         if key not in profile_setting_choices_for_user(user_id, setting):
@@ -7143,11 +7226,22 @@ class NamingBot(commands.Bot):
         )
         user_balances = user_inventory["balances"]
         user_balances[currency] = balance - price
-        user_inventory["assets"] = sorted(
-            set(user_inventory["assets"])
-            | self.profile_assets_for_user(user_id)
-            | {asset_id}
+        current_assets = user_inventory["assets"]
+        copy_number = 1 + sum(
+            1
+            for asset in current_assets
+            if profile_asset_id(str(asset["type"]), str(asset["key"])) == asset_id
         )
+        used_codes = set(profile_asset_codes().values())
+        for inventory in updated_inventory.values():
+            used_codes.update(asset["code"] for asset in inventory["assets"])
+        code = profile_inventory_code(
+            str(user_id),
+            asset_id,
+            copy_number,
+            used_codes,
+        )
+        current_assets.append(profile_inventory_item(asset_id, code))
 
         save_profile_data(
             self.profile_data_path,
@@ -7259,9 +7353,34 @@ class NamingBot(commands.Bot):
         user_inventory = updated_inventory.setdefault(
             str(user_id), {"balances": {}, "assets": []}
         )
-        user_inventory["assets"] = sorted(
-            set(user_inventory["assets"]) | self.profile_assets_for_user(user_id)
-        )
+        owned_asset_ids = {
+            profile_asset_id(str(asset["type"]), str(asset["key"]))
+            for asset in user_inventory["assets"]
+        }
+        used_codes = set(profile_asset_codes().values())
+        for inventory in updated_inventory.values():
+            used_codes.update(asset["code"] for asset in inventory["assets"])
+        settings = self.profile_settings_for_user(user_id)
+        for setting in PROFILE_ASSET_SETTINGS:
+            key = str(settings[setting])
+            if key == PROFILE_DEFAULT_ASSETS[setting]:
+                continue
+            asset_id = profile_asset_id(setting, key)
+            if asset_id in owned_asset_ids:
+                continue
+            copy_number = 1 + sum(
+                1
+                for asset in user_inventory["assets"]
+                if profile_asset_id(str(asset["type"]), str(asset["key"])) == asset_id
+            )
+            code = profile_inventory_code(
+                str(user_id),
+                asset_id,
+                copy_number,
+                used_codes,
+            )
+            user_inventory["assets"].append(profile_inventory_item(asset_id, code))
+            owned_asset_ids.add(asset_id)
         save_profile_inventory(self.profile_inventory_path, updated_inventory)
         self.profile_inventory = updated_inventory
 
@@ -9108,9 +9227,6 @@ class NamingBot(commands.Bot):
             )
             return
         asset_id, item = found
-        if asset_id in self.profile_assets_for_user(message.author.id):
-            await message.reply("You already own this profile asset.", mention_author=False)
-            return
         code = profile_asset_codes()[asset_id]
         name = profile_asset_display(asset_id)
         price = int(item["price"])

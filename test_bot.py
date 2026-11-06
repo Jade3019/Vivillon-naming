@@ -2183,7 +2183,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         view = bot_module.ProfileInventoryView(self.bot, 123)
 
         self.assertIn("0 Pokédollar", view.embed.description or "")
-        expected_code = bot_module.profile_asset_codes()["frame:mystic"]
+        expected_code = self.bot.profile_inventory["123"]["assets"][0]["code"]
         self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
 
     async def test_buy_confirmation_deducts_currency_and_equips_asset(self) -> None:
@@ -2198,7 +2198,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         }
         self.bot.profile_inventory = {
             "123": {
-                "balances": {bot_module.PROFILE_SHOP_CURRENCY: 100},
+                "balances": {bot_module.PROFILE_SHOP_CURRENCY: 200},
                 "assets": [],
             }
         }
@@ -2228,9 +2228,45 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.profile_settings_for_user(123)["frame"], "mystic")
         self.assertEqual(
             self.bot.profile_inventory["123"]["balances"][bot_module.PROFILE_SHOP_CURRENCY],
-            20,
+            120,
         )
-        self.assertIn(asset_id, self.bot.profile_inventory["123"]["assets"])
+
+        await self.bot.handle_profile_buy_command(message)
+        purchase_view = awaited_kwargs(message.reply)["view"]
+        second_interaction = Mock()
+        second_interaction.user.id = 123
+        second_interaction.response.edit_message = AsyncMock()
+        yes_button = next(
+            child
+            for child in purchase_view.children
+            if isinstance(child, discord.ui.Button) and child.label == "Yes"
+        )
+        await yes_button.callback(second_interaction)
+
+        owned_copies = self.bot.profile_inventory["123"]["assets"]
+        self.assertEqual(len(owned_copies), 2)
+        self.assertEqual(
+            [(asset["type"], asset["key"]) for asset in owned_copies],
+            [("frame", "mystic"), ("frame", "mystic")],
+        )
+        self.assertEqual(len({asset["code"] for asset in owned_copies}), 2)
+        self.assertTrue(all(len(asset["code"]) == 7 for asset in owned_copies))
+        inventory_view = bot_module.ProfileInventoryView(self.bot, 123)
+        inventory_lines = (inventory_view.embed.description or "").splitlines()
+        self.assertEqual(
+            sum(line.endswith(" - Mystic") for line in inventory_lines),
+            2,
+        )
+        self.assertTrue(
+            all(
+                f"{asset['code']} - Mystic" in inventory_lines
+                for asset in owned_copies
+            )
+        )
+        self.assertEqual(
+            self.bot.profile_inventory["123"]["balances"][bot_module.PROFILE_SHOP_CURRENCY],
+            40,
+        )
         self.assertEqual(
             bot_module.load_profile_inventory(self.bot.profile_inventory_path, {}),
             self.bot.profile_inventory,
@@ -8792,8 +8828,18 @@ class ProfileShopDataTests(unittest.TestCase):
             }
             inventory = bot.load_profile_inventory(inventory_path, profiles)
             self.assertEqual(
-                inventory["123"]["assets"],
-                ["background:cosmog", "frame:mystic"],
+                [
+                    (asset["type"], asset["key"])
+                    for asset in inventory["123"]["assets"]
+                ],
+                [("background", "cosmog"), ("frame", "mystic")],
+            )
+            migrated_codes = [
+                asset["code"] for asset in inventory["123"]["assets"]
+            ]
+            self.assertEqual(len(migrated_codes), len(set(migrated_codes)))
+            self.assertTrue(
+                all(len(code) == 7 and code.isalnum() for code in migrated_codes)
             )
             inventory["123"]["balances"] = {"Pokédollar": 25}
             bot.save_profile_inventory(inventory_path, inventory)

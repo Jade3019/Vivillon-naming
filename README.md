@@ -427,11 +427,14 @@ visual assets are migrated into their owners' inventories; profile music is not
 an inventory item. The inventory and shop catalog are stored separately in
 `profile_inventory.json` and `profile_shop.json` by default. The inventory file
 is private runtime data and is ignored by Git. Balances start at zero Pokédollar;
-currency earning is not part of this feature yet.
+currency earning is not part of this feature yet. An asset can be purchased any
+number of times. Every purchase charges its price and adds a separate inventory
+line with its own seven-character code, even when the asset is already owned.
 
 Add assets and prices to `profile_shop.json`. `type` is `frame`, `background`,
-or `middle_background`; `key` must match an existing profile asset key. Codes
-are generated automatically and remain stable for each asset.
+or `middle_background`; `key` must match an existing profile asset key. Shop
+codes are generated automatically and remain stable per catalog item; each
+owned copy gets a separate unique code shown in `v!inv`.
 
 ```json
 {

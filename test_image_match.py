@@ -1014,6 +1014,7 @@ class CustomFormRecognitionTests(unittest.TestCase):
             ("Gulpin", "bulbasaur-example-tight-c44n.png"),
             ("Salandit", "bulbasaur-example-tight-c7n.png"),
             ("Spheal", "bulbasaur-example-3.png"),
+            ("Spheal", "bulbasaur-example-6.png"),
             ("Spheal", "bulbasaur-example-tight-c28n.png"),
             ("Yamask", "bulbasaur-example-tight-c33n.png"),
         )

@@ -815,6 +815,41 @@ class ImageMatcher:
                 )
                 if result is not None:
                     results.append(result)
+        if not results and mask is None:
+            foreground = foreground_mask(data)
+            if foreground is not None:
+                foreground_descriptors = {
+                    mirror: compute_descriptors(data, mirror, foreground)
+                    for mirror in (False, True)
+                }
+                for relaxed in (False, True):
+                    for mirror in (False, True):
+                        result = self._match(
+                            data,
+                            mirror,
+                            mask=foreground,
+                            relaxed=relaxed,
+                            descriptors=foreground_descriptors[mirror],
+                        )
+                        if result is not None:
+                            results.append(result)
+                    if results:
+                        break
+                if not results:
+                    for mirror in (False, True):
+                        result = self._match(
+                            data,
+                            mirror,
+                            mask=foreground,
+                            descriptors=compute_descriptors(
+                                data,
+                                mirror,
+                                foreground,
+                                WIDE_FEATURES_PER_IMAGE,
+                            ),
+                        )
+                        if result is not None:
+                            results.append(result)
         if not results:
             return None
         vivillon_form: str | None = None

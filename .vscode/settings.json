@@ -11,6 +11,10 @@
         "/^python - <<'PY'\nfrom pathlib import Path\nfrom image_match import ImageMatcher\nmatcher = ImageMatcher\\(Path\\('image_bank\\.npz'\\)\\)\npaths = \\[\n'pokemon_images/Gulpin/bulbasaur-example-3\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c29n\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c44n\\.png',\n'pokemon_images/Gulpin/bulbasaur-example-tight-c4n\\.png',\n'pokemon_images/Salandit/bulbasaur-example-tight-c7n\\.png',\n'pokemon_images/Spheal/bulbasaur-example-3\\.png',\n'pokemon_images/Spheal/bulbasaur-example-6\\.png',\n'pokemon_images/Spheal/bulbasaur-example-tight-c28n\\.png',\n'pokemon_images/Yamask/bulbasaur-example-tight-c33n\\.png',\n\\]\nfor value in paths:\n    path = Path\\(value\\)\n    print\\(f'\\{path\\}: \\{matcher\\.best_guess\\(path\\.read_bytes\\(\\)\\)\\}'\\)\nPY$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python -m py_compile test_bot\\.py && python -m unittest test_bot\\.ApiStatusTests\\.test_global_concurrency_ceiling_is_shared_across_servers test_bot\\.ApiStatusTests\\.test_pause_all_pauses_active_incense_channels_in_current_server test_bot\\.ApiStatusTests\\.test_pause_all_recovers_untracked_active_incense_from_history test_bot\\.ApiStatusTests\\.test_api_status_counts_incenses_across_all_servers$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

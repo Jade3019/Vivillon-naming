@@ -392,6 +392,21 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, ("Vivillon", 49.99))
 
+    def test_squawkabilly_colour_confirmed_guess_is_not_low_confidence(self) -> None:
+        import bot
+
+        name = "Yellow-Plumage Squawkabilly"
+        matcher = Mock()
+        matcher.best_guess.return_value = (name, 20)
+
+        with patch("bot.squawkabilly_form_by_color", return_value=name):
+            self.assertEqual(
+                bot.local_fallback_prediction(matcher, b"x"),
+                (name, bot.CORROBORATED_CONFIDENCE_FLOOR),
+            )
+        with patch("bot.squawkabilly_form_by_color", return_value=None):
+            self.assertLess(bot.local_fallback_prediction(matcher, b"x")[1], 50)
+
     async def test_local_matcher_agreement_raises_low_confidence_prediction_to_alert_cutoff(
         self,
     ) -> None:

@@ -29,10 +29,12 @@ from image_match import (
     canonicalize_regional_name,
     minimum_votes_for,
     SILVALLY_FORMS,
+    SQUAWKABILLY_PLUMAGE_FORMS,
     VIVILLON_FORM_SET,
     ImageMatcher,
     cv2,
     species_display_name,
+    squawkabilly_form_by_color,
     vivillon_form_by_pattern,
 )
 from org_api import OrgReserves, create_app
@@ -1052,6 +1054,14 @@ def local_fallback_prediction(
     name, votes = guess
     needed = max(1, minimum_votes_for(name))
     confidence = round(min(49.99, votes / needed * 49.99), 2)
+    # Plumage forms share one shape, so enough votes plus a matching colour is a solid answer.
+    if (
+        name in SQUAWKABILLY_PLUMAGE_FORMS
+        and votes >= needed
+        and squawkabilly_form_by_color(image_bytes) == name
+    ):
+        logger.info("Squawkabilly plumage confirmed by colour: %s (%d votes)", name, votes)
+        return name, CORROBORATED_CONFIDENCE_FLOOR
     logger.warning(
         "Using low-confidence local guess %s (%d reference votes)",
         name,

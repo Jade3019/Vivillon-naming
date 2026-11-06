@@ -1029,6 +1029,18 @@ class CustomFormRecognitionTests(unittest.TestCase):
                 result = require_match(result)
                 self.assertEqual(result[0], expected)
 
+    def test_saved_goomy_spawn_scene_matches_as_goomy(self) -> None:
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        image_path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Goomy"
+            / "bulbasaur-example-1.png"
+        )
+
+        result = require_match(matcher.match(image_path.read_bytes()))
+
+        self.assertEqual(result[0], "Goomy")
+
     def test_user_reported_spawn_crops_are_recognized(self) -> None:
         matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
         examples = (

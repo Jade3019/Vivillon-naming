@@ -2134,10 +2134,147 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             self.bot.profile_records,
             self.bot.profile_seen_catch_ids,
         ) = load_profile_data(self.bot.profile_data_path)
+        self.bot.profile_shop_path = Path(self.directory.name) / "profile_shop.json"
+        self.bot.profile_shop = {}
+        self.bot.profile_inventory_path = (
+            Path(self.directory.name) / "profile_inventory.json"
+        )
+        self.bot.profile_inventory = bot_module.load_profile_inventory(
+            self.bot.profile_inventory_path,
+            self.bot.profiles,
+        )
 
     async def asyncTearDown(self) -> None:
         await self.bot.close()
         self.directory.cleanup()
+
+    async def test_shop_shows_three_categories_and_empty_category(self) -> None:
+        view = bot_module.ProfileShopView(self.bot, 123)
+        category_buttons = [
+            child
+            for child in view.children
+            if isinstance(child, bot_module.ProfileShopCategoryButton)
+        ]
+        self.assertEqual(
+            [button.label for button in category_buttons],
+            ["Frames", "Backgrounds", "Middle backgrounds"],
+        )
+
+        interaction = Mock()
+        interaction.response.edit_message = AsyncMock()
+        await category_buttons[0].callback(interaction)
+        self.assertEqual(view.embed.description, "No frames are in the shop yet.")
+        self.assertTrue(cast(discord.ui.Button, view.children[-2]).disabled)
+        self.assertTrue(cast(discord.ui.Button, view.children[-1]).disabled)
+
+    async def test_inventory_lists_equipped_assets_with_codes(self) -> None:
+        self.bot.profiles = {
+            "123": {**bot_module.PROFILE_DEFAULTS, "frame": "mystic"}
+        }
+        self.bot.profile_inventory = bot_module.load_profile_inventory(
+            self.bot.profile_inventory_path,
+            self.bot.profiles,
+        )
+
+        view = bot_module.ProfileInventoryView(self.bot, 123)
+
+        self.assertIn("0 Pokédollar", view.embed.description or "")
+        expected_code = bot_module.profile_asset_codes()["frame:mystic"]
+        self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
+
+    async def test_buy_confirmation_deducts_currency_and_equips_asset(self) -> None:
+        asset_id = "frame:mystic"
+        self.bot.profile_shop = {
+            asset_id: {
+                "type": "frame",
+                "key": "mystic",
+                "price": 80,
+                "currency": bot_module.PROFILE_SHOP_CURRENCY,
+            }
+        }
+        self.bot.profile_inventory = {
+            "123": {
+                "balances": {bot_module.PROFILE_SHOP_CURRENCY: 100},
+                "assets": [],
+            }
+        }
+        self.assertNotIn("mystic", self.bot.profile_choices_for_user(123, "frame"))
+        message = Mock()
+        message.guild = Mock()
+        message.author.id = 123
+        message.content = "v!buy mystic"
+        message.reply = AsyncMock(return_value=Mock())
+
+        await self.bot.handle_profile_buy_command(message)
+
+        purchase_view = awaited_kwargs(message.reply)["view"]
+        self.assertIsInstance(purchase_view, bot_module.ProfilePurchaseView)
+        self.assertIn("Are you sure", awaited_kwargs(message.reply)["content"])
+        interaction = Mock()
+        interaction.user.id = 123
+        interaction.response.edit_message = AsyncMock()
+        yes_button = next(
+            child
+            for child in purchase_view.children
+            if isinstance(child, discord.ui.Button) and child.label == "Yes"
+        )
+
+        await yes_button.callback(interaction)
+
+        self.assertEqual(self.bot.profile_settings_for_user(123)["frame"], "mystic")
+        self.assertEqual(
+            self.bot.profile_inventory["123"]["balances"][bot_module.PROFILE_SHOP_CURRENCY],
+            20,
+        )
+        self.assertIn(asset_id, self.bot.profile_inventory["123"]["assets"])
+        self.assertEqual(
+            bot_module.load_profile_inventory(self.bot.profile_inventory_path, {}),
+            self.bot.profile_inventory,
+        )
+
+    async def test_purchase_with_insufficient_currency_changes_nothing(self) -> None:
+        asset_id = "frame:mystic"
+        self.bot.profile_shop = {
+            asset_id: {
+                "type": "frame",
+                "key": "mystic",
+                "price": 80,
+                "currency": bot_module.PROFILE_SHOP_CURRENCY,
+            }
+        }
+        self.bot.profile_inventory = {
+            "123": {
+                "balances": {bot_module.PROFILE_SHOP_CURRENCY: 20},
+                "assets": [],
+            }
+        }
+        message = Mock()
+        message.guild = Mock()
+        message.author.id = 123
+        message.content = "v!buy mystic"
+        message.reply = AsyncMock(return_value=Mock())
+        await self.bot.handle_profile_buy_command(message)
+        purchase_view = awaited_kwargs(message.reply)["view"]
+        interaction = Mock()
+        interaction.user.id = 123
+        interaction.response.edit_message = AsyncMock()
+        yes_button = next(
+            child
+            for child in purchase_view.children
+            if isinstance(child, discord.ui.Button) and child.label == "Yes"
+        )
+
+        await yes_button.callback(interaction)
+
+        self.assertEqual(self.bot.profiles, {})
+        self.assertEqual(
+            self.bot.profile_inventory["123"]["balances"][bot_module.PROFILE_SHOP_CURRENCY],
+            20,
+        )
+        self.assertIn(
+            "You don't have enough Pokédollar",
+            awaited_kwargs(interaction.response.edit_message)["content"],
+        )
 
     async def test_profile_command_sends_image_and_edit_button(self) -> None:
         message = Mock()
@@ -8623,6 +8760,49 @@ class PokemonNameValidationTests(unittest.TestCase):
     def test_rejects_multiple_candidates_and_unexpected_symbols(self) -> None:
         self.assertFalse(is_valid_pokemon_name("Gothorita / Gothita"))
         self.assertFalse(is_valid_pokemon_name("Gothorita!"))
+
+
+class ProfileShopDataTests(unittest.TestCase):
+    def test_shop_catalog_inventory_migration_and_asset_codes(self) -> None:
+        import bot
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shop_path = root / "profile_shop.json"
+            inventory_path = root / "profile_inventory.json"
+            shop_path.write_text(
+                '{"items": [{"type": "frame", "key": "mystic", "price": 80}]}',
+                encoding="utf-8",
+            )
+
+            items = bot.load_profile_shop(shop_path)
+            self.assertEqual(items["frame:mystic"]["price"], 80)
+            self.assertEqual(bot.load_profile_shop(root / "empty.json"), {})
+
+            profiles = {
+                "123": {
+                    **bot.PROFILE_DEFAULTS,
+                    "background": "cosmog",
+                    "frame": "mystic",
+                }
+            }
+            inventory = bot.load_profile_inventory(inventory_path, profiles)
+            self.assertEqual(
+                inventory["123"]["assets"],
+                ["background:cosmog", "frame:mystic"],
+            )
+            inventory["123"]["balances"] = {"Pokédollar": 25}
+            bot.save_profile_inventory(inventory_path, inventory)
+            self.assertEqual(
+                bot.load_profile_inventory(inventory_path, {}),
+                inventory,
+            )
+
+            codes = bot.profile_asset_codes()
+            self.assertEqual(len(codes), len(set(codes.values())))
+            self.assertTrue(
+                all(len(code) == 7 and code.isalnum() for code in codes.values())
+            )
 
 
 class OrgReservesTests(unittest.TestCase):

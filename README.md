@@ -420,6 +420,31 @@ saved settings.
 Profile choices and per-server totals are saved in `profile_data.json` by
 default; set `PROFILE_DATA_FILE` to use another path.
 
+Use `v!shop` to browse Frames, Backgrounds, and Middle backgrounds, and
+`v!buy <asset name or code>` to confirm a purchase. Purchased assets are added
+to the profile, equipped immediately, and shown by `v!inv`. Existing equipped
+visual assets are migrated into their owners' inventories; profile music is not
+an inventory item. The inventory and shop catalog are stored separately in
+`profile_inventory.json` and `profile_shop.json` by default. The inventory file
+is private runtime data and is ignored by Git. Balances start at zero Pokédollar;
+currency earning is not part of this feature yet.
+
+Add assets and prices to `profile_shop.json`. `type` is `frame`, `background`,
+or `middle_background`; `key` must match an existing profile asset key. Codes
+are generated automatically and remain stable for each asset.
+
+```json
+{
+  "items": [
+    {"type": "frame", "key": "mystic", "price": 100},
+    {"type": "background", "key": "cosmog", "price": 75}
+  ]
+}
+```
+
+The optional `currency` field defaults to `Pokédollar`. `PROFILE_SHOP_FILE` and
+`PROFILE_INVENTORY_FILE` can override the default data paths.
+
 ## Exchanging reservations
 
 Reserve managers can move one member's reservations to others. Post a list

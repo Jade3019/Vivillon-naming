@@ -81,6 +81,14 @@ HELP_CATEGORIES: Final[list[tuple[str, list[tuple[str, str]]]]] = [
         ],
     ),
     (
+        "🛍️ Profile Shop & Inventory",
+        [
+            ("v!shop", "Browse frames, backgrounds, and middle backgrounds for sale."),
+            ("v!buy <asset name or code>", "Confirm a purchase and equip the profile asset."),
+            ("v!inv", "View your Pokédollar balance and owned profile assets."),
+        ],
+    ),
+    (
         "⚙️ Settings & Utility",
         [
             ("v!settings", "Server settings: turn naming, assisted replies and ping-only mode on or off."),

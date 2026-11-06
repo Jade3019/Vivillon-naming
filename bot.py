@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import csv
+import hashlib
 import mimetypes
 from io import BytesIO
 import json
@@ -109,6 +110,10 @@ PREMIUM_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 PROFILE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^v!profile(?:\s+<@!?(\d+)>)?\s*$",
+    re.IGNORECASE,
+)
+PROFILE_BUY_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^v!buy(?:\s+(.+?))?\s*$",
     re.IGNORECASE,
 )
 PROFILE_BACKFILL_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -369,6 +374,18 @@ PROFILE_SETTING_LABELS: Final[dict[str, str]] = {
     "middle_background": "Middle background",
     "frame": "Frame",
 }
+PROFILE_ASSET_SETTINGS: Final[tuple[str, ...]] = (
+    "background",
+    "middle_background",
+    "frame",
+)
+PROFILE_DEFAULT_ASSETS: Final[dict[str, str]] = {
+    "background": "default",
+    "middle_background": "white",
+    "frame": "none",
+}
+PROFILE_SHOP_CURRENCY: Final[str] = "Pokédollar"
+PROFILE_SHOP_PAGE_SIZE: Final[int] = 10
 PROFILE_EMOJI_URLS: Final[dict[str, str]] = {
     "low_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c9.png",
     "high_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c8.png",
@@ -392,6 +409,144 @@ def profile_setting_choices_for_user(
         for value, choice in choices.items()
         if value not in restricted_choices
     }
+
+
+def profile_asset_id(setting: str, key: str) -> str:
+    return f"{setting}:{key}"
+
+
+def profile_asset_codes() -> dict[str, str]:
+    asset_ids = sorted(
+        profile_asset_id(setting, key)
+        for setting in PROFILE_ASSET_SETTINGS
+        for key in PROFILE_SETTING_CHOICES[setting]
+        if key != PROFILE_DEFAULT_ASSETS[setting]
+    )
+    codes: dict[str, str] = {}
+    used_codes: set[str] = set()
+    for asset_id in asset_ids:
+        suffix = 0
+        while True:
+            digest = hashlib.sha256(f"{asset_id}:{suffix}".encode()).hexdigest()
+            code = digest[:7].upper()
+            if code not in used_codes:
+                codes[asset_id] = code
+                used_codes.add(code)
+                break
+            suffix += 1
+    return codes
+
+
+def load_profile_shop(path: Path) -> dict[str, dict[str, str | int]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read profile shop from {path}") from error
+    if not isinstance(data, dict) or set(data) != {"items"} or not isinstance(data["items"], list):
+        raise ValueError(f"Profile shop in {path} has an invalid format")
+
+    items: dict[str, dict[str, str | int]] = {}
+    for entry in data["items"]:
+        if not isinstance(entry, dict):
+            raise ValueError(f"Profile shop in {path} has an invalid item")
+        setting = entry.get("type")
+        key = entry.get("key")
+        price = entry.get("price")
+        currency = entry.get("currency", PROFILE_SHOP_CURRENCY)
+        if (
+            not isinstance(setting, str)
+            or setting not in PROFILE_ASSET_SETTINGS
+            or not isinstance(key, str)
+            or key not in PROFILE_SETTING_CHOICES[setting]
+            or key == PROFILE_DEFAULT_ASSETS[setting]
+            or isinstance(price, bool)
+            or not isinstance(price, int)
+            or price < 0
+            or not isinstance(currency, str)
+            or not currency.strip()
+        ):
+            raise ValueError(f"Profile shop in {path} has an invalid item")
+        asset_id = profile_asset_id(setting, key)
+        if asset_id in items:
+            raise ValueError(f"Profile shop in {path} has a duplicate item")
+        items[asset_id] = {
+            "type": setting,
+            "key": key,
+            "price": price,
+            "currency": currency.strip(),
+        }
+    return items
+
+
+def load_profile_inventory(
+    path: Path,
+    profiles: dict[str, dict[str, int | str]],
+) -> dict[str, dict[str, Any]]:
+    if not path.exists():
+        users: dict[str, dict[str, Any]] = {}
+        for user_id, settings in profiles.items():
+            assets = sorted(
+                profile_asset_id(setting, str(settings[setting]))
+                for setting in PROFILE_ASSET_SETTINGS
+                if settings.get(setting) != PROFILE_DEFAULT_ASSETS[setting]
+            )
+            if assets:
+                users[user_id] = {"balances": {}, "assets": assets}
+        return users
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read profile inventory from {path}") from error
+    if not isinstance(data, dict) or set(data) != {"users"} or not isinstance(data["users"], dict):
+        raise ValueError(f"Profile inventory in {path} has an invalid format")
+
+    users: dict[str, dict[str, Any]] = {}
+    for user_id, stored_inventory in data["users"].items():
+        if (
+            not isinstance(user_id, str)
+            or not user_id.isdecimal()
+            or not isinstance(stored_inventory, dict)
+            or not isinstance(stored_inventory.get("balances", {}), dict)
+            or not isinstance(stored_inventory.get("assets", []), list)
+        ):
+            raise ValueError(f"Profile inventory in {path} has an invalid user")
+        balances = stored_inventory.get("balances", {})
+        if any(
+            not isinstance(currency, str)
+            or not currency.strip()
+            or isinstance(amount, bool)
+            or not isinstance(amount, int)
+            or amount < 0
+            for currency, amount in balances.items()
+        ):
+            raise ValueError(f"Profile inventory in {path} has an invalid balance")
+        assets = stored_inventory.get("assets", [])
+        if any(not isinstance(asset_id, str) or ":" not in asset_id for asset_id in assets):
+            raise ValueError(f"Profile inventory in {path} has an invalid asset")
+        users[user_id] = {
+            "balances": dict(balances),
+            "assets": sorted(set(assets)),
+        }
+    return users
+
+
+def save_profile_inventory(
+    path: Path,
+    users: dict[str, dict[str, Any]],
+) -> None:
+    data = {"users": users}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_name(f"{path.name}.tmp")
+        temporary_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    except OSError as error:
+        raise ValueError(f"Could not save profile inventory to {path}") from error
 
 
 def load_pokemon_forms(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -6143,6 +6298,292 @@ def render_profile_image(
     return output
 
 
+PROFILE_SHOP_CATEGORIES: Final[dict[str, str]] = {
+    "frame": "Frames",
+    "background": "Backgrounds",
+    "middle_background": "Middle backgrounds",
+}
+
+
+def profile_asset_display(asset_id: str) -> str:
+    setting, separator, key = asset_id.partition(":")
+    if not separator:
+        return asset_id
+    choice = PROFILE_SETTING_CHOICES.get(setting, {}).get(key)
+    return choice[0] if choice is not None else key.replace("_", " ").title()
+
+
+class ProfileShopCategoryButton(discord.ui.Button):
+    def __init__(self, shop_view: "ProfileShopView", setting: str, row: int) -> None:
+        super().__init__(
+            label=PROFILE_SHOP_CATEGORIES[setting],
+            style=discord.ButtonStyle.primary,
+            custom_id=f"profile_shop:category:{setting}",
+            row=row,
+        )
+        self.shop_view = shop_view
+        self.setting = setting
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.shop_view.category = self.setting
+        self.shop_view.page = 0
+        self.shop_view.refresh()
+        await interaction.response.edit_message(
+            embed=self.shop_view.embed,
+            view=self.shop_view,
+        )
+
+
+class ProfileShopPageButton(discord.ui.Button):
+    def __init__(self, shop_view: "ProfileShopView", direction: int) -> None:
+        super().__init__(
+            label="Previous" if direction < 0 else "Next",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"profile_shop:page:{'previous' if direction < 0 else 'next'}",
+            row=1,
+        )
+        self.shop_view = shop_view
+        self.direction = direction
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.shop_view.page += self.direction
+        self.shop_view.refresh()
+        await interaction.response.edit_message(
+            embed=self.shop_view.embed,
+            view=self.shop_view,
+        )
+
+
+class ProfileShopView(discord.ui.View):
+    def __init__(self, bot: "NamingBot", user_id: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.user_id = user_id
+        self.category: str | None = None
+        self.page = 0
+        self.message: discord.Message | None = None
+        for setting in ("frame", "background", "middle_background"):
+            self.add_item(ProfileShopCategoryButton(self, setting, 0))
+        self.add_item(ProfileShopPageButton(self, -1))
+        self.add_item(ProfileShopPageButton(self, 1))
+        self.refresh()
+
+    def refresh(self) -> None:
+        embed = discord.Embed(title="Profile Shop", color=discord.Color.gold())
+        if self.category is None:
+            embed.description = "Choose frames, backgrounds, or middle backgrounds."
+            self.embed = embed
+            self._update_page_buttons(1)
+            return
+
+        items = sorted(
+            (
+                (asset_id, item)
+                for asset_id, item in self.bot.profile_shop.items()
+                if item["type"] == self.category
+            ),
+            key=lambda entry: profile_asset_display(entry[0]).casefold(),
+        )
+        page_count = max(
+            1,
+            (len(items) + PROFILE_SHOP_PAGE_SIZE - 1) // PROFILE_SHOP_PAGE_SIZE,
+        )
+        self.page = min(max(self.page, 0), page_count - 1)
+        page_items = items[
+            self.page * PROFILE_SHOP_PAGE_SIZE :
+            (self.page + 1) * PROFILE_SHOP_PAGE_SIZE
+        ]
+        if not page_items:
+            embed.description = f"No {PROFILE_SHOP_CATEGORIES[self.category].lower()} are in the shop yet."
+        else:
+            codes = profile_asset_codes()
+            lines = []
+            for asset_id, item in page_items:
+                code = codes[asset_id]
+                name = profile_asset_display(asset_id)
+                price = int(item["price"])
+                currency = str(item["currency"])
+                lines.append(
+                    f"**{code} - {name}** ({price:,} {currency})\n"
+                    f"`v!buy {code}`"
+                )
+            embed.description = "\n\n".join(lines)
+        embed.set_footer(text=f"Page {self.page + 1} of {page_count}")
+        self.embed = embed
+        self._update_page_buttons(page_count)
+
+    def _update_page_buttons(self, page_count: int) -> None:
+        for child in self.children:
+            if isinstance(child, ProfileShopPageButton):
+                child.disabled = (
+                    page_count <= 1
+                    or (child.direction < 0 and self.page == 0)
+                    or (child.direction > 0 and self.page >= page_count - 1)
+                )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the member who opened this shop can use its buttons.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def on_timeout(self) -> None:
+        if self.message is None:
+            return
+        for child in self.children:
+            child.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.HTTPException:
+            logger.warning("Could not disable expired profile shop buttons")
+
+
+class ProfileInventoryView(discord.ui.View):
+    def __init__(self, bot: "NamingBot", user_id: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.user_id = user_id
+        self.page = 0
+        self.entries = self._entries()
+        self.embed = discord.Embed(title="Inventory", color=discord.Color.gold())
+        self.previous_button = discord.ui.Button(
+            label="Previous", style=discord.ButtonStyle.secondary, row=0, disabled=True
+        )
+        self.next_button = discord.ui.Button(
+            label="Next", style=discord.ButtonStyle.secondary, row=0
+        )
+        self.previous_button.callback = self.previous_page
+        self.next_button.callback = self.next_page
+        self.add_item(self.previous_button)
+        self.add_item(self.next_button)
+        self.refresh()
+
+    def _entries(self) -> list[str]:
+        balances = self.bot.profile_balances_for_user(self.user_id)
+        entries = [
+            f"{amount:,} {currency}"
+            for currency, amount in sorted(balances.items())
+        ]
+        if PROFILE_SHOP_CURRENCY not in balances:
+            entries.insert(0, f"0 {PROFILE_SHOP_CURRENCY}")
+        codes = profile_asset_codes()
+        assets = sorted(
+            self.bot.profile_assets_for_user(self.user_id),
+            key=lambda asset_id: profile_asset_display(asset_id).casefold(),
+        )
+        entries.extend(
+            f"{codes.get(asset_id, '???????')} - {profile_asset_display(asset_id)}"
+            for asset_id in assets
+        )
+        return entries
+
+    def refresh(self) -> None:
+        page_count = max(
+            1,
+            (len(self.entries) + PROFILE_SHOP_PAGE_SIZE - 1)
+            // PROFILE_SHOP_PAGE_SIZE,
+        )
+        start = self.page * PROFILE_SHOP_PAGE_SIZE
+        page_entries = self.entries[start : start + PROFILE_SHOP_PAGE_SIZE]
+        self.embed.description = "\n".join(page_entries) or "Your inventory is empty."
+        self.embed.set_footer(
+            text=f"Showing items {start + 1}-{start + len(page_entries)} of {len(self.entries)}"
+        )
+        self.previous_button.disabled = self.page == 0
+        self.next_button.disabled = self.page >= page_count - 1
+
+    async def previous_page(self, interaction: discord.Interaction) -> None:
+        self.page = max(0, self.page - 1)
+        self.refresh()
+        await interaction.response.edit_message(embed=self.embed, view=self)
+
+    async def next_page(self, interaction: discord.Interaction) -> None:
+        page_count = max(
+            1,
+            (len(self.entries) + PROFILE_SHOP_PAGE_SIZE - 1)
+            // PROFILE_SHOP_PAGE_SIZE,
+        )
+        self.page = min(page_count - 1, self.page + 1)
+        self.refresh()
+        await interaction.response.edit_message(embed=self.embed, view=self)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the member who opened this inventory can use its buttons.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+
+class ProfilePurchaseView(discord.ui.View):
+    def __init__(
+        self,
+        bot: "NamingBot",
+        user_id: int,
+        asset_id: str,
+        item: dict[str, str | int],
+    ) -> None:
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.user_id = user_id
+        self.asset_id = asset_id
+        self.item = item
+        self.completed = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the member who started this purchase can confirm it.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.success)
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        if self.completed:
+            await interaction.response.send_message(
+                "This purchase has already been completed.", ephemeral=True
+            )
+            return
+        try:
+            name = self.bot.buy_profile_asset(self.user_id, self.asset_id)
+        except ValueError as error:
+            self.completed = True
+            await interaction.response.edit_message(
+                content=str(error), embed=None, view=None
+            )
+            return
+        self.completed = True
+        await interaction.response.edit_message(
+            content=f"Purchased **{name}** and equipped it on your profile.",
+            embed=None,
+            view=None,
+        )
+
+    @discord.ui.button(label="No", style=discord.ButtonStyle.danger)
+    async def cancel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        del button
+        self.completed = True
+        await interaction.response.edit_message(
+            content="Purchase cancelled.", embed=None, view=None
+        )
+
+
 class ProfileEditSelect(discord.ui.Select):
     def __init__(
         self,
@@ -6153,7 +6594,10 @@ class ProfileEditSelect(discord.ui.Select):
         self.profile_view = profile_view
         self.setting = setting
         current_value = profile_view.settings_for_display()[setting]
-        choices = profile_setting_choices_for_user(profile_view.user_id, setting)
+        choices = profile_view.bot.profile_choices_for_user(
+            profile_view.user_id,
+            setting,
+        )
         super().__init__(
             placeholder=PROFILE_SETTING_LABELS[setting],
             options=[
@@ -6183,7 +6627,7 @@ class ProfileEditSelect(discord.ui.Select):
             return
         try:
             if self.profile_view.preview_settings is not None:
-                choices = profile_setting_choices_for_user(
+                choices = self.profile_view.bot.profile_choices_for_user(
                     self.profile_view.user_id,
                     self.setting,
                 )
@@ -6566,6 +7010,20 @@ class NamingBot(commands.Bot):
         ) = load_profile_data(
             self.profile_data_path
         )
+        self.profile_shop_path = Path(
+            os.environ.get("PROFILE_SHOP_FILE", str(data_path("profile_shop.json")))
+        )
+        self.profile_shop = load_profile_shop(self.profile_shop_path)
+        self.profile_inventory_path = Path(
+            os.environ.get(
+                "PROFILE_INVENTORY_FILE",
+                str(data_path("profile_inventory.json")),
+            )
+        )
+        self.profile_inventory = load_profile_inventory(
+            self.profile_inventory_path,
+            self.profiles,
+        )
         self.profile_backfills_in_progress: set[int] = set()
         self.profile_backfill_stop_requests: set[int] = set()
         self.profile_emoji_cache: dict[str, bytes] | None = None
@@ -6602,6 +7060,122 @@ class NamingBot(commands.Bot):
                     if settings[setting] in restricted_choices:
                         settings[setting] = PROFILE_DEFAULTS[setting]
         return settings
+
+    def profile_assets_for_user(self, user_id: int) -> set[str]:
+        inventory = self.profile_inventory.get(str(user_id), {})
+        assets = set(inventory.get("assets", []))
+        settings = self.profile_settings_for_user(user_id)
+        for setting in PROFILE_ASSET_SETTINGS:
+            key = settings[setting]
+            if key != PROFILE_DEFAULT_ASSETS[setting]:
+                assets.add(profile_asset_id(setting, str(key)))
+        return assets
+
+    def profile_balances_for_user(self, user_id: int) -> dict[str, int]:
+        inventory = self.profile_inventory.get(str(user_id), {})
+        return dict(inventory.get("balances", {}))
+
+    def profile_choices_for_user(
+        self,
+        user_id: int,
+        setting: str,
+    ) -> dict[str, tuple[str, str]]:
+        choices = profile_setting_choices_for_user(user_id, setting)
+        owned_assets = self.profile_assets_for_user(user_id)
+        for asset_id, item in self.profile_shop.items():
+            if item["type"] == setting and asset_id not in owned_assets:
+                choices.pop(str(item["key"]), None)
+        return choices
+
+    def profile_shop_item_for_query(
+        self,
+        query: str,
+    ) -> tuple[str, dict[str, str | int]] | None:
+        normalized_query = unicodedata.normalize("NFC", query).strip().casefold()
+        codes = profile_asset_codes()
+        matches = []
+        for asset_id, item in self.profile_shop.items():
+            setting = str(item["type"])
+            key = str(item["key"])
+            label = PROFILE_SETTING_CHOICES[setting][key][0]
+            code = codes[asset_id]
+            if normalized_query in {code.casefold(), label.casefold(), key.casefold()}:
+                matches.append((asset_id, item))
+        return matches[0] if len(matches) == 1 else None
+
+    def buy_profile_asset(self, user_id: int, asset_id: str) -> str:
+        item = self.profile_shop.get(asset_id)
+        if item is None:
+            raise ValueError("That profile asset is no longer available in the shop.")
+        if asset_id in self.profile_assets_for_user(user_id):
+            raise ValueError("You already own this profile asset.")
+        setting = str(item["type"])
+        key = str(item["key"])
+        if key not in profile_setting_choices_for_user(user_id, setting):
+            raise ValueError("This profile asset is not available to your account.")
+
+        currency = str(item["currency"])
+        price = int(item["price"])
+        current_inventory = self.profile_inventory.get(str(user_id), {
+            "balances": {},
+            "assets": [],
+        })
+        balances = dict(current_inventory.get("balances", {}))
+        balance = balances.get(currency, 0)
+        if balance < price:
+            raise ValueError(f"You don't have enough {currency}.")
+
+        updated_profiles = {
+            profile_user_id: dict(profile)
+            for profile_user_id, profile in self.profiles.items()
+        }
+        updated_profiles.setdefault(str(user_id), dict(PROFILE_DEFAULTS))[setting] = key
+        updated_inventory = {
+            profile_user_id: {
+                "balances": dict(inventory.get("balances", {})),
+                "assets": list(inventory.get("assets", [])),
+            }
+            for profile_user_id, inventory in self.profile_inventory.items()
+        }
+        user_inventory = updated_inventory.setdefault(
+            str(user_id), {"balances": {}, "assets": []}
+        )
+        user_balances = user_inventory["balances"]
+        user_balances[currency] = balance - price
+        user_inventory["assets"] = sorted(
+            set(user_inventory["assets"])
+            | self.profile_assets_for_user(user_id)
+            | {asset_id}
+        )
+
+        save_profile_data(
+            self.profile_data_path,
+            updated_profiles,
+            self.profile_stats,
+            self.profile_records,
+            self.profile_seen_catch_ids,
+        )
+        try:
+            save_profile_inventory(self.profile_inventory_path, updated_inventory)
+        except ValueError:
+            try:
+                save_profile_data(
+                    self.profile_data_path,
+                    self.profiles,
+                    self.profile_stats,
+                    self.profile_records,
+                    self.profile_seen_catch_ids,
+                )
+            except ValueError:
+                logger.exception("Could not roll back profile after inventory save failure")
+                raise ValueError(
+                    "Purchase failed and the profile could not be rolled back"
+                )
+            raise
+
+        self.profiles = updated_profiles
+        self.profile_inventory = updated_inventory
+        return PROFILE_SETTING_CHOICES[setting][key][0]
 
     def profile_stats_for_user(
         self,
@@ -6651,7 +7225,7 @@ class NamingBot(commands.Bot):
         return emoji_assets
 
     def set_profile_setting(self, user_id: int, setting: str, value: str) -> None:
-        choices = profile_setting_choices_for_user(user_id, setting)
+        choices = self.profile_choices_for_user(user_id, setting)
         if choices is None or value not in choices:
             raise ValueError(f"Invalid profile setting: {setting}")
         profiles = {key: dict(profile) for key, profile in self.profiles.items()}
@@ -6665,6 +7239,30 @@ class NamingBot(commands.Bot):
             self.profile_seen_catch_ids,
         )
         self.profiles = profiles
+        try:
+            self.persist_equipped_assets(user_id)
+        except ValueError:
+            logger.exception(
+                "Could not save equipped assets to inventory for user %s",
+                user_id,
+            )
+
+    def persist_equipped_assets(self, user_id: int) -> None:
+        updated_inventory = {
+            profile_user_id: {
+                "balances": dict(inventory.get("balances", {})),
+                "assets": list(inventory.get("assets", [])),
+            }
+            for profile_user_id, inventory in self.profile_inventory.items()
+        }
+        user_inventory = updated_inventory.setdefault(
+            str(user_id), {"balances": {}, "assets": []}
+        )
+        user_inventory["assets"] = sorted(
+            set(user_inventory["assets"]) | self.profile_assets_for_user(user_id)
+        )
+        save_profile_inventory(self.profile_inventory_path, updated_inventory)
+        self.profile_inventory = updated_inventory
 
     def track_profile_catch(
         self,
@@ -7734,6 +8332,15 @@ class NamingBot(commands.Bot):
             if PROFILE_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_profile_command(message)
                 return
+            if re.fullmatch(r"v!shop\s*", message.content, re.IGNORECASE):
+                await self.handle_profile_shop_command(message)
+                return
+            if re.fullmatch(r"v!inv\s*", message.content, re.IGNORECASE):
+                await self.handle_profile_inventory_command(message)
+                return
+            if re.match(r"^v!buy(?:\s|$)", message.content, re.IGNORECASE):
+                await self.handle_profile_buy_command(message)
+                return
             if PROFILE_BACKFILL_COMMAND_PATTERN.fullmatch(message.content):
                 await self.handle_profile_backfill_command(message)
                 return
@@ -8435,6 +9042,73 @@ class NamingBot(commands.Bot):
         finally:
             self.profile_backfill_stop_requests.discard(guild.id)
             self.profile_backfills_in_progress.discard(guild.id)
+
+    async def handle_profile_shop_command(
+        self,
+        message: discord.Message,
+    ) -> None:
+        if message.guild is None:
+            await message.reply("The profile shop is only available in a server.", mention_author=False)
+            return
+        view = ProfileShopView(self, message.author.id)
+        response = await message.reply(
+            embed=view.embed,
+            view=view,
+            mention_author=False,
+        )
+        view.message = response
+
+    async def handle_profile_inventory_command(
+        self,
+        message: discord.Message,
+    ) -> None:
+        view = ProfileInventoryView(self, message.author.id)
+        view.embed.set_author(name=f"{message.author.display_name}'s Inventory")
+        await message.reply(
+            embed=view.embed,
+            view=view,
+            mention_author=False,
+        )
+
+    async def handle_profile_buy_command(
+        self,
+        message: discord.Message,
+    ) -> None:
+        if message.guild is None:
+            await message.reply("Purchases are only available in a server.", mention_author=False)
+            return
+        match = PROFILE_BUY_PATTERN.fullmatch(message.content)
+        query = match.group(1).strip() if match and match.group(1) else None
+        if not query:
+            await message.reply(
+                "Usage: `v!buy <asset name or code>`.",
+                mention_author=False,
+            )
+            return
+        found = self.profile_shop_item_for_query(query)
+        if found is None:
+            await message.reply(
+                "I couldn't find one matching shop item. Use its seven-character code from `v!shop`.",
+                mention_author=False,
+            )
+            return
+        asset_id, item = found
+        if asset_id in self.profile_assets_for_user(message.author.id):
+            await message.reply("You already own this profile asset.", mention_author=False)
+            return
+        code = profile_asset_codes()[asset_id]
+        name = profile_asset_display(asset_id)
+        price = int(item["price"])
+        currency = str(item["currency"])
+        view = ProfilePurchaseView(self, message.author.id, asset_id, item)
+        await message.reply(
+            content=(
+                f"Are you sure you want to buy **{code} - {name}** for "
+                f"{price:,} {currency}?"
+            ),
+            view=view,
+            mention_author=False,
+        )
 
     async def handle_profile_command(self, message: discord.Message) -> None:
         match = PROFILE_COMMAND_PATTERN.fullmatch(message.content)

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final, Literal, TypeGuard, TypedDict
+from typing import Any, Callable, Final, Literal, TypeGuard, TypedDict, cast
 
 import aiohttp
 import discord
@@ -9838,16 +9838,17 @@ class NamingBot(commands.Bot):
                 mention_author=False,
             )
             return
-        org_store = getattr(self, "org_store", None)
-        conflicting_category_names = (
-            [
+        org_store = cast(
+            Callable[[], OrgReserves] | None,
+            getattr(self, "org_store", None),
+        )
+        conflicting_category_names = []
+        if org_store is not None:
+            conflicting_category_names = [
                 name
                 for name in pokemon_names
                 if org_store().category_owner_for(name, target.id) is not None
             ]
-            if callable(org_store)
-            else []
-        )
         if conflicting_category_names:
             await message.reply(
                 "These Pokémon are reserved by another category claim: "
@@ -10965,16 +10966,17 @@ class GrabAddReservesView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         del button
-        org_store = getattr(self.bot, "org_store", None)
-        conflicts = (
-            [
+        org_store = cast(
+            Callable[[], OrgReserves] | None,
+            getattr(self.bot, "org_store", None),
+        )
+        conflicts = []
+        if org_store is not None:
+            conflicts = [
                 name
                 for name, user_id in self.pairs
                 if org_store().category_owner_for(name, user_id) is not None
             ]
-            if callable(org_store)
-            else []
-        )
         if conflicts:
             await interaction.response.send_message(
                 "These Pokémon are reserved by another category claim: "

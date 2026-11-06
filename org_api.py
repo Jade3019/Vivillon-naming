@@ -98,12 +98,24 @@ class OrgReserves:
         return name, all_forms
 
     def add(self, name: str, user_id: int, slot: str | None) -> bool:
+        if self.category_owner_for(name, user_id) is not None:
+            raise OrgError(409, f"{name} is reserved by another category claim")
         for entry in self.entries:
             if entry["pokemon"] == name and entry["userId"] == str(user_id):
                 return False
         self.entries.append({"pokemon": name, "userId": str(user_id), "slot": slot})
         save_json(self.path, self.entries)
         return True
+
+    def category_owner_for(self, name: str, user_id: int) -> str | None:
+        for entry in self.entries:
+            if (
+                fold(entry["pokemon"]) == fold(name)
+                and entry.get("type") == "category"
+                and entry["userId"] != str(user_id)
+            ):
+                return entry["userId"]
+        return None
 
     def remove(self, name: str, user_id: int) -> bool:
         kept = [
@@ -130,6 +142,8 @@ def create_app(
     guild_id: int,
     add_to_vivillon: Callable[[str, int], None],
     remove_from_vivillon: Callable[[str, int], bool],
+    categories: Callable[[], dict[str, dict[str, list[str]]]] | None = None,
+    add_category_to_vivillon: Callable[[list[str], int], None] | None = None,
 ) -> web.Application:
     @web.middleware
     async def guard(request: web.Request, handler: Any) -> web.StreamResponse:
@@ -184,6 +198,17 @@ def create_app(
             raise OrgError(400, "Invalid request: slot must be a string")
         return slot
 
+    def parse_category(data: dict[str, Any]) -> str:
+        category = data.get("category")
+        if not isinstance(category, str) or not category.strip():
+            raise OrgError(400, "Invalid request: category must be a string")
+        return category
+
+    def current_categories() -> dict[str, list[str]]:
+        if categories is None:
+            return {}
+        return categories().get(str(guild_id), {})
+
     async def reserves(request: web.Request) -> web.Response:
         data = await body(request)
         action = data.get("action")
@@ -230,8 +255,119 @@ def create_app(
 
     async def list_reserves(request: web.Request) -> web.Response:
         del request
+        entries = [
+            {**entry, "type": entry.get("type", "individual")}
+            for entry in org.entries
+        ]
         return web.json_response(
-            {"success": True, "count": len(org.entries), "reserves": org.entries}
+            {"success": True, "count": len(entries), "reserves": entries}
+        )
+
+    async def list_categories(request: web.Request) -> web.Response:
+        del request
+        available = [
+            {"name": name, "pokemon": pokemon, "count": len(pokemon)}
+            for name, pokemon in sorted(current_categories().items())
+        ]
+        return web.json_response(
+            {"success": True, "count": len(available), "categories": available}
+        )
+
+    async def reserve_category(request: web.Request) -> web.Response:
+        data = await body(request)
+        category_name = parse_category(data)
+        user_id = parse_user(data)
+        category_key = fold(category_name)
+        category_data = current_categories()
+        category_pokemon = next(
+            (
+                pokemon
+                for name, pokemon in category_data.items()
+                if fold(name) == category_key
+            ),
+            None,
+        )
+        if category_pokemon is None:
+            raise OrgError(404, f"Category not found: {category_name}")
+        if not category_pokemon:
+            raise OrgError(409, f"Category is empty: {category_key}")
+        if add_category_to_vivillon is None:
+            raise OrgError(503, "Category reservations are not configured")
+
+        names: list[str] = []
+        seen_names: set[str] = set()
+        for pokemon in category_pokemon:
+            name, all_forms = org.canonical_name(pokemon)
+            stored = f"All {name}" if all_forms else name
+            key = fold(stored)
+            if key not in seen_names:
+                names.append(stored)
+                seen_names.add(key)
+
+        user_key = str(user_id)
+        for name in names:
+            for entry in org.entries:
+                if fold(entry["pokemon"]) != fold(name):
+                    continue
+                if entry["userId"] != user_key:
+                    raise OrgError(409, f"{name} is already reserved by another user")
+                if entry.get("type") == "category" and entry.get("category") != category_key:
+                    raise OrgError(409, f"{name} is already assigned to another category")
+
+        previous_entries = [dict(entry) for entry in org.entries]
+        updated_entries = [dict(entry) for entry in org.entries]
+        changed = False
+        for name in names:
+            existing = next(
+                (
+                    entry
+                    for entry in updated_entries
+                    if fold(entry["pokemon"]) == fold(name)
+                    and entry["userId"] == user_key
+                ),
+                None,
+            )
+            if existing is None:
+                updated_entries.append(
+                    {
+                        "pokemon": name,
+                        "userId": user_key,
+                        "slot": None,
+                        "type": "category",
+                        "category": category_key,
+                    }
+                )
+                changed = True
+            elif existing.get("type") != "category":
+                existing["type"] = "category"
+                existing["category"] = category_key
+                changed = True
+
+        if changed:
+            save_json(org.path, updated_entries)
+            try:
+                add_category_to_vivillon(names, user_id)
+            except Exception:
+                try:
+                    save_json(org.path, previous_entries)
+                except Exception as rollback_error:
+                    logger.exception("Could not roll back failed category reservation")
+                    raise ValueError(
+                        "Category reservation failed and the org reserve list "
+                        "could not be rolled back"
+                    ) from rollback_error
+                raise
+            org.entries = updated_entries
+
+        return web.json_response(
+            {
+                "success": True,
+                "category": category_key,
+                "userId": user_key,
+                "count": len(names),
+                "pokemon": names,
+                "changed": changed,
+            }
         )
 
     async def reset(request: web.Request) -> web.Response:
@@ -245,8 +381,10 @@ def create_app(
     app = web.Application(middlewares=[guard])
     app.router.add_get("/api/org/health", health)
     app.router.add_post("/api/org/reserves", reserves)
+    app.router.add_post("/api/org/reserves/category", reserve_category)
     app.router.add_post("/api/org/validate", validate)
     app.router.add_get("/api/org/reserves", list_reserves)
+    app.router.add_get("/api/org/categories", list_categories)
     app.router.add_post("/api/org/reset", reset)
     app["guild_id"] = guild_id
     return app

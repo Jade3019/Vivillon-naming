@@ -38,7 +38,7 @@ from image_match import (
     squawkabilly_form_by_color,
     vivillon_form_by_pattern,
 )
-from org_api import OrgReserves, create_app
+from org_api import OrgError, OrgReserves, create_app
 import org_rpc
 import pg_store
 from data_paths import data_path
@@ -7235,6 +7235,21 @@ class NamingBot(commands.Bot):
         save_reservations(self.reserve_path, updated)
         self.reservations = updated
 
+    def org_add_category_reserves(self, names: list[str], user_id: int) -> None:
+        guild_id = int(os.environ["ORG_GUILD_ID"])
+        for name in names:
+            key = reservation_key_for_command(guild_id, name)
+            existing_users = self.reservations.get(key, [])
+            if any(existing_user != user_id for existing_user in existing_users):
+                raise OrgError(409, f"{name} is already reserved by another user")
+        updated = add_reservations_bulk(
+            self.reservations,
+            guild_id,
+            [(name, user_id) for name in names],
+        )
+        save_reservations(self.reserve_path, updated)
+        self.reservations = updated
+
     def org_remove_reserve(self, name: str, user_id: int) -> bool:
         guild_id = int(os.environ["ORG_GUILD_ID"])
         updated, removed = remove_reservation(
@@ -7319,6 +7334,8 @@ class NamingBot(commands.Bot):
             guild_id,
             self.org_add_reserve,
             self.org_remove_reserve,
+            lambda: self.reserve_categories,
+            self.org_add_category_reserves,
         )
         port = _org_api_port_from_environment()
         if (
@@ -9821,6 +9838,23 @@ class NamingBot(commands.Bot):
                 mention_author=False,
             )
             return
+        org_store = getattr(self, "org_store", None)
+        conflicting_category_names = (
+            [
+                name
+                for name in pokemon_names
+                if org_store().category_owner_for(name, target.id) is not None
+            ]
+            if callable(org_store)
+            else []
+        )
+        if conflicting_category_names:
+            await message.reply(
+                "These Pokémon are reserved by another category claim: "
+                f"{', '.join(conflicting_category_names)}.",
+                mention_author=False,
+            )
+            return
         event_species = list(
             dict.fromkeys(
                 canonicalize_pokemon_name(name[4:].strip())
@@ -10931,6 +10965,23 @@ class GrabAddReservesView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         del button
+        org_store = getattr(self.bot, "org_store", None)
+        conflicts = (
+            [
+                name
+                for name, user_id in self.pairs
+                if org_store().category_owner_for(name, user_id) is not None
+            ]
+            if callable(org_store)
+            else []
+        )
+        if conflicts:
+            await interaction.response.send_message(
+                "These Pokémon are reserved by another category claim: "
+                f"{', '.join(conflicts)}.",
+                ephemeral=True,
+            )
+            return
         updated = add_reservations_bulk(
             self.bot.reservations, self.guild_id, self.pairs
         )

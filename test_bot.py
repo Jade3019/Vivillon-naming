@@ -405,7 +405,10 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
                 (name, bot.CORROBORATED_CONFIDENCE_FLOOR),
             )
         with patch("bot.squawkabilly_form_by_color", return_value=None):
-            self.assertLess(bot.local_fallback_prediction(matcher, b"x")[1], 50)
+            prediction = bot.local_fallback_prediction(matcher, b"x")
+            if prediction is None:
+                self.fail("Expected a low-confidence fallback prediction")
+            self.assertLess(prediction[1], 50)
 
     async def test_local_matcher_agreement_raises_low_confidence_prediction_to_alert_cutoff(
         self,
@@ -6705,7 +6708,10 @@ class ReservationExchangeTests(unittest.TestCase):
         snapshot = SimpleNamespace(
             content="<@1> pikachu", embeds=[SimpleNamespace(description="emb")]
         )
-        message = SimpleNamespace(content="", embeds=[], message_snapshots=[snapshot])
+        message: discord.Message = cast(
+            discord.Message,
+            SimpleNamespace(content="", embeds=[], message_snapshots=[snapshot]),
+        )
         self.assertEqual(message_list_texts(message), ["<@1> pikachu", "emb"])
 
     def test_moves_only_reservations_held_by_the_source(self) -> None:
@@ -8720,6 +8726,119 @@ class OrgApiValidationTests(unittest.IsolatedAsyncioTestCase):
                         response.status, 200 if expected["success"] else 403
                     )
                     self.assertEqual(await response.json(), expected)
+
+    async def test_category_listing_and_reservation_are_atomic_and_idempotent(self) -> None:
+        import tempfile
+        from aiohttp.test_utils import TestClient, TestServer
+        from org_api import OrgReserves, create_app
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            categories = {"1": {"regional": ["Pikachu", "Eevee"]}}
+            vivillon_reserves: list[tuple[str, int]] = []
+
+            def add_category(names: list[str], user_id: int) -> None:
+                vivillon_reserves.extend((name, user_id) for name in names)
+
+            org = OrgReserves(root / "org.json", root / "restrictions.json", ["Pikachu", "Eevee"])
+            app = create_app(
+                "test-api-key",
+                org,
+                1,
+                lambda *_: None,
+                lambda *_: False,
+                lambda: categories,
+                add_category,
+            )
+            headers = {"Authorization": "Bearer test-api-key"}
+
+            async with TestClient(TestServer(app)) as client:
+                response = await client.get("/api/org/categories", headers=headers)
+                self.assertEqual(
+                    await response.json(),
+                    {
+                        "success": True,
+                        "count": 1,
+                        "categories": [
+                            {
+                                "name": "regional",
+                                "pokemon": ["Pikachu", "Eevee"],
+                                "count": 2,
+                            }
+                        ],
+                    },
+                )
+
+                request = {"category": "Regional", "userId": "123"}
+                response = await client.post(
+                    "/api/org/reserves/category", json=request, headers=headers
+                )
+                self.assertEqual(response.status, 200)
+                self.assertTrue((await response.json())["changed"])
+                self.assertEqual(len(vivillon_reserves), 2)
+
+                response = await client.post(
+                    "/api/org/reserves/category", json=request, headers=headers
+                )
+                self.assertFalse((await response.json())["changed"])
+                self.assertEqual(len(vivillon_reserves), 2)
+
+                response = await client.post(
+                    "/api/org/reserves/category",
+                    json={"category": "regional", "userId": "456"},
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 409)
+                self.assertEqual(len(vivillon_reserves), 2)
+
+                response = await client.get("/api/org/reserves", headers=headers)
+                listed = await response.json()
+                self.assertEqual(listed["count"], 2)
+                self.assertTrue(
+                    all(entry["type"] == "category" for entry in listed["reserves"])
+                )
+
+                response = await client.post(
+                    "/api/org/reserves",
+                    json={
+                        "action": "add",
+                        "pokemon": "Pikachu",
+                        "userId": "456",
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 409)
+
+    async def test_category_reservation_rolls_back_org_entries_on_vivillon_failure(self) -> None:
+        import tempfile
+        from aiohttp.test_utils import TestClient, TestServer
+        from org_api import OrgReserves, create_app
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            org = OrgReserves(root / "org.json", root / "restrictions.json", ["Pikachu"])
+
+            def fail_add(_names: list[str], _user_id: int) -> None:
+                raise ValueError("storage failed")
+
+            app = create_app(
+                "test-api-key",
+                org,
+                1,
+                lambda *_: None,
+                lambda *_: False,
+                lambda: {"1": {"regional": ["Pikachu"]}},
+                fail_add,
+            )
+            async with TestClient(TestServer(app)) as client:
+                response = await client.post(
+                    "/api/org/reserves/category",
+                    json={"category": "regional", "userId": "123"},
+                    headers={"Authorization": "Bearer test-api-key"},
+                )
+                self.assertEqual(response.status, 500)
+                self.assertEqual(org.entries, [])
+                self.assertEqual((root / "org.json").read_text(encoding="utf-8"), "[]\n")
 
 
 class TypeEmojiTests(unittest.TestCase):

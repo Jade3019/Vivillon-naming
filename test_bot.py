@@ -6693,6 +6693,21 @@ class ReservationExchangeTests(unittest.TestCase):
             [(1, ["pikachu", "Eevee"]), (2, ["all arceus"]), (3, ["sylveon"])],
         )
 
+    def test_exchange_list_works_without_dash(self) -> None:
+        self.assertEqual(
+            parse_exchange_list("<@1> pikachu, Eevee\n<@2>all arceus"),
+            [(1, ["pikachu", "Eevee"]), (2, ["all arceus"])],
+        )
+
+    def test_list_texts_include_forwarded_snapshots(self) -> None:
+        from bot import message_list_texts
+
+        snapshot = SimpleNamespace(
+            content="<@1> pikachu", embeds=[SimpleNamespace(description="emb")]
+        )
+        message = SimpleNamespace(content="", embeds=[], message_snapshots=[snapshot])
+        self.assertEqual(message_list_texts(message), ["<@1> pikachu", "emb"])
+
     def test_moves_only_reservations_held_by_the_source(self) -> None:
         reservations = {
             "10:pikachu": [100, 5],

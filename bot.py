@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Final, Literal, TypeGuard, TypedDict
+from typing import Any, Final, Literal, TypeGuard, TypedDict
 
 import aiohttp
 import discord
@@ -3355,8 +3355,21 @@ EXCHANGE_COMMAND_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 EXCHANGE_LINE_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"<@!?(\d+)>\s*[-–—:]\s*(.+)"
+    r"<@!?(\d+)>\s*[-–—:]?\s*(.+)"
 )
+
+
+def message_list_texts(message: discord.Message) -> list[str]:
+    """Text of a message and of any message it forwards."""
+    sources: list[Any] = [message, *getattr(message, "message_snapshots", [])]
+    texts: list[str] = []
+    for source in sources:
+        if source.content:
+            texts.append(source.content)
+        texts.extend(
+            embed.description for embed in source.embeds if embed.description
+        )
+    return texts
 
 
 def parse_exchange_list(text: str) -> list[tuple[int, list[str]]]:
@@ -9048,9 +9061,7 @@ class NamingBot(discord.Client):
                 return
         texts = RESERVE_LIST_CACHE.get(referenced.id)
         if texts is None:
-            texts = [referenced.content] + [
-                embed.description for embed in referenced.embeds if embed.description
-            ]
+            texts = message_list_texts(referenced)
         entries = parse_grab_entries(texts)
         if not entries:
             await message.reply(usage, mention_author=False)
@@ -9869,7 +9880,7 @@ class NamingBot(discord.Client):
 
     async def handle_reserve_exchange(self, message: discord.Message) -> None:
         usage = (
-            "Reply to a list like `@member - pikachu, eevee` (one member per line) "
+            "Reply to a list like `@member pikachu, eevee` (one member per line; the `-` is optional) "
             "with `v!r e @owner`."
         )
         match = EXCHANGE_COMMAND_PATTERN.fullmatch(message.content.strip())
@@ -9896,7 +9907,7 @@ class NamingBot(discord.Client):
                 )
                 return
 
-        transfers = parse_exchange_list(referenced.content)
+        transfers = parse_exchange_list("\n".join(message_list_texts(referenced)))
         if not transfers:
             await message.reply(usage, mention_author=False)
             return

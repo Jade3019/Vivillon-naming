@@ -386,6 +386,10 @@ PROFILE_DEFAULT_ASSETS: Final[dict[str, str]] = {
 }
 PROFILE_SHOP_CURRENCY: Final[str] = "Pokédollar"
 PROFILE_SHOP_PAGE_SIZE: Final[int] = 10
+PROFILE_SHOP_CURRENCY_ICON: Final[Path] = (
+    Path(__file__).with_name("assets") / "pokedollar.png"
+)
+PROFILE_SHOP_CURRENCY_ICON_FILENAME: Final[str] = "pokedollar.png"
 PROFILE_EMOJI_URLS: Final[dict[str, str]] = {
     "low_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c9.png",
     "high_iv": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c8.png",
@@ -6393,6 +6397,24 @@ def profile_asset_display(asset_id: str) -> str:
     return choice[0] if choice is not None else key.replace("_", " ").title()
 
 
+def profile_shop_currency_files() -> list[discord.File]:
+    if not PROFILE_SHOP_CURRENCY_ICON.is_file():
+        return []
+    return [
+        discord.File(
+            PROFILE_SHOP_CURRENCY_ICON,
+            filename=PROFILE_SHOP_CURRENCY_ICON_FILENAME,
+        )
+    ]
+
+
+def set_profile_shop_currency_thumbnail(embed: discord.Embed) -> None:
+    if PROFILE_SHOP_CURRENCY_ICON.is_file():
+        embed.set_thumbnail(
+            url=f"attachment://{PROFILE_SHOP_CURRENCY_ICON_FILENAME}"
+        )
+
+
 class ProfileShopCategoryButton(discord.ui.Button):
     def __init__(self, shop_view: "ProfileShopView", setting: str, row: int) -> None:
         super().__init__(
@@ -6476,6 +6498,7 @@ class ProfileShopView(discord.ui.View):
         if not page_items:
             embed.description = f"No {PROFILE_SHOP_CATEGORIES[self.category].lower()} are in the shop yet."
         else:
+            set_profile_shop_currency_thumbnail(embed)
             codes = profile_asset_codes()
             lines = []
             for asset_id, item in page_items:
@@ -6572,6 +6595,7 @@ class ProfileInventoryView(discord.ui.View):
         start = self.page * PROFILE_SHOP_PAGE_SIZE
         page_entries = self.entries[start : start + PROFILE_SHOP_PAGE_SIZE]
         self.embed.description = "\n".join(page_entries) or "Your inventory is empty."
+        set_profile_shop_currency_thumbnail(self.embed)
         self.embed.set_footer(
             text=f"Showing items {start + 1}-{start + len(page_entries)} of {len(self.entries)}"
         )
@@ -8186,6 +8210,7 @@ class NamingBot(commands.Bot):
         task.cancel()
         await message.reply(
             "Timer stopped. Use `v!settime` with roles to start again.",
+            files=profile_shop_currency_files(),
             mention_author=False,
         )
 
@@ -9188,6 +9213,7 @@ class NamingBot(commands.Bot):
         response = await message.reply(
             embed=view.embed,
             view=view,
+            files=profile_shop_currency_files(),
             mention_author=False,
         )
         view.message = response
@@ -9232,12 +9258,18 @@ class NamingBot(commands.Bot):
         price = int(item["price"])
         currency = str(item["currency"])
         view = ProfilePurchaseView(self, message.author.id, asset_id, item)
-        await message.reply(
-            content=(
+        embed = discord.Embed(
+            description=(
                 f"Are you sure you want to buy **{code} - {name}** for "
                 f"{price:,} {currency}?"
             ),
+            color=discord.Color.gold(),
+        )
+        set_profile_shop_currency_thumbnail(embed)
+        await message.reply(
+            embed=embed,
             view=view,
+            files=profile_shop_currency_files(),
             mention_author=False,
         )
 

@@ -2167,6 +2167,33 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(cast(discord.ui.Button, view.children[-2]).disabled)
         self.assertTrue(cast(discord.ui.Button, view.children[-1]).disabled)
 
+        self.bot.profile_shop = {
+            "frame:mystic": {
+                "type": "frame",
+                "key": "mystic",
+                "price": 80,
+                "currency": bot_module.PROFILE_SHOP_CURRENCY,
+            }
+        }
+        populated_view = bot_module.ProfileShopView(self.bot, 123)
+        frames_button = next(
+            child
+            for child in populated_view.children
+            if isinstance(child, bot_module.ProfileShopCategoryButton)
+            and child.setting == "frame"
+        )
+        await frames_button.callback(interaction)
+        self.assertEqual(
+            populated_view.embed.thumbnail.url,
+            "attachment://pokedollar.png",
+        )
+        icon_files = bot_module.profile_shop_currency_files()
+        try:
+            self.assertEqual([file.filename for file in icon_files], ["pokedollar.png"])
+        finally:
+            for file in icon_files:
+                file.close()
+
     async def test_inventory_lists_equipped_assets_with_codes(self) -> None:
         profile: dict[str, int | str] = {
             "text_color": "white",
@@ -2183,6 +2210,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         view = bot_module.ProfileInventoryView(self.bot, 123)
 
         self.assertIn("0 Pokédollar", view.embed.description or "")
+        self.assertEqual(view.embed.thumbnail.url, "attachment://pokedollar.png")
         expected_code = self.bot.profile_inventory["123"]["assets"][0]["code"]
         self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
 
@@ -2213,7 +2241,14 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         purchase_view = awaited_kwargs(message.reply)["view"]
         self.assertIsInstance(purchase_view, bot_module.ProfilePurchaseView)
-        self.assertIn("Are you sure", awaited_kwargs(message.reply)["content"])
+        self.assertIn(
+            "Are you sure",
+            awaited_kwargs(message.reply)["embed"].description,
+        )
+        self.assertEqual(
+            awaited_kwargs(message.reply)["embed"].thumbnail.url,
+            "attachment://pokedollar.png",
+        )
         interaction = Mock()
         interaction.user.id = 123
         interaction.response.edit_message = AsyncMock()

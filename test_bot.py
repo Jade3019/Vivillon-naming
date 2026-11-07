@@ -2221,7 +2221,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         message.reply = AsyncMock()
         await self.bot.handle_profile_inventory_command(message)
         inventory_kwargs = awaited_kwargs(message.reply)
-        self.assertEqual(inventory_kwargs["embed"].title, "Trainer's Inventory")
+        self.assertEqual(inventory_kwargs["content"], "Trainer's Inventory")
+        self.assertIsNone(inventory_kwargs["embed"].title)
         self.assertEqual(
             inventory_kwargs["embed"].author.name,
             "0 Pokédollar",

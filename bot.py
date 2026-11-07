@@ -9229,8 +9229,9 @@ class NamingBot(commands.Bot):
         message: discord.Message,
     ) -> None:
         view = ProfileInventoryView(self, message.author.id)
-        view.embed.title = f"{message.author.display_name}'s Inventory"
+        view.embed.title = None
         await message.reply(
+            content=f"{message.author.display_name}'s Inventory",
             embed=view.embed,
             view=view,
             files=profile_currency_icon_files(),

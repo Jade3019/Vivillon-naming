@@ -2183,11 +2183,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             and child.setting == "frame"
         )
         await frames_button.callback(interaction)
-        self.assertEqual(
-            populated_view.embed.thumbnail.url,
-            "attachment://pokedollar.png",
-        )
-        icon_files = bot_module.profile_shop_currency_files()
+        self.assertIsNone(populated_view.embed.thumbnail.url)
+        icon_files = bot_module.profile_currency_icon_files()
         try:
             self.assertEqual([file.filename for file in icon_files], ["pokedollar.png"])
         finally:
@@ -2209,8 +2206,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         view = bot_module.ProfileInventoryView(self.bot, 123)
 
-        self.assertIn("0 Pokédollar", view.embed.description or "")
-        self.assertEqual(view.embed.thumbnail.url, "attachment://pokedollar.png")
+        author = runtime_attribute(view.embed, "author")
+        self.assertEqual(runtime_attribute(author, "name"), "0 Pokédollar")
+        self.assertEqual(
+            runtime_attribute(author, "icon_url"),
+            "attachment://pokedollar.png",
+        )
         expected_code = self.bot.profile_inventory["123"]["assets"][0]["code"]
         self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
 
@@ -2245,10 +2246,7 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
             "Are you sure",
             awaited_kwargs(message.reply)["embed"].description,
         )
-        self.assertEqual(
-            awaited_kwargs(message.reply)["embed"].thumbnail.url,
-            "attachment://pokedollar.png",
-        )
+        self.assertIsNone(awaited_kwargs(message.reply)["embed"].thumbnail.url)
         interaction = Mock()
         interaction.user.id = 123
         interaction.response.edit_message = AsyncMock()

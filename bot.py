@@ -6397,7 +6397,7 @@ def profile_asset_display(asset_id: str) -> str:
     return choice[0] if choice is not None else key.replace("_", " ").title()
 
 
-def profile_shop_currency_files() -> list[discord.File]:
+def profile_currency_icon_files() -> list[discord.File]:
     if not PROFILE_SHOP_CURRENCY_ICON.is_file():
         return []
     return [
@@ -6408,11 +6408,11 @@ def profile_shop_currency_files() -> list[discord.File]:
     ]
 
 
-def set_profile_shop_currency_thumbnail(embed: discord.Embed) -> None:
+def set_profile_inventory_balance(embed: discord.Embed, amount: int) -> None:
+    kwargs: dict[str, str] = {}
     if PROFILE_SHOP_CURRENCY_ICON.is_file():
-        embed.set_thumbnail(
-            url=f"attachment://{PROFILE_SHOP_CURRENCY_ICON_FILENAME}"
-        )
+        kwargs["icon_url"] = f"attachment://{PROFILE_SHOP_CURRENCY_ICON_FILENAME}"
+    embed.set_author(name=f"{amount:,} {PROFILE_SHOP_CURRENCY}", **kwargs)
 
 
 class ProfileShopCategoryButton(discord.ui.Button):
@@ -6498,7 +6498,6 @@ class ProfileShopView(discord.ui.View):
         if not page_items:
             embed.description = f"No {PROFILE_SHOP_CATEGORIES[self.category].lower()} are in the shop yet."
         else:
-            set_profile_shop_currency_thumbnail(embed)
             codes = profile_asset_codes()
             lines = []
             for asset_id, item in page_items:
@@ -6566,13 +6565,7 @@ class ProfileInventoryView(discord.ui.View):
         self.refresh()
 
     def _entries(self) -> list[str]:
-        balances = self.bot.profile_balances_for_user(self.user_id)
-        entries = [
-            f"{amount:,} {currency}"
-            for currency, amount in sorted(balances.items())
-        ]
-        if PROFILE_SHOP_CURRENCY not in balances:
-            entries.insert(0, f"0 {PROFILE_SHOP_CURRENCY}")
+        entries: list[str] = []
         inventory = self.bot.profile_inventory.get(str(self.user_id), {})
         assets = sorted(
             inventory.get("assets", []),
@@ -6595,7 +6588,11 @@ class ProfileInventoryView(discord.ui.View):
         start = self.page * PROFILE_SHOP_PAGE_SIZE
         page_entries = self.entries[start : start + PROFILE_SHOP_PAGE_SIZE]
         self.embed.description = "\n".join(page_entries) or "Your inventory is empty."
-        set_profile_shop_currency_thumbnail(self.embed)
+        balance = self.bot.profile_balances_for_user(self.user_id).get(
+            PROFILE_SHOP_CURRENCY,
+            0,
+        )
+        set_profile_inventory_balance(self.embed, balance)
         self.embed.set_footer(
             text=f"Showing items {start + 1}-{start + len(page_entries)} of {len(self.entries)}"
         )
@@ -9213,7 +9210,6 @@ class NamingBot(commands.Bot):
         response = await message.reply(
             embed=view.embed,
             view=view,
-            files=profile_shop_currency_files(),
             mention_author=False,
         )
         view.message = response
@@ -9223,10 +9219,11 @@ class NamingBot(commands.Bot):
         message: discord.Message,
     ) -> None:
         view = ProfileInventoryView(self, message.author.id)
-        view.embed.set_author(name=f"{message.author.display_name}'s Inventory")
+        view.embed.title = f"{message.author.display_name}'s Inventory"
         await message.reply(
             embed=view.embed,
             view=view,
+            files=profile_currency_icon_files(),
             mention_author=False,
         )
 
@@ -9265,11 +9262,9 @@ class NamingBot(commands.Bot):
             ),
             color=discord.Color.gold(),
         )
-        set_profile_shop_currency_thumbnail(embed)
         await message.reply(
             embed=embed,
             view=view,
-            files=profile_shop_currency_files(),
             mention_author=False,
         )
 

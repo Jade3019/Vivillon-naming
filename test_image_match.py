@@ -770,6 +770,7 @@ class VivillonTests(unittest.TestCase):
             "Zenith Marshadow": "Marshadow",
             "Galarian Zen Darmanitan": "Darmanitan",
             "Zygarde Cell": "Zygarde",
+            "Zygarde Core": "Zygarde",
             "Combat Breed Tauros": "Tauros",
             "Blaze Breed Tauros": "Tauros",
             "Aqua Breed Tauros": "Tauros",
@@ -787,7 +788,7 @@ class VivillonTests(unittest.TestCase):
                 self.assertIn(form, groups)
                 self.assertEqual(image_match.species_display_name(form), species)
                 self.assertEqual(image_match.family_name(form), species)
-                if form != "Green-Plumage Squawkabilly":
+                if form not in {"Green-Plumage Squawkabilly", "Zygarde Core"}:
                     self.assertIsNotNone(bot.custom_thumbnail_path(form), form)
 
     def test_pattern_is_chosen_by_appearance_even_mirrored(self) -> None:

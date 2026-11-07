@@ -129,6 +129,7 @@ CUSTOM_FORM_SPECIES = {
     "Zenith Marshadow": "Marshadow",
     "Galarian Zen Darmanitan": "Darmanitan",
     "Zygarde Cell": "Zygarde",
+    "Zygarde Core": "Zygarde",
     "Combat Breed Tauros": "Tauros",
     "Blaze Breed Tauros": "Tauros",
     "Aqua Breed Tauros": "Tauros",

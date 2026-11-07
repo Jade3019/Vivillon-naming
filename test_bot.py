@@ -854,7 +854,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             1.0,
         )
 
-    async def test_low_confidence_guess_is_not_posted_and_is_reported(
+    async def test_low_confidence_guess_is_posted_and_reported(
         self,
     ) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
@@ -922,7 +922,11 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(saved_images), 1)
         self.assertTrue(saved_images[0].name.endswith("_pikachu.png"))
         self.assertEqual(saved_images[0].read_bytes(), b"spawn image")
-        message.reply.assert_not_awaited()
+        message.reply.assert_awaited_once()
+        self.assertIn("Pikachu: 49.99%", message.reply.await_args.args[0])
+        self.assertNotIn("below 50%", message.reply.await_args.args[0])
+        self.assertEqual(self.bot.pokemon_named_count, 1)
+        self.assertEqual(self.bot.failed_recognition_count, 0)
         get_channel.assert_called_once_with(bot_module.RECOGNITION_ALERT_CHANNEL_ID)
         alert_channel.send.assert_awaited_once()
         alert = alert_channel.send.await_args.args[0]
@@ -938,6 +942,78 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(allowed_mentions.roles)
         self.assertFalse(allowed_mentions.everyone)
+
+    @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
+    async def test_weak_zygarde_core_spawn_is_named_and_alerted(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        self.bot.openai = None
+        self.bot.server_settings[str(SERVER_ID)] = {
+            "enabled": True,
+            "assisted": False,
+        }
+        message = Mock()
+        message.id = 9010
+        message.guild.id = SERVER_ID
+        message.channel.id = 9011
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+        image = (
+            Path(__file__).with_name("test")
+            / "fixtures"
+            / "zygarde-core-spawn.png"
+        ).read_bytes()
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch(
+                "bot.download_image",
+                new=AsyncMock(return_value=(image, "image/png")),
+            ),
+            patch.object(self.bot, "report_low_accuracy", new=AsyncMock()) as alert,
+            patch.object(self.bot, "save_flagged_pokemon_spawn_image", new=AsyncMock()),
+        ):
+            self.bot.pokemon_confidence_path = Path(directory) / "confidence.csv"
+            await self.bot.handle_spawn(message)
+
+        message.reply.assert_awaited_once()
+        alert.assert_awaited_once()
+        alert_message, name, confidence = alert.await_args.args
+        self.assertIs(alert_message, message)
+        self.assertEqual(name, "Zygarde Core")
+        self.assertGreater(confidence, 0)
+        self.assertLess(confidence, 50)
+        self.assertIn(
+            f"Zygarde Core: {confidence:.2f}%", message.reply.await_args.args[0]
+        )
+
+    async def test_low_confidence_test_mode_posts_normal_preview(self) -> None:
+        self.bot.image_http = Mock(close=AsyncMock())
+        message = Mock()
+        message.id = 9012
+        message.guild.id = SERVER_ID
+        message.channel.id = 9013
+        message.attachments = [
+            Mock(content_type="image/png", url="https://example.test/spawn.png")
+        ]
+        message.embeds = []
+        message.reply = AsyncMock()
+
+        with (
+            patch("bot.recognize_pokemon", new=AsyncMock(return_value=("Pikachu", 25.0))),
+            patch.object(self.bot, "report_low_accuracy", new=AsyncMock()) as alert,
+            patch.object(self.bot, "post_test_starboard", new=AsyncMock()),
+        ):
+            await self.bot.handle_spawn(message, test_mode=True)
+
+        message.reply.assert_awaited_once()
+        self.assertIn("Pikachu: 25.00%", message.reply.await_args.args[0])
+        alert.assert_awaited_once_with(message, "Pikachu", 25.0)
+        self.assertEqual(self.bot.pokemon_named_count, 0)
+        self.assertEqual(self.bot.failed_recognition_count, 0)
+
     async def test_guess_at_50_percent_uses_normal_spawn_reply(self) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
         self.bot.server_settings[str(SERVER_ID)] = {
@@ -6226,6 +6302,22 @@ class FireSpawnFormattingTests(unittest.TestCase):
                 self.assertIn(f"c {species.casefold()}", reply)
                 for file in files:
                     file.close()
+
+    def test_zygarde_core_displays_form_and_catches_base_species(self) -> None:
+        form = "Zygarde Core"
+        species = image_match.species_display_name(form)
+        self.assertEqual(species, "Zygarde")
+        self.assertEqual(shown_form_name(species, form), form)
+        embed = format_pc_catch_embed(species, form)
+        self.assertEqual(embed.title, "Catch Zygarde Core")
+        self.assertEqual(
+            embed_description(embed),
+            "Copy Below\n```\n@Pokétwo#8236 c zygarde\n```",
+        )
+        self.assertTrue(
+            format_spawn_reply(species, 100, POKETWO_COMMAND_BOT_ID, guess_name=form)
+            .startswith("Zygarde Core: 100.00%")
+        )
 
     def test_custom_form_uses_its_artwork_on_normal_starboard(self) -> None:
         forms = (

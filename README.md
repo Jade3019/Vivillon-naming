@@ -584,8 +584,10 @@ This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 
 `OPENAI_API_KEY` is optional. When no clear local match is found, the bot uses
 OpenAI if configured; otherwise it considers its best local guess.
-Unconfirmed local guesses are capped below 50%. Guesses below 50% are not
-posted publicly; they are reported to the configured error channel instead.
+Unconfirmed local guesses are capped below 50%. The bot posts the best
+available name even below 50%, and also reports it to the configured error
+channel. These guesses can be wrong. If neither recognizer can produce a
+name, the bot alerts the error channel instead.
 Add correctly labelled spawn images to improve future matches.
 
 ## Music Activity

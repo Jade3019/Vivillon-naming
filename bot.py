@@ -11431,14 +11431,6 @@ class NamingBot(commands.Bot):
             await self.save_flagged_pokemon_spawn_image(url, name, message.id)
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
-            if test_mode:
-                await message.reply(
-                    "I couldn't confidently identify that test image.",
-                    mention_author=False,
-                )
-            else:
-                self.failed_recognition_count += 1
-            return
         if not test_mode:
             self.pokemon_named_count += 1
             self.recognition_durations.append(

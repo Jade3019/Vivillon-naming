@@ -390,6 +390,44 @@ class ImageMatcherTests(unittest.TestCase):
             result = require_match(result)
             self.assertEqual(result[0], "Pikachu")
 
+    def test_small_known_spawn_images_match_in_both_orientations(self) -> None:
+        cv2 = image_match.cv2
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        root = Path(__file__).with_name("pokemon_images")
+        for name, filename in (
+            ("Oddish", "spawn-screenshot-2026-11-07.png"),
+            ("Toedscool", "user-reference-2026-11-07.png"),
+            ("Ditto", "bulbasaur-example-1.png"),
+            ("Wiglett", "bulbasaur-example-6.png"),
+            ("Spheal", "bulbasaur-example-big-3.png"),
+        ):
+            image = require_match(cv2.imread(str(root / name / filename)))
+            height, width = image.shape[:2]
+            scale = 240 / max(height, width)
+            image = cv2.resize(
+                image, (round(width * scale), round(height * scale)),
+                interpolation=cv2.INTER_AREA,
+            )
+            for mirror in (False, True):
+                with self.subTest(pokemon=name, mirrored=mirror):
+                    candidate = cv2.flip(image, 1) if mirror else image
+                    success, encoded = cv2.imencode(".png", candidate)
+                    self.assertTrue(success)
+                    result = require_match(matcher.match(encoded.tobytes()))
+                    self.assertEqual(result[0], name)
+
+    def test_small_image_retry_preserves_vote_thresholds(self) -> None:
+        cv2 = image_match.cv2
+        np = image_match.np
+        image = np.zeros((120, 240, 3), dtype=np.uint8)
+        encoded = cv2.imencode(".png", image)[1].tobytes()
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        with patch.object(matcher, "_match", return_value=None) as vote_match:
+            self.assertIsNone(matcher.match(encoded))
+
+        self.assertTrue(vote_match.called)
+        self.assertTrue(all(not call.kwargs.get("allow_weak") for call in vote_match.call_args_list))
+
     def test_foreground_retry_cannot_reclassify_boldore_or_milcery(self) -> None:
         np = image_match.np
         descriptors = np.random.default_rng(23).random((8, 128), dtype=np.float32)

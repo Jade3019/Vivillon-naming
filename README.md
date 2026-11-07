@@ -565,11 +565,21 @@ This writes `image_bank.npz`. Only the changed Pokémon are recomputed on later 
 
 Reference-image matching checks both the original and horizontally flipped
 spawn image, so Pokémon can be recognized facing either direction without
-adding flipped copies to the image bank.
+adding flipped copies to the image bank. If the usual passes do not find a
+match, smaller images are also retried at a larger size with the same vote
+requirements. This can recover details lost when an image is downscaled.
 
-When a spawn is clearly one of the known Pokémon (the Pokémon's own features are matched, the background is ignored), the bot names it in about 60 ms without calling OpenAI (shown as 100.00%). Anything unclear falls back to OpenAI, or is skipped if there is no key. This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
+When the reference matcher finds a clear winner, the bot names it without
+calling OpenAI and reports 100.00%. This is a match indicator, not a measured
+probability of correctness. A Pokémon being in the bank does not guarantee
+every image of it will match: backgrounds, image size, other Pokémon with
+similar features, or limited reference features can make the result unclear.
+This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 
-`OPENAI_API_KEY` is optional. Without it the bot names spawns only from the reference images and stays silent (it logs `No reference image matched`) for any spawn that doesn't match, so add pictures for every Pokémon you want named.
+`OPENAI_API_KEY` is optional. When no clear local match is found, the bot uses
+OpenAI if configured; otherwise it posts its best local guess when available.
+Unconfirmed local guesses are capped below 50% and reported to the configured
+error channel. Add correctly labelled spawn images to improve future matches.
 
 ## Music Activity
 

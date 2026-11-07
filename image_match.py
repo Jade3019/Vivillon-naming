@@ -851,6 +851,21 @@ class ImageMatcher:
                         if result is not None:
                             results.append(result)
         if not results:
+            enlarged = self._enlarge_small_image(data)
+            if enlarged is not None:
+                enlarged_mask = self._transparency_mask(enlarged)
+                for mirror in (False, True):
+                    result = self._match(
+                        data,
+                        mirror,
+                        mask=enlarged_mask,
+                        descriptors=compute_descriptors(
+                            enlarged, mirror, enlarged_mask
+                        ),
+                    )
+                    if result is not None:
+                        results.append(result)
+        if not results:
             return None
         vivillon_form: str | None = None
         vivillon_checked = False
@@ -895,6 +910,21 @@ class ImageMatcher:
         if name in VIVILLON_FORM_SET:
             name = "Vivillon"
         return self._postprocess_match(data, name, votes)
+
+    @staticmethod
+    def _enlarge_small_image(data: bytes) -> bytes | None:
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            return None
+        scale = min(2.0, MAX_SIDE / max(image.shape[:2]))
+        if scale <= 1:
+            return None
+        enlarged = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        success, encoded = cv2.imencode(".png", enlarged)
+        if not success:
+            logger.warning("Could not encode enlarged spawn image for matching")
+            return None
+        return encoded.tobytes()
 
     @staticmethod
     def _transparency_mask(data: bytes):

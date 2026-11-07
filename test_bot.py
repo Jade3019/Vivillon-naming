@@ -517,6 +517,7 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             ("Ralts", "Ralts"),
             ("Toedscool", "Toedscool"),
             ("Wingull", "Wingull"),
+            ("Ditto", "Ditto"),
         ):
             with self.subTest(pokemon=folder):
                 image = (root / folder / "user-reference-2026-11-07.png").read_bytes()

@@ -2206,11 +2206,12 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         view = bot_module.ProfileInventoryView(self.bot, 123)
 
-        self.assertIn(
-            "0 Pokédollar",
-            (view.embed.description or "").splitlines()[0],
+        self.assertEqual(view.embed.author.name, "0 Pokédollar")
+        self.assertEqual(
+            view.embed.author.icon_url,
+            "attachment://pokedollar.png",
         )
-        self.assertEqual(view.embed.thumbnail.url, "attachment://pokedollar.png")
+        self.assertIsNone(view.embed.thumbnail.url)
         expected_code = self.bot.profile_inventory["123"]["assets"][0]["code"]
         self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
 
@@ -2222,12 +2223,17 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         inventory_kwargs = awaited_kwargs(message.reply)
         self.assertEqual(inventory_kwargs["embed"].title, "Trainer's Inventory")
         self.assertEqual(
-            inventory_kwargs["embed"].description.splitlines()[0],
+            inventory_kwargs["embed"].author.name,
             "0 Pokédollar",
         )
         self.assertEqual(
-            inventory_kwargs["embed"].thumbnail.url,
+            inventory_kwargs["embed"].author.icon_url,
             "attachment://pokedollar.png",
+        )
+        self.assertIsNone(inventory_kwargs["embed"].thumbnail.url)
+        self.assertIn(
+            self.bot.profile_inventory["123"]["assets"][0]["code"],
+            inventory_kwargs["embed"].description,
         )
         self.assertEqual(
             [file.filename for file in inventory_kwargs["files"]],

@@ -6411,14 +6411,17 @@ def profile_currency_icon_files() -> list[discord.File]:
 def set_profile_inventory_balance(embed: discord.Embed, amount: int) -> None:
     balance_line = f"{amount:,} {PROFILE_SHOP_CURRENCY}"
     existing_description = embed.description or ""
-    embed.description = (
-        f"{balance_line}\n\n{existing_description}"
-        if existing_description
-        else balance_line
-    )
     if PROFILE_SHOP_CURRENCY_ICON.is_file():
-        embed.set_thumbnail(
-            url=f"attachment://{PROFILE_SHOP_CURRENCY_ICON_FILENAME}"
+        embed.set_author(
+            name=balance_line,
+            icon_url=f"attachment://{PROFILE_SHOP_CURRENCY_ICON_FILENAME}",
+        )
+        embed.description = existing_description
+    else:
+        embed.description = (
+            f"{balance_line}\n\n{existing_description}"
+            if existing_description
+            else balance_line
         )
 
 

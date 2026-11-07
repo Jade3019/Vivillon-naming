@@ -30,8 +30,9 @@ Scope is configurable, so the transport can serve one channel or a whole server:
 
 In a guild, a message from the org bot that is not a JSON request is ignored
 silently: a busy server must not get an error reply for every stray message.
-In a single channel the old strict behaviour stays, where any content gets an
-answer, because the channel is private and that helps while integrating.
+In a single channel, non-JSON messages from the org bot are also ignored. Only
+JSON requests are handled, so normal board commands and embeds cannot trigger
+invalid-payload replies.
 
 Unset ORG_DISCORD_RPC_CHANNEL_ID, ORG_DISCORD_RPC_GUILD_ID or
 ORG_BOT_USER_ID disables the transport completely: no listener, no replies, and
@@ -228,10 +229,16 @@ class OrgRpc:
                 )
                 return True
             return False
-        if self.guild_wide and not self._looks_like_request(message):
-            # A whole server carries plenty of other messages from this bot; an
-            # error reply to each of them would be noise. Not ours, hands off.
-            return False
+        if not self._looks_like_request(message):
+            # Org Bot's normal commands and board messages are not RPC requests.
+            # In a private channel swallow them; in a guild leave them alone.
+            if self.guild_wide:
+                return False
+            logger.info(
+                "Ignoring non-JSON org channel message %s",
+                getattr(message, "id", "?"),
+            )
+            return True
         try:
             await asyncio.wait_for(self._handle_request(message), self.handle_timeout)
         except asyncio.TimeoutError:
@@ -287,8 +294,8 @@ class OrgRpc:
     def _looks_like_request(message: Any) -> bool:
         """Cheap test: a JSON object carrying type or request_id.
 
-        Used only in guild mode, to tell a request from the org bot's ordinary
-        chatter without replying an error to every stray message.
+        Distinguishes RPC requests from the org bot's ordinary commands and
+        board messages in every configured scope.
         """
         raw = (getattr(message, "content", "") or "").strip()
         if not raw.startswith("{"):

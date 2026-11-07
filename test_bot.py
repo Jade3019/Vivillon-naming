@@ -8909,6 +8909,39 @@ class ProfileShopDataTests(unittest.TestCase):
             )
 
 
+class OrgRpcTransportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_private_org_channel_ignores_board_commands_but_handles_json(self) -> None:
+        from org_rpc import OrgRpc
+
+        with tempfile.TemporaryDirectory() as directory:
+            channel = SimpleNamespace(id=456, send=AsyncMock())
+            message = SimpleNamespace(
+                id=123,
+                author=SimpleNamespace(id=789),
+                channel=channel,
+                guild=None,
+                content="!org start",
+            )
+            rpc = OrgRpc(
+                channel_id=channel.id,
+                guild_id=None,
+                org_bot_user_id=message.author.id,
+                org=Mock(entries=[]),
+                add_to_vivillon=Mock(),
+                remove_from_vivillon=Mock(return_value=False),
+                dedupe_path=Path(directory) / "dedupe.json",
+            )
+
+            with patch.object(rpc, "_handle_request", new=AsyncMock()) as handle:
+                self.assertTrue(await rpc.handle_message(message))
+                handle.assert_not_awaited()
+                channel.send.assert_not_awaited()
+
+                message.content = '{"type": "list", "request_id": "round-1"}'
+                self.assertTrue(await rpc.handle_message(message))
+                handle.assert_awaited_once_with(message)
+
+
 class OrgReservesTests(unittest.TestCase):
     def test_validation_and_restrictions(self):
         import tempfile

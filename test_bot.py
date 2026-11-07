@@ -2206,14 +2206,35 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
 
         view = bot_module.ProfileInventoryView(self.bot, 123)
 
-        author = runtime_attribute(view.embed, "author")
-        self.assertEqual(runtime_attribute(author, "name"), "0 Pokédollar")
-        self.assertEqual(
-            runtime_attribute(author, "icon_url"),
-            "attachment://pokedollar.png",
+        self.assertIn(
+            "0 Pokédollar",
+            (view.embed.description or "").splitlines()[0],
         )
+        self.assertEqual(view.embed.thumbnail.url, "attachment://pokedollar.png")
         expected_code = self.bot.profile_inventory["123"]["assets"][0]["code"]
         self.assertIn(f"{expected_code} - Mystic", view.embed.description or "")
+
+        message = Mock()
+        message.author.id = 123
+        message.author.display_name = "Trainer"
+        message.reply = AsyncMock()
+        await self.bot.handle_profile_inventory_command(message)
+        inventory_kwargs = awaited_kwargs(message.reply)
+        self.assertEqual(inventory_kwargs["embed"].title, "Trainer's Inventory")
+        self.assertEqual(
+            inventory_kwargs["embed"].description.splitlines()[0],
+            "0 Pokédollar",
+        )
+        self.assertEqual(
+            inventory_kwargs["embed"].thumbnail.url,
+            "attachment://pokedollar.png",
+        )
+        self.assertEqual(
+            [file.filename for file in inventory_kwargs["files"]],
+            ["pokedollar.png"],
+        )
+        for file in inventory_kwargs["files"]:
+            file.close()
 
     async def test_buy_confirmation_deducts_currency_and_equips_asset(self) -> None:
         asset_id = "frame:mystic"

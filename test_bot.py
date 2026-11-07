@@ -504,6 +504,37 @@ class RecognitionValidationTests(unittest.IsolatedAsyncioTestCase):
             r"\[download \d+\.\d{2}s, match \d+\.\d{2}s\]$",
         )
 
+    @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
+    async def test_user_reference_images_recognized_at_full_confidence(self) -> None:
+        matcher = image_match.ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        root = Path(__file__).with_name("pokemon_images")
+        for folder, display in (
+            ("Alolan Vulpix", "Alolan Vulpix"),
+            ("Unown Variant 4", "D Unown"),
+            ("Drizzile", "Drizzile"),
+            ("Flamigo", "Flamigo"),
+            ("Milcery", "Milcery"),
+            ("Ralts", "Ralts"),
+            ("Toedscool", "Toedscool"),
+            ("Wingull", "Wingull"),
+        ):
+            with self.subTest(pokemon=folder):
+                image = (root / folder / "user-reference-2026-11-07.png").read_bytes()
+                with patch(
+                    "bot.download_image",
+                    new=AsyncMock(return_value=(image, "image/png")),
+                ):
+                    name, confidence = await bot_module.recognize_pokemon(
+                        "https://example.test/spawn.png",
+                        client=None,
+                        http=Mock(),
+                        model="test-model",
+                        matcher=matcher,
+                    )
+                self.assertEqual(name, folder)
+                self.assertEqual(bot_module.display_pokemon_name(name), display)
+                self.assertEqual(confidence, 100.0)
+
     async def test_no_reference_match_uses_low_confidence_local_guess(self) -> None:
         import bot
 

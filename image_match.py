@@ -4,6 +4,7 @@
 feature file (image_bank.npz). The bot only loads that file.
 """
 
+import hashlib
 import logging
 import re
 from functools import lru_cache
@@ -740,6 +741,7 @@ class ImageMatcher:
         self.names: list[str] = []
         self.labels = None
         self.matcher = None
+        self.exact_references: dict[str, str] = {}
         if cv2 is None or not bank_path.is_file():
             return
         try:
@@ -748,9 +750,27 @@ class ImageMatcher:
                 self.names = [str(name) for name in data["names"]]
                 self.labels = data["labels"]
                 self.families = [family_name(name) for name in self.names]
+                if "exact_hashes" in data or "exact_labels" in data:
+                    hashes = data["exact_hashes"]
+                    labels = data["exact_labels"]
+                    if (
+                        hashes.ndim != 1
+                        or labels.ndim != 1
+                        or len(hashes) != len(labels)
+                        or labels.dtype.kind not in "iu"
+                        or any(re.fullmatch(r"[0-9a-f]{64}", str(value)) is None for value in hashes)
+                        or any(int(label) >= len(self.names) or int(label) < 0 for label in labels)
+                        or len(set(str(value) for value in hashes)) != len(hashes)
+                    ):
+                        raise ValueError("Invalid exact reference index")
+                    self.exact_references = {
+                        str(digest): self.names[int(label)]
+                        for digest, label in zip(hashes, labels)
+                    }
         except (OSError, ValueError, KeyError):
             logger.warning("Could not read %s; image matching disabled", bank_path)
             self.names = []
+            self.exact_references = {}
             return
         cv2.setRNGSeed(0)
         self.matcher = cv2.FlannBasedMatcher(
@@ -776,6 +796,10 @@ class ImageMatcher:
         """
         if not self.names or self.matcher is None:
             return None
+        if self.exact_references:
+            exact = self.exact_references.get(hashlib.sha256(data).hexdigest())
+            if exact is not None:
+                return DISPLAY_NAMES.get(exact, exact), 0
         mask = self._transparency_mask(data)
         # SIFT is the expensive half, so each orientation is described once and
         # the relaxed retry reuses those descriptors instead of recomputing them.

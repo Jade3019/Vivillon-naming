@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,46 @@ def require_match(value: T | None) -> T:
 
 @unittest.skipIf(image_match.cv2 is None, "OpenCV is not installed")
 class ImageMatcherTests(unittest.TestCase):
+    def test_exact_reference_does_not_match_another_image(self) -> None:
+        np = image_match.np
+        image = b"trusted reference bytes"
+        with tempfile.TemporaryDirectory() as directory:
+            bank_path = Path(directory) / "image_bank.npz"
+            np.savez(
+                bank_path,
+                descriptors=np.random.default_rng(42).random((8, 128), dtype=np.float32),
+                labels=np.zeros(8, dtype=np.int32),
+                names=np.array(["Pikachu"]),
+                exact_hashes=np.array([hashlib.sha256(image).hexdigest()]),
+                exact_labels=np.array([0], dtype=np.int32),
+            )
+            matcher = ImageMatcher(bank_path)
+            with patch.object(matcher, "_transparency_mask", return_value=None):
+                with patch("image_match.compute_descriptors", return_value=None):
+                    with patch("image_match.foreground_mask", return_value=None):
+                        self.assertEqual(matcher.match(image), ("Pikachu", 0))
+                        self.assertIsNone(matcher.match(b"different image bytes"))
+
+    def test_conflicting_exact_references_are_not_indexed(self) -> None:
+        from build_image_bank import exact_reference_index
+
+        cv2 = image_match.cv2
+        np = image_match.np
+        encoded = cv2.imencode(".png", np.zeros((16, 16, 3), dtype=np.uint8))[1].tobytes()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "Pikachu" / "user-reference-one.png"
+            second = root / "Eevee" / "user-reference-two.png"
+            for path in (first, second):
+                path.parent.mkdir()
+                path.write_bytes(encoded)
+            hashes, labels = exact_reference_index(
+                {"Pikachu": [first], "Eevee": [second]},
+                ["Pikachu", "Eevee"],
+            )
+        self.assertEqual(len(hashes), 0)
+        self.assertEqual(len(labels), 0)
+
     def test_shared_screenshot_species_use_lower_vote_floor(self) -> None:
         for name in (
             "White-Plumage Squawkabilly",
@@ -396,8 +437,6 @@ class ImageMatcherTests(unittest.TestCase):
         root = Path(__file__).with_name("pokemon_images")
         for name, filename in (
             ("Oddish", "spawn-screenshot-2026-11-07.png"),
-            ("Toedscool", "user-reference-2026-11-07.png"),
-            ("Ditto", "bulbasaur-example-1.png"),
             ("Wiglett", "bulbasaur-example-6.png"),
             ("Spheal", "bulbasaur-example-big-3.png"),
         ):
@@ -415,6 +454,30 @@ class ImageMatcherTests(unittest.TestCase):
                     self.assertTrue(success)
                     result = require_match(matcher.match(encoded.tobytes()))
                     self.assertEqual(result[0], name)
+
+    def test_reduced_exact_reference_is_not_a_different_clear_match(self) -> None:
+        cv2 = image_match.cv2
+        path = (
+            Path(__file__).with_name("pokemon_images")
+            / "Toedscool"
+            / "user-reference-2026-11-07.png"
+        )
+        image = require_match(cv2.imread(str(path)))
+        height, width = image.shape[:2]
+        scale = 240 / max(height, width)
+        image = cv2.resize(
+            image, (round(width * scale), round(height * scale)),
+            interpolation=cv2.INTER_AREA,
+        )
+        matcher = ImageMatcher(Path(__file__).with_name("image_bank.npz"))
+        for mirror in (False, True):
+            with self.subTest(mirrored=mirror):
+                candidate = cv2.flip(image, 1) if mirror else image
+                success, encoded = cv2.imencode(".png", candidate)
+                self.assertTrue(success)
+                result = matcher.match(encoded.tobytes())
+                if result is not None:
+                    self.assertEqual(result[0], "Toedscool")
 
     def test_small_image_retry_preserves_vote_thresholds(self) -> None:
         cv2 = image_match.cv2

@@ -539,7 +539,13 @@ curl -X POST https://YOUR-HOST:PORT/api/org/reserves \
 
 ## Reference images (faster recognition)
 
-Put each Pokémon's spawn pictures in its own folder inside `pokemon_images/`, named exactly like the Pokémon (`pokemon_images/Abomasnow/`, `pokemon_images/Mega Absol/`). The file names inside don't matter. Use real spawn images Pokétwo posts, ideally with different backgrounds (about 10 to 25 each).
+Put each Pokémon's spawn pictures in its own folder inside `pokemon_images/`, named exactly like the Pokémon (`pokemon_images/Abomasnow/`, `pokemon_images/Mega Absol/`). Use real spawn images Pokétwo posts, ideally with different backgrounds (about 10 to 25 each).
+
+Files named `user-reference-*` are indexed separately as exact byte-for-byte
+references, rather than adding their features to the general bank. An exact
+image gets its assigned name; a resized or re-encoded image still uses regular
+recognition. If identical files have conflicting names, they are excluded from
+the exact index and a warning is logged.
 
 You can place a bulk archive of per-Pokémon image folders anywhere under `pokemon_images/` (for example `pokemon_images/archive/`). The builder searches recursively, merges duplicate folders, skips ambiguous composite images, and recognizes species, known forms, regional forms and event-costume names. Raw archive images are git-ignored; only upload the generated bank.
 Gender-coded folders such as `nidoran-f` and `nidoran-m` retain their separate
@@ -577,9 +583,10 @@ similar features, or limited reference features can make the result unclear.
 This needs `numpy` and `opencv-python-headless` (in `requirements.txt`).
 
 `OPENAI_API_KEY` is optional. When no clear local match is found, the bot uses
-OpenAI if configured; otherwise it posts its best local guess when available.
-Unconfirmed local guesses are capped below 50% and reported to the configured
-error channel. Add correctly labelled spawn images to improve future matches.
+OpenAI if configured; otherwise it considers its best local guess.
+Unconfirmed local guesses are capped below 50%. Guesses below 50% are not
+posted publicly; they are reported to the configured error channel instead.
+Add correctly labelled spawn images to improve future matches.
 
 ## Music Activity
 

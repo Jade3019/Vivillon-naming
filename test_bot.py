@@ -853,7 +853,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
             1.0,
         )
 
-    async def test_low_confidence_guess_is_named_and_reported_to_alert_channel(
+    async def test_low_confidence_guess_is_not_posted_and_is_reported(
         self,
     ) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
@@ -921,9 +921,7 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(saved_images), 1)
         self.assertTrue(saved_images[0].name.endswith("_pikachu.png"))
         self.assertEqual(saved_images[0].read_bytes(), b"spawn image")
-        message.reply.assert_awaited_once()
-        self.assertIn("Pikachu: 49.99%", message.reply.await_args.args[0])
-        self.assertNotIn("below 50%", message.reply.await_args.args[0])
+        message.reply.assert_not_awaited()
         get_channel.assert_called_once_with(bot_module.RECOGNITION_ALERT_CHANNEL_ID)
         alert_channel.send.assert_awaited_once()
         alert = alert_channel.send.await_args.args[0]
@@ -939,11 +937,6 @@ class ApiStatusTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(allowed_mentions.roles)
         self.assertFalse(allowed_mentions.everyone)
-        self.assertEqual(
-            awaited_kwargs(message.reply)["mention_author"],
-            False,
-        )
-
     async def test_guess_at_50_percent_uses_normal_spawn_reply(self) -> None:
         self.bot.image_http = Mock(close=AsyncMock())
         self.bot.server_settings[str(SERVER_ID)] = {

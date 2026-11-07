@@ -1344,13 +1344,22 @@ async def recognize_pokemon(
         found = await asyncio.to_thread(matcher.match, downloaded[0])
         match_seconds = time.monotonic() - match_started
         if found is not None:
-            logger.info(
-                "Matched %s from reference images (%d votes) "
-                "[download %.2fs, match %.2fs]",
-                *found,
-                download_seconds,
-                match_seconds,
-            )
+            if found[1] == 0:
+                logger.info(
+                    "Matched %s from an exact reference image "
+                    "[download %.2fs, match %.2fs]",
+                    found[0],
+                    download_seconds,
+                    match_seconds,
+                )
+            else:
+                logger.info(
+                    "Matched %s from reference images (%d votes) "
+                    "[download %.2fs, match %.2fs]",
+                    *found,
+                    download_seconds,
+                    match_seconds,
+                )
             return found[0], 100.0
     logger.info(
         "No reference match [download %.2fs, match %.2fs]",
@@ -11391,13 +11400,6 @@ class NamingBot(commands.Bot):
 
         completed = time.monotonic()
         response_seconds = completed - started
-        if name and not test_mode:
-            self.pokemon_named_count += 1
-            self.recognition_durations.append(
-                (completed, inference_seconds, response_seconds)
-            )
-        elif not name and not test_mode:
-            self.failed_recognition_count += 1
         if response_seconds >= RECOGNITION_WINDOW_SECONDS:
             logger.warning(
                 "SLOW recognition for spawn %s took %.2fs",
@@ -11411,6 +11413,8 @@ class NamingBot(commands.Bot):
             message.id,
         )
         if not name:
+            if not test_mode:
+                self.failed_recognition_count += 1
             await self.send_recognition_failure_alert(message)
             return
         if (
@@ -11427,6 +11431,19 @@ class NamingBot(commands.Bot):
             await self.save_flagged_pokemon_spawn_image(url, name, message.id)
         if confidence < LOW_ACCURACY_THRESHOLD:
             await self.report_low_accuracy(message, name, confidence)
+            if test_mode:
+                await message.reply(
+                    "I couldn't confidently identify that test image.",
+                    mention_author=False,
+                )
+            else:
+                self.failed_recognition_count += 1
+            return
+        if not test_mode:
+            self.pokemon_named_count += 1
+            self.recognition_durations.append(
+                (completed, inference_seconds, response_seconds)
+            )
         thumbnail_name = name
         name = species_display_name(name)
         guess_name = shown_form_name(name, thumbnail_name)

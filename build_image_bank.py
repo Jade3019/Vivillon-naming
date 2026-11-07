@@ -8,6 +8,7 @@ Pokémon only that one is recomputed.
 """
 
 import hashlib
+import logging
 import sys
 from pathlib import Path
 
@@ -43,6 +44,39 @@ BACKGROUND_SAMPLE = 120
 # Scraped pictures whose scenery is shared between pictures and would be learned
 # as part of the Pokémon (Swinub's snow forest made it name every snowy spawn).
 EXCLUDED_REFERENCES = {"Swinub": {"7.png", "13.png"}, "Snom": {"7.png"}}
+
+logger = logging.getLogger(__name__)
+
+
+def exact_reference_index(
+    groups: dict[str, list[Path]], names: list[str]
+) -> tuple[np.ndarray, np.ndarray]:
+    indices = {name: index for index, name in enumerate(names)}
+    owners: dict[str, str] = {}
+    conflicts: set[str] = set()
+    for name, paths in groups.items():
+        for path in paths:
+            if not path.name.startswith("user-reference-"):
+                continue
+            data = path.read_bytes()
+            image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+            if image is None:
+                raise ValueError(f"Cannot decode exact reference image {path}")
+            digest = hashlib.sha256(data).hexdigest()
+            previous = owners.get(digest)
+            if previous is not None and previous != name:
+                conflicts.add(digest)
+            else:
+                owners[digest] = name
+    for digest in conflicts:
+        del owners[digest]
+    if conflicts:
+        logger.warning("Excluded %d exact references with conflicting names", len(conflicts))
+    hashes = sorted(owners)
+    return (
+        np.array(hashes, dtype="U64"),
+        np.array([indices[owners[digest]] for digest in hashes], dtype=np.int32),
+    )
 
 
 def background_pool(folder: Path, exclude: set[str]):
@@ -178,7 +212,7 @@ def main() -> None:
     for number, name in enumerate(names, 1):
         per_pokemon[name] = pokemon_features(
             name,
-            groups[name],
+            [path for path in groups[name] if not path.name.startswith("user-reference-")],
             cache,
             pool,
         )
@@ -186,11 +220,14 @@ def main() -> None:
             print(f"[{number}/{len(names)}] {name}: {len(per_pokemon[name])} features", flush=True)
 
     descriptors, labels = assemble_bank(names, per_pokemon)
+    exact_hashes, exact_labels = exact_reference_index(groups, names)
     np.savez_compressed(
         output,
         descriptors=descriptors,
         labels=labels,
         names=np.array(names),
+        exact_hashes=exact_hashes,
+        exact_labels=exact_labels,
     )
     print(f"Wrote {output}: {len(names)} Pokémon, {len(descriptors)} features")
 
